@@ -715,183 +715,10 @@ function downloadSampleCSV(){
   URL.revokeObjectURL(a.href);
 }
 
-// ══════════════════════════════════════════════════════
-// PACKING ENGINE — Guillotine Tree (v9)
-// Uses a binary tree to track the exact cut structure.
-// Every layout produced is GUARANTEED cuttable on a panel saw.
-// 39 sheets on the reference dataset (DW=15, all others match).
-// 0 non-guillotine sheets verified against reference data.
-// ══════════════════════════════════════════════════════
-
-class GNode {
-  constructor(x, y, w, h) {
-    this.x=x; this.y=y; this.w=w; this.h=h;
-    this.piece=null; this.left=null; this.right=null;
-  }
-  isEmpty() { return this.left===null && this.piece===null; }
-
-  // Recursively find best BSSF empty leaf for pw×ph
-  search(pw, ph, canRot, res) {
-    if (this.isEmpty()) {
-      const oris = (canRot && pw!==ph) ? [[pw,ph],[ph,pw]] : [[pw,ph]];
-      for (const [rw,rh] of oris) {
-        if (this.w>=rw && this.h>=rh) {
-          const s = Math.min(this.w-rw,this.h-rh)*1e9 + Math.max(this.w-rw,this.h-rh);
-          if (s < res.score) { res.score=s; res.node=this; res.ori=[rw,rh]; }
-        }
-      }
-    } else {
-      if (this.left)  this.left.search(pw,ph,canRot,res);
-      if (this.right) this.right.search(pw,ph,canRot,res);
-    }
-  }
-
-  // Place pw×ph in this empty leaf. Split into piece + two child free regions.
-  // Split direction chosen to maximise the larger remaining free section.
-  place(pw, ph, piece, k) {
-    this.piece = {pw, ph, piece};
-    const hArea = Math.max(0,this.w-pw-k)*ph + this.w*Math.max(0,this.h-ph-k);
-    const vArea = pw*Math.max(0,this.h-ph-k) + Math.max(0,this.w-pw-k)*this.h;
-    if (hArea >= vArea) {
-      // Horizontal split: right child = narrow strip at piece height; left = full-width bottom
-      if (this.w-pw-k > 0) this.right = new GNode(this.x+pw+k, this.y,    this.w-pw-k, ph);
-      if (this.h-ph-k > 0) this.left  = new GNode(this.x,       this.y+ph+k, this.w,    this.h-ph-k);
-    } else {
-      // Vertical split: left child = narrow bottom under piece; right = full-height strip to right
-      if (this.h-ph-k > 0) this.left  = new GNode(this.x,       this.y+ph+k, pw,         this.h-ph-k);
-      if (this.w-pw-k > 0) this.right = new GNode(this.x+pw+k,  this.y,      this.w-pw-k, this.h);
-    }
-  }
-
-  // Collect all placed piece positions
-  collect(arr) {
-    if (this.piece) arr.push({piece:this.piece.piece, x:this.x, y:this.y, pw:this.piece.pw, ph:this.piece.ph});
-    if (this.left)  this.left.collect(arr);
-    if (this.right) this.right.collect(arr);
-  }
-}
-
-function getSortOrders(pieces) {
-  return [
-    [...pieces].sort((a,b) => b.l*b.w - a.l*a.w),
-    [...pieces].sort((a,b) => Math.max(b.l,b.w) - Math.max(a.l,a.w)),
-    [...pieces].sort((a,b) => { const d=Math.max(b.l,b.w)-Math.max(a.l,a.w); return d||b.l*b.w-a.l*a.w; }),
-    [...pieces].sort((a,b) => (b.l+b.w)-(a.l+a.w)),
-  ];
-}
-
-function gtreeRun(pieces, W, H, kerf, allowRotate) {
-  const roots = [];
-  const sheets = [];
-
-  for (const piece of pieces) {
-    const canRot = allowRotate && piece.canRotate;
-    let placed = false;
-
-    for (let i=0; i<roots.length; i++) {
-      const res = {score:Infinity, node:null, ori:null};
-      roots[i].search(piece.l, piece.w, canRot, res);
-      if (res.node) {
-        res.node.place(res.ori[0], res.ori[1], piece, kerf);
-        placed = true; break;
-      }
-    }
-    if (!placed) {
-      const oris = (canRot && piece.l!==piece.w) ? [[piece.l,piece.w],[piece.w,piece.l]] : [[piece.l,piece.w]];
-      for (const [rw,rh] of oris) {
-        if (rw<=W && rh<=H) {
-          const root = new GNode(0,0,W,H);
-          root.place(rw, rh, piece, kerf);
-          roots.push(root);
-          sheets.push({root, placed:[], failed:[]});
-          placed = true; break;
-        }
-      }
-      if (!placed) {
-        if (!sheets.length) sheets.push({root:null, placed:[], failed:[]});
-        sheets[sheets.length-1].failed.push(piece);
-      }
-    }
-  }
-
-  // Collect placements from each root
-  for (let i=0; i<roots.length; i++) {
-    roots[i].collect(sheets[i].placed);
-  }
-  return sheets.length ? sheets : [{root:null, placed:[], failed:[]}];
-}
-
-function evalResult(sheets, W, H) {
-  let n=0, waste=0, unfitted=0;
-  for (const sh of sheets) {
-    if (sh.placed.length>0) n++;
-    waste += W*H - sh.placed.reduce((a,p)=>a+p.pw*p.ph, 0);
-    unfitted += sh.failed ? sh.failed.length : 0;
-  }
-  return {n: n+unfitted*1000, waste};
-}
-
-function packBest(pieces, W, H, kerf, allowRotate) {
-  let best=null, bestScore={n:Infinity, waste:Infinity};
-  for (const sorted of getSortOrders(pieces)) {
-    const result = gtreeRun(sorted, W, H, kerf, allowRotate);
-    const score  = evalResult(result, W, H);
-    if (score.n < bestScore.n || (score.n===bestScore.n && score.waste<bestScore.waste)) {
-      bestScore=score; best=result;
-    }
-  }
-  return best;
-}
-
-
-function packAll(panels, stocks, kerf, matchMat, allowRotate) {
-  const mats = [...new Set(panels.map(p => p.material))];
-  let allSheets = [], allUnfitted = [];
-  for (const mat of mats) {
-    const mp = panels.filter(p => p.material === mat);
-    const ms = matchMat ? stocks.filter(s => s.material === mat) : stocks;
-    if (!ms.length) {
-      for (const p of mp) for (let i=0; i<p.qty; i++) allUnfitted.push({...p, instance:i+1});
-      continue;
-    }
-    const {sheets, unfitted} = packMaterial(mp, ms, kerf, allowRotate, mat);
-    allSheets.push(...sheets);
-    allUnfitted.push(...unfitted);
-  }
-  return {sheets:allSheets, unfitted:allUnfitted};
-}
-
-function packMaterial(panelDefs, stockDefs, kerf, allowRotate, material) {
-  let ci = 0;
-  const colorMap = {};
-  for (const p of panelDefs) colorMap[p.id] = ci++;
-  const pieces = [];
-  for (const p of panelDefs)
-    for (let i=0; i<p.qty; i++)
-      pieces.push({...p, colorIdx:colorMap[p.id], instance:i+1});
-
-  const tmpl = stockDefs[0];
-  const W = tmpl.l, H = tmpl.w;
-
-  const best = packBest(pieces, W, H, kerf, allowRotate);
-
-  // Collect all placed piece IDs
-  const ids = new Set();
-  for (const sh of best) for (const p of sh.placed) ids.add(`${p.piece.id}-${p.piece.instance}`);
-  const uf = pieces.filter(p => !ids.has(`${p.id}-${p.instance}`));
-
-  return {
-    sheets: best
-      .filter(sh => sh.placed.length > 0)
-      .map((sh, i) => ({label:tmpl.label, L:W, W:H, material, idx:i+1, placed:sh.placed})),
-    unfitted: uf
-  };
-}
-
 // ══ API CONFIG ══
 const API_URL = (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1')
   ? 'http://localhost:3001'
-  : 'https://easycutlist-api.onrender.com';
+  : 'https://api.easycutlist.com';
 
 // ══ CALCULATE — calls backend API ══
 async function calculate() {
@@ -903,16 +730,24 @@ async function calculate() {
   const matchMat    = document.getElementById('mat-toggle').checked;
   const scale       = +document.getElementById('scale').value || 1;
 
-  // Show loading
+  // Show loading with cold-start awareness
   document.getElementById('empty-state').style.display = 'none';
   const el = document.getElementById('results');
   el.style.display = 'block';
   el.innerHTML = `
     <div class="empty-state" style="min-height:300px">
       <div class="empty-icon" style="font-size:28px;border:none">⚙️</div>
-      <h2 style="color:var(--sl-text)">Optimizing...</h2>
-      <p>Running guillotine packing algorithm</p>
+      <h2 style="color:var(--sl-text)" id="loading-title">Optimizing...</h2>
+      <p id="loading-msg">Running packing algorithm</p>
     </div>`;
+
+  // After 4 seconds if still loading, hint about cold start
+  const coldStartTimer = setTimeout(() => {
+    const t = document.getElementById('loading-title');
+    const m = document.getElementById('loading-msg');
+    if (t) t.textContent = 'Almost ready...';
+    if (m) m.innerHTML = 'Server is waking up — this takes ~15 seconds on first use.<br>Subsequent requests will be instant.';
+  }, 4000);
 
   try {
     // Build payload matching API contract
@@ -950,6 +785,7 @@ async function calculate() {
     }
 
     const data = await res.json();
+    clearTimeout(coldStartTimer);
 
     // Remap API response → renderResults format
     // API returns: { sheets: [{sheetIndex,material,sheetW,sheetH,placed:[{label,colorIdx,instance,x,y,pw,ph}]},...], unfitted, summary }
@@ -977,6 +813,7 @@ async function calculate() {
     renderResults(sheets, unfitted, scale);
 
   } catch (err) {
+    clearTimeout(coldStartTimer);
     el.innerHTML = `
       <div class="empty-state" style="min-height:300px">
         <div class="empty-icon" style="font-size:28px;border:none">⚠️</div>
