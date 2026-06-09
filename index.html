@@ -1120,9 +1120,52 @@ function clearPanels(){if(panelRows.length&&!confirm('Clear all panels?'))return
 function clearStock(){if(stockRows.length&&!confirm('Clear all stock sheets?'))return;stockRows=[];renderStock()}
 
 // ══ PANELS ══
-function addPanel(label='',l=600,w=400,qty=1,material='Plywood',canRotate=true){panelRows.push({id:uid(),label,l,w,qty,material,canRotate});renderPanels()}
-function removePanel(id){panelRows=panelRows.filter(r=>r.id!==id);renderPanels()}
-function updatePanel(id,f,v){const r=panelRows.find(r=>r.id===id);if(r)r[f]=(f==='l'||f==='w'||f==='qty')?+v:v}
+function addPanel(label='',l=600,w=400,qty=1,material='Plywood',canRotate=true){
+  panelRows.push({id:uid(),label,l,w,qty,material,canRotate});
+  renderPanels();
+  autoPopulateStock();
+}
+function removePanel(id){
+  panelRows=panelRows.filter(r=>r.id!==id);
+  renderPanels();
+  autoPopulateStock();
+}
+function updatePanel(id,f,v){
+  const r=panelRows.find(r=>r.id===id);
+  if(r) r[f]=(f==='l'||f==='w'||f==='qty')?+v:v;
+  // If material changed, re-sync stock
+  if(f==='material') autoPopulateStock();
+}
+
+// ── Auto-populate stock sheets from panel materials ──
+function autoPopulateStock(){
+  // Get all unique materials from panels
+  const mats = [...new Set(panelRows.map(p=>p.material).filter(Boolean))];
+  if(!mats.length) return;
+
+  const defW = +(profile.defaultSheetW||1210);
+  const defH = +(profile.defaultSheetH||2430);
+
+  // Add stock for any material not already covered
+  let added = false;
+  for(const mat of mats){
+    const already = stockRows.some(s=>s.material===mat);
+    if(!already){
+      const price = priceBook[mat]||0;
+      stockRows.push({
+        id: uid(),
+        label: '',
+        l: defW,
+        w: defH,
+        qty: 100,
+        material: mat,
+        price,
+      });
+      added = true;
+    }
+  }
+  if(added) renderStock();
+}
 function toggleRot(id){const r=panelRows.find(r=>r.id===id);if(r){r.canRotate=!r.canRotate;renderPanels()}}
 function renderPanels(){
   document.getElementById('panels-tbody').innerHTML=panelRows.map(r=>`<tr>
@@ -1191,7 +1234,9 @@ function applyCSV(){
       imported++;
     }else errors++;
   }
-  closeCSV();if(errors)alert(`Imported ${imported}. ${errors} rows skipped (invalid data).`);
+  closeCSV();
+  if(errors) alert(`Imported ${imported}. ${errors} rows skipped (invalid data).`);
+  if(csvTarget==='panels') autoPopulateStock();
 }
 
 function downloadSampleCSV(){
