@@ -1009,7 +1009,7 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
       <div><div class="print-opt-label">Diagram label font (pt)</div>
         <div class="print-opt-sub">Panel labels &amp; dimensions inside SVG</div></div>
       <div class="print-font-row">
-        <input type="number" id="po-diag-font" value="10" min="5" max="24" step="0.5">
+        <input type="number" id="po-diag-font" value="16" min="5" max="24" step="0.5">
       </div>
     </div>
 
@@ -1298,7 +1298,13 @@ function deletePriceEntry(mat){ delete priceBook[mat]; savePriceBook(); renderPr
 // ══ CLIENT MANAGEMENT ══
 let clients = JSON.parse(localStorage.getItem('ecl_clients')||'[]');
 function saveClients(){ localStorage.setItem('ecl_clients', JSON.stringify(clients)); }
-function openClients(){ renderClientsList(); document.getElementById('clients-modal').style.display='flex'; }
+function openClients(){
+  // Clear search first, then render
+  const s = document.getElementById('client-search');
+  if(s) s.value = '';
+  renderClientsList();
+  document.getElementById('clients-modal').style.display='flex';
+}
 function closeClients(){ document.getElementById('clients-modal').style.display='none'; }
 function openAddClient(id=null){
   const c=id?clients.find(c=>c.id===id):null;
@@ -1312,7 +1318,9 @@ function openAddClient(id=null){
   document.getElementById('add-client-modal').style.display='flex';
   setTimeout(()=>document.getElementById('cl-name').focus(),100);
 }
-function closeAddClient(){ document.getElementById('add-client-modal').style.display='none'; }
+function closeAddClient(){
+  document.getElementById('add-client-modal').style.display='none';
+}
 function saveClient(){
   const name=document.getElementById('cl-name').value.trim();
   if(!name){alert('Client name required');return;}
@@ -1326,7 +1334,12 @@ function saveClient(){
     date:new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}),
   };
   if(editId){clients=clients.map(c=>c.id===editId?client:c);}else{clients.unshift(client);}
-  saveClients(); closeAddClient(); renderClientsList();
+  saveClients();
+  closeAddClient();
+  // Clear search and re-render so new client is visible
+  const s=document.getElementById('client-search');
+  if(s) s.value='';
+  renderClientsList();
 }
 function deleteClient(id){
   const c=clients.find(c=>c.id===id);
@@ -1334,11 +1347,17 @@ function deleteClient(id){
   clients=clients.filter(c=>c.id!==id); saveClients(); renderClientsList();
 }
 function renderClientsList(){
-  const q=(document.getElementById('client-search')?.value||'').toLowerCase();
-  const filtered=clients.filter(c=>c.name.toLowerCase().includes(q)||(c.biz||'').toLowerCase().includes(q)||(c.phone||'').includes(q));
+  const q=(document.getElementById('client-search')?.value||'').toLowerCase().trim();
+  const filtered=q
+    ? clients.filter(c=>c.name.toLowerCase().includes(q)||(c.biz||'').toLowerCase().includes(q)||(c.phone||'').includes(q))
+    : clients; // show ALL when search is empty
   const el=document.getElementById('clients-list');
+  if(!el) return;
   if(!filtered.length){
-    el.innerHTML=`<div style="text-align:center;padding:30px;color:var(--sl-text3)"><div style="font-size:15px;color:var(--sl-text2);font-weight:700;margin-bottom:6px">${clients.length?'No matches':'No clients yet'}</div><div>${clients.length?'Try different search':'Click + Add Client to start'}</div></div>`;
+    el.innerHTML=`<div style="text-align:center;padding:30px;color:var(--sl-text3)">
+      <div style="font-size:15px;color:var(--sl-text2);font-weight:700;margin-bottom:6px">${clients.length&&q?'No matches':'No clients yet'}</div>
+      <div style="font-size:13px">${clients.length&&q?'Try a different name or phone number':'Click "+ Add Client" to add your first client'}</div>
+    </div>`;
     return;
   }
   el.innerHTML=filtered.map(c=>`
@@ -1346,7 +1365,8 @@ function renderClientsList(){
       <div class="client-avatar">${c.name.charAt(0).toUpperCase()}</div>
       <div style="flex:1">
         <div class="client-name">${esc(c.name)}${c.biz?` <span style="font-weight:400;color:var(--sl-text2)">· ${esc(c.biz)}</span>`:''}</div>
-        <div class="client-meta">${c.phone?`📞 ${esc(c.phone)} `:''} ${c.email?`✉ ${esc(c.email)}`:''}</div>
+        <div class="client-meta">${c.phone?`📞 ${esc(c.phone)} `:''} ${c.email?`✉ ${esc(c.email)}`:''} ${c.notes?`· ${esc(c.notes.substring(0,40))}${c.notes.length>40?'...':''}`:''}</div>
+        <div style="font-size:10px;color:var(--sl-text3);margin-top:2px">Added: ${c.date||''}</div>
       </div>
       <div class="client-actions">
         <button class="proj-act-btn proj-act-load" onclick="useClientInProject(${c.id})">Use</button>
@@ -1828,24 +1848,26 @@ function renderResults(sheets,unfitted,scale){
 
     const cutRows=s.placed.map((p,i)=>`<tr><td>${i+1}</td><td><span class="piece-dot" style="background:${PRINT_STROKES[p.piece.colorIdx%PRINT_STROKES.length]};-webkit-print-color-adjust:exact;print-color-adjust:exact"></span>${esc(p.piece.label)}${p.piece.instance>1?' #'+p.piece.instance:''}</td><td>${p.pw} × ${p.ph}</td><td>${p.x.toFixed(0)}, ${p.y.toFixed(0)}</td><td>${(p.pw!==p.piece.l)?'✓':'—'}</td></tr>`).join('');
 
-    // Cut sequence section — Pro only
-    const cutSeqHtml = isPro()
-      ? buildCutSeqTable(cutSeq, s)
-      : cutSeq.length > 0
-        ? `<div class="cut-seq-wrap no-print">
+    // Cut sequence section — numbers on diagram FREE, detailed table PRO only
+    const cutSeqHtml = cutSeq.length > 0
+      ? isPro()
+        ? buildCutSeqTable(cutSeq, s)
+        : `<div class="cut-seq-wrap no-print">
             <div class="cut-seq-title">
               <span class="cut-seq-badge-inline">✂</span>
               Cutting Sequence
-              <span class="premium-lock" onclick="showUpgrade('Cutting Sequence Diagram')">⭐ PRO</span>
+              <span class="premium-lock" onclick="showUpgrade('Cut Sequence Table')">⭐ PRO</span>
             </div>
-            <div style="background:var(--sl-bg3);border:1px dashed var(--sl-border2);border-radius:6px;padding:14px;text-align:center;color:var(--sl-text2);font-size:12px">
-              <div style="font-size:22px;margin-bottom:6px">🔒</div>
-              <div style="font-weight:700;margin-bottom:4px">${cutSeq.length} cuts computed — upgrade to see the sequence</div>
-              <div style="font-size:11px;color:var(--sl-text3)">Numbered cut order so your workshop operator knows exactly what to cut first</div>
-              <button onclick="showUpgrade('Cutting Sequence Diagram')" style="margin-top:10px;background:var(--sl-yellow);color:#1D1C1D;border:none;border-radius:4px;padding:6px 14px;font-weight:700;cursor:pointer;font-family:var(--sans)">⭐ Upgrade to Pro</button>
+            <div style="background:var(--sl-bg3);border:1px dashed var(--sl-border2);border-radius:6px;padding:12px 14px;display:flex;align-items:center;gap:12px">
+              <div style="font-size:24px">🔒</div>
+              <div>
+                <div style="font-weight:700;font-size:12px;color:var(--sl-text);margin-bottom:3px">${cutSeq.length} numbered cuts shown on diagram above</div>
+                <div style="font-size:11px;color:var(--sl-text2)">Upgrade to Pro to see the full cut sequence table with cut order, direction and position for your workshop operator.</div>
+                <button onclick="showUpgrade('Cut Sequence Table')" style="margin-top:8px;background:var(--sl-yellow);color:#1D1C1D;border:none;border-radius:4px;padding:5px 12px;font-weight:700;cursor:pointer;font-family:var(--sans);font-size:11px">⭐ Upgrade to Pro</button>
+              </div>
             </div>
            </div>`
-        : '';
+      : '';
 
     html+=`<div class="sheet-block">
       <div class="print-custom-header"></div>
@@ -1892,7 +1914,7 @@ function doPrint(){
   const hdrText=document.getElementById('po-header-text').value.trim();
   const hdrSize=+document.getElementById('po-header-size').value||16;
   const matFont=+document.getElementById('po-mat-font').value||18;
-  const diagFont=+document.getElementById('po-diag-font').value||10;
+  const diagFont=+document.getElementById('po-diag-font').value||16;
 
   // Remove old dynamic print style
   ['dyn-print','dyn-svg-ovr'].forEach(id=>{const e=document.getElementById(id);if(e)e.remove()});
@@ -2047,32 +2069,55 @@ function buildSVG(sheet, scale) {
   const placed = sheet.placed;
   const hCutSet = new Set(), vCutSet = new Set();
   for (const p of placed) {
-    hCutSet.add(Math.round(p.y)); hCutSet.add(Math.round(p.y+p.ph));
-    vCutSet.add(Math.round(p.x)); vCutSet.add(Math.round(p.x+p.pw));
+    hCutSet.add(Math.round(p.y));
+    hCutSet.add(Math.round(p.y + p.ph));
+    vCutSet.add(Math.round(p.x));
+    vCutSet.add(Math.round(p.x + p.pw));
   }
-  const hCuts = [...hCutSet].filter(y => y > 1 && y < sheet.W - 1 &&
-    !placed.some(p => p.y < y - 0.5 && p.y+p.ph > y + 0.5));
-  const vCuts = [...vCutSet].filter(x => x > 1 && x < sheet.L - 1 &&
-    !placed.some(p => p.x < x - 0.5 && p.x+p.pw > x + 0.5));
 
-  // Draw cut lines — numbered if pro, plain if free
+  // Deduplicate cuts within 5mm of each other (kerf duplicates)
+  function dedupeCuts(cuts, sheetMax) {
+    const sorted = [...cuts].filter(v => v > 1 && v < sheetMax - 1).sort((a,b) => a-b);
+    const result = [];
+    for (const v of sorted) {
+      if (!result.length || v - result[result.length-1] > 5) result.push(v);
+    }
+    return result;
+  }
+
+  const hCuts = dedupeCuts(
+    [...hCutSet].filter(y => !placed.some(p => p.y < y - 0.5 && p.y+p.ph > y + 0.5)),
+    sheet.W
+  );
+  const vCuts = dedupeCuts(
+    [...vCutSet].filter(x => !placed.some(p => p.x < x - 0.5 && p.x+p.pw > x + 0.5)),
+    sheet.L
+  );
+
+  // Draw cut lines — always numbered (sequence numbers shown for all users)
+  // Pro users additionally get the cut sequence TABLE below the diagram
   o += `<style>
     .sv-cut{stroke:#CC2200;stroke-width:1;stroke-dasharray:4,3;opacity:.75}
     .sv-cutl{fill:#CC2200;font-family:'Inconsolata','Courier New',monospace;font-size:7px;opacity:.8}
     @media print{.sv-cut{stroke:#CC0000;stroke-dasharray:3,2;opacity:.9}.sv-cutl{fill:#CC0000}}
   </style>`;
 
-  if(isPro() && sheet._cutSeq){
-    // Pro: numbered sequence overlay
+  if(sheet._cutSeq && sheet._cutSeq.length > 0){
+    // Always show numbered cut sequence on diagram
     o += buildCutSequenceSVG(sheet, scale, sheet._cutSeq);
   } else {
-    // Free: plain dashed lines with dimension
+    // Fallback: plain dashed lines (deduped, no kerf duplicates)
+    const seenH = new Set(), seenV = new Set();
     for (const y of hCuts) {
+      const yr = Math.round(y/10)*10; // round to nearest 10 to dedupe kerf variants
+      if(seenH.has(yr)) continue; seenH.add(yr);
       const sy = MT + Math.round(y * s);
       o += `<line x1="${ML}" y1="${sy}" x2="${ML+bW}" y2="${sy}" class="sv-cut"/>`;
       o += `<text x="${ML+3}" y="${sy-2}" class="sv-cutl">↔ ${Math.round(y)}</text>`;
     }
     for (const x of vCuts) {
+      const xr = Math.round(x/10)*10;
+      if(seenV.has(xr)) continue; seenV.add(xr);
       const sx = ML + Math.round(x * s);
       o += `<line x1="${sx}" y1="${MT}" x2="${sx}" y2="${MT+bH}" class="sv-cut"/>`;
       o += `<text transform="rotate(-90,${sx+6},${MT+bH/2})" x="${sx+6}" y="${MT+bH/2}" text-anchor="middle" class="sv-cutl">↕ ${Math.round(x)}</text>`;
