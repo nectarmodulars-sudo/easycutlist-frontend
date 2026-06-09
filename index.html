@@ -140,13 +140,17 @@ header{
 .btn-csv:hover{border-color:var(--sl-yellow);color:var(--sl-yellow)}
 
 /* Sidebar tables */
-.sidebar-table-wrap{padding:0 10px 4px}
-.input-table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px}
+.sidebar-table-wrap{padding:0 10px 4px;overflow-x:hidden}
+.input-table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px;table-layout:fixed}
 .input-table th{
   text-align:left;padding:0 3px 5px 3px;font-size:9px;color:var(--sl-sidebar-icon);
   font-weight:600;font-family:var(--sans);letter-spacing:.3px;white-space:nowrap;text-transform:uppercase;
+  overflow:hidden;
 }
-.input-table td{padding:2px 3px;vertical-align:middle}
+.input-table td{padding:2px 3px;vertical-align:middle;overflow:hidden}
+.input-table input[type="number"],
+.input-table input[type="text"],
+.input-table select{width:100%!important;min-width:0!important;box-sizing:border-box}
 
 input[type="number"],input[type="text"],select{
   background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);
@@ -662,13 +666,13 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
     <div class="sidebar-table-wrap">
       <table class="input-table">
         <thead><tr>
-          <th style="min-width:72px">Label</th>
-          <th style="width:48px">W</th>
-          <th style="width:48px">H</th>
-          <th style="width:30px">Qty</th>
-          <th style="width:80px">Material</th>
-          <th style="width:20px" title="Rotate?">⟳</th>
-          <th style="width:14px"></th>
+          <th style="width:22%">Label</th>
+          <th style="width:13%">W</th>
+          <th style="width:13%">H</th>
+          <th style="width:9%">Qty</th>
+          <th style="width:28%">Material</th>
+          <th style="width:8%" title="Rotate?">⟳</th>
+          <th style="width:7%"></th>
         </tr></thead>
         <tbody id="panels-tbody"></tbody>
       </table>
@@ -693,13 +697,13 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
     <div class="sidebar-table-wrap">
       <table class="input-table">
         <thead><tr>
-          <th style="min-width:60px">Label</th>
-          <th style="width:44px">W</th>
-          <th style="width:44px">H</th>
-          <th style="width:28px">Qty</th>
-          <th style="width:72px">Material</th>
-          <th style="width:50px" title="Price per sheet">₹/sheet</th>
-          <th style="width:14px"></th>
+          <th style="width:18%">Label</th>
+          <th style="width:13%">W</th>
+          <th style="width:13%">H</th>
+          <th style="width:9%">Qty</th>
+          <th style="width:25%">Material</th>
+          <th style="width:15%" title="Price per sheet">₹/sheet</th>
+          <th style="width:7%"></th>
         </tr></thead>
         <tbody id="stock-tbody"></tbody>
       </table>
