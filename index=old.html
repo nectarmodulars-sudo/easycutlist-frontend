@@ -373,73 +373,8 @@ table.cuts-table{width:100%;border-collapse:collapse;font-family:var(--mono);fon
 
 .print-custom-header{display:none}
 
-/* Header buttons */
-.hdr-btn{
-  background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);
-  color:rgba(255,255,255,.85);font-family:var(--sans);font-size:11px;font-weight:700;
-  padding:5px 10px;border-radius:4px;cursor:pointer;
-  display:flex;align-items:center;gap:5px;transition:all .15s;
-}
-.hdr-btn:hover{background:rgba(255,255,255,.22);color:#fff}
-.hdr-btn-new{
-  background:rgba(236,178,46,.15);border-color:rgba(236,178,46,.4)!important;
-  color:var(--sl-yellow)!important;
-}
-.hdr-btn-new:hover{background:rgba(236,178,46,.25)!important;color:var(--sl-yellow)!important}
-
-/* Save project button */
-.save-proj-btn{
-  width:100%;padding:7px;font-family:var(--sans);font-size:12px;font-weight:700;
-  background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);
-  color:rgba(255,255,255,.8);border-radius:var(--radius);
-  cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:6px;
-  margin-bottom:6px;
-}
-.save-proj-btn:hover{background:rgba(255,255,255,.18);color:#fff}
-
-/* Project cards */
-.proj-card{
-  background:var(--sl-bg);border:1px solid var(--sl-border);
-  border-radius:var(--radius);padding:12px 14px;margin-bottom:8px;
-  transition:box-shadow .15s;
-}
-.proj-card:hover{box-shadow:0 2px 8px rgba(0,0,0,.1)}
-.proj-card-top{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
-.proj-card-name{font-weight:900;font-size:14px;color:var(--sl-text)}
-.proj-card-client{font-size:12px;color:var(--sl-text2);margin-top:2px}
-.proj-card-meta{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center}
-.proj-status{font-size:10px;font-weight:700;padding:2px 7px;border-radius:3px;letter-spacing:.3px}
-.proj-status-draft{background:#F1F1F1;color:#616061}
-.proj-status-inprogress{background:var(--sl-blue-light);color:var(--sl-blue)}
-.proj-status-done{background:var(--sl-green-light);color:var(--sl-green)}
-.proj-card-date{font-size:10px;color:var(--sl-text3);font-family:var(--mono)}
-.proj-card-counts{font-size:10px;color:var(--sl-text3)}
-.proj-card-actions{display:flex;gap:6px;margin-top:8px}
-.proj-act-btn{
-  font-size:11px;font-weight:700;padding:4px 10px;border-radius:4px;
-  cursor:pointer;font-family:var(--sans);border:none;transition:all .1s;
-}
-.proj-act-load{background:var(--sl-yellow);color:#1D1C1D}
-.proj-act-load:hover{background:var(--sl-yellow-dark)}
-.proj-act-dup{background:var(--sl-bg3);border:1px solid var(--sl-border2)!important;color:var(--sl-text2)}
-.proj-act-dup:hover{background:var(--sl-border)}
-.proj-act-del{background:var(--sl-red-light);color:var(--sl-red)}
-.proj-act-del:hover{background:#fdd}
-.proj-notes{font-size:11px;color:var(--sl-text2);margin-top:6px;font-style:italic;border-top:1px solid var(--sl-border);padding-top:6px}
-.proj-empty{text-align:center;padding:40px 20px;color:var(--sl-text3)}
-.proj-empty h3{font-size:15px;color:var(--sl-text2);margin-bottom:6px}
-
-/* Cost card in results */
-.cost-summary{
-  background:linear-gradient(135deg,#1264A3 0%,#0a4a7a 100%);
-  border-radius:var(--radius);padding:14px 18px;margin-bottom:16px;
-  color:#fff;
-}
-.cost-title{font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;opacity:.7;margin-bottom:10px}
-.cost-main{font-size:28px;font-weight:900;font-family:var(--mono);margin-bottom:8px}
-.cost-rows{display:flex;gap:16px;flex-wrap:wrap}
-.cost-row{font-size:11px;opacity:.85}
-.cost-row span{font-weight:700;font-family:var(--mono)}
+/* Slack-style section header look for sidebar */
+.sl-section-label{
   padding:16px 16px 6px;
   font-size:13px;font-weight:900;color:var(--sl-sidebar-text-active);
   letter-spacing:0;
@@ -505,23 +440,8 @@ table.cuts-table{width:100%;border-collapse:collapse;font-family:var(--mono);fon
     </div>
     Easy<span>CutList</span>
   </div>
-  <div style="position:absolute;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:8px">
-    <button class="hdr-btn hdr-btn-new" onclick="newProject()" title="Clear all and start fresh">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
-      New Project
-    </button>
-    <div style="color:rgba(255,255,255,.35);font-size:16px;font-weight:200">|</div>
-    <div style="color:rgba(255,255,255,.5);font-size:11px;font-family:var(--mono);letter-spacing:.3px">Cut smarter. Waste less.</div>
-  </div>
-  <div style="display:flex;align-items:center;gap:8px">
-    <button class="hdr-btn" onclick="openProjects()">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-      My Projects
-    </button>
-    <button class="hdr-btn" onclick="openProfile()">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
-      My Profile
-    </button>
+  <div style="display:flex;align-items:center;gap:10px">
+    <div class="hbadge" style="color:rgba(255,255,255,.6);font-size:10px">Cut smarter. Waste less.</div>
   </div>
 </header>
 <div class="app">
@@ -535,7 +455,7 @@ table.cuts-table{width:100%;border-collapse:collapse;font-family:var(--mono);fon
         Panels to Cut
       </div>
       <div class="sec-actions">
-        <button class="btn-csv" onclick="openCSV('panels')">↑ Import</button>
+        <button class="btn-csv" onclick="openCSV('panels')">↑ CSV</button>
         <button class="btn btn-ghost btn-sm" onclick="addPanel()">+ Add</button>
         <button class="btn-danger-sm" onclick="clearPanels()">✕</button>
       </div>
@@ -566,7 +486,7 @@ table.cuts-table{width:100%;border-collapse:collapse;font-family:var(--mono);fon
         Stock Sheets
       </div>
       <div class="sec-actions">
-        <button class="btn-csv" onclick="openCSV('stock')">↑ Import</button>
+        <button class="btn-csv" onclick="openCSV('stock')">↑ CSV</button>
         <button class="btn btn-ghost btn-sm" onclick="addStock()">+ Add</button>
         <button class="btn-danger-sm" onclick="clearStock()">✕</button>
       </div>
@@ -574,12 +494,11 @@ table.cuts-table{width:100%;border-collapse:collapse;font-family:var(--mono);fon
     <div class="sidebar-table-wrap">
       <table class="input-table">
         <thead><tr>
-          <th style="min-width:60px">Label</th>
-          <th style="width:44px">W</th>
-          <th style="width:44px">H</th>
-          <th style="width:28px">Qty</th>
-          <th style="width:72px">Material</th>
-          <th style="width:50px" title="Price per sheet">₹/sheet</th>
+          <th style="min-width:72px">Label</th>
+          <th style="width:48px">W</th>
+          <th style="width:48px">H</th>
+          <th style="width:30px">Qty</th>
+          <th style="width:80px">Material</th>
           <th style="width:14px"></th>
         </tr></thead>
         <tbody id="stock-tbody"></tbody>
@@ -616,10 +535,6 @@ table.cuts-table{width:100%;border-collapse:collapse;font-family:var(--mono);fon
   </div>
 
   <div class="calc-section">
-    <button class="save-proj-btn" onclick="openSaveProject()">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-      Save Project
-    </button>
     <button class="calc-btn" onclick="calculate()">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
       Run Optimizer
@@ -652,146 +567,7 @@ table.cuts-table{width:100%;border-collapse:collapse;font-family:var(--mono);fon
   </div>
 </div>
 
-<!-- Save Project Modal -->
-<div class="modal-overlay" id="save-proj-modal" style="display:none" onclick="if(event.target===this)closeSaveProject()">
-  <div class="modal" style="width:420px">
-    <div class="modal-title">💾 Save Project</div>
-    <div class="modal-sub">Save current panels, stock and settings as a project.</div>
-    <div style="margin-bottom:10px">
-      <label style="font-size:11px;color:var(--sl-text2);display:block;margin-bottom:4px;font-weight:700">Project Name *</label>
-      <input type="text" id="sp-name" placeholder="e.g. Sharma Kitchen - June 2026">
-    </div>
-    <div style="margin-bottom:10px">
-      <label style="font-size:11px;color:var(--sl-text2);display:block;margin-bottom:4px;font-weight:700">Client Name</label>
-      <input type="text" id="sp-client" placeholder="e.g. Rahul Sharma">
-    </div>
-    <div style="margin-bottom:10px">
-      <label style="font-size:11px;color:var(--sl-text2);display:block;margin-bottom:4px;font-weight:700">Status</label>
-      <select id="sp-status" style="background:var(--sl-bg2);border:1px solid var(--sl-border2);color:var(--sl-text);border-radius:4px;padding:6px 8px;width:100%">
-        <option value="draft">Draft</option>
-        <option value="inprogress">In Progress</option>
-        <option value="done">Completed</option>
-      </select>
-    </div>
-    <div style="margin-bottom:10px">
-      <label style="font-size:11px;color:var(--sl-text2);display:block;margin-bottom:4px;font-weight:700">Notes</label>
-      <textarea id="sp-notes" style="height:70px" placeholder="Any notes about this project..."></textarea>
-    </div>
-    <div class="modal-btns">
-      <button class="btn btn-ghost" onclick="closeSaveProject()">Cancel</button>
-      <button class="btn btn-accent" onclick="saveProject()">Save Project</button>
-    </div>
-  </div>
-</div>
-
-<!-- Projects Modal -->
-<div class="modal-overlay" id="projects-modal" style="display:none" onclick="if(event.target===this)closeProjects()">
-  <div class="modal" style="width:680px;max-height:85vh">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-      <div class="modal-title" style="margin:0">📁 My Projects</div>
-      <button class="btn btn-ghost" onclick="closeProjects()" style="padding:4px 10px">✕</button>
-    </div>
-    <input type="text" id="proj-search" placeholder="Search projects or clients..." oninput="renderProjectsList()" style="background:var(--sl-bg2);border:1px solid var(--sl-border2);color:var(--sl-text);margin-bottom:12px">
-    <div id="projects-list" style="max-height:55vh;overflow-y:auto"></div>
-  </div>
-</div>
-
-<!-- Profile Modal -->
-<div class="modal-overlay" id="profile-modal" style="display:none" onclick="if(event.target===this)closeProfile()">
-  <div class="modal" style="width:480px">
-    <div class="modal-title">👤 My Profile</div>
-    <div class="modal-sub">Your details appear on PDF exports.</div>
-    <div class="modal-divider"></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-      <div>
-        <label style="font-size:11px;color:var(--sl-text2);display:block;margin-bottom:4px;font-weight:700">Your Name</label>
-        <input type="text" id="pf-name" placeholder="e.g. Pratiksha">
-      </div>
-      <div>
-        <label style="font-size:11px;color:var(--sl-text2);display:block;margin-bottom:4px;font-weight:700">Business Name</label>
-        <input type="text" id="pf-biz" placeholder="e.g. Nectar Modular Kitchen">
-      </div>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-      <div>
-        <label style="font-size:11px;color:var(--sl-text2);display:block;margin-bottom:4px;font-weight:700">Phone / WhatsApp</label>
-        <input type="text" id="pf-phone" placeholder="+91 98765 43210">
-      </div>
-      <div>
-        <label style="font-size:11px;color:var(--sl-text2);display:block;margin-bottom:4px;font-weight:700">Currency Symbol</label>
-        <select id="pf-currency" style="background:var(--sl-bg2);border:1px solid var(--sl-border2);color:var(--sl-text);border-radius:4px;padding:6px 8px;width:100%">
-        <optgroup label="Asia">
-          <option value="₹">₹ Indian Rupee (INR)</option>
-          <option value="৳">৳ Bangladeshi Taka (BDT)</option>
-          <option value="₨">₨ Pakistani Rupee (PKR)</option>
-          <option value="Rs">Rs Sri Lankan Rupee (LKR)</option>
-          <option value="¥">¥ Japanese Yen (JPY)</option>
-          <option value="¥">¥ Chinese Yuan (CNY)</option>
-          <option value="₩">₩ South Korean Won (KRW)</option>
-          <option value="฿">฿ Thai Baht (THB)</option>
-          <option value="Rp">Rp Indonesian Rupiah (IDR)</option>
-          <option value="RM">RM Malaysian Ringgit (MYR)</option>
-          <option value="₱">₱ Philippine Peso (PHP)</option>
-          <option value="S$">S$ Singapore Dollar (SGD)</option>
-        </optgroup>
-        <optgroup label="Middle East">
-          <option value="AED">AED UAE Dirham</option>
-          <option value="SAR">SAR Saudi Riyal</option>
-          <option value="QAR">QAR Qatari Riyal</option>
-          <option value="KWD">KWD Kuwaiti Dinar</option>
-          <option value="BHD">BHD Bahraini Dinar</option>
-          <option value="OMR">OMR Omani Rial</option>
-        </optgroup>
-        <optgroup label="Americas">
-          <option value="$">$ US Dollar (USD)</option>
-          <option value="C$">C$ Canadian Dollar (CAD)</option>
-          <option value="R$">R$ Brazilian Real (BRL)</option>
-          <option value="MX$">MX$ Mexican Peso (MXN)</option>
-        </optgroup>
-        <optgroup label="Europe">
-          <option value="€">€ Euro (EUR)</option>
-          <option value="£">£ British Pound (GBP)</option>
-          <option value="CHF">CHF Swiss Franc</option>
-          <option value="kr">kr Swedish Krona (SEK)</option>
-          <option value="zł">zł Polish Zloty (PLN)</option>
-        </optgroup>
-        <optgroup label="Africa">
-          <option value="R">R South African Rand (ZAR)</option>
-          <option value="KSh">KSh Kenyan Shilling (KES)</option>
-          <option value="₦">₦ Nigerian Naira (NGN)</option>
-          <option value="EGP">EGP Egyptian Pound</option>
-        </optgroup>
-        <optgroup label="Oceania">
-          <option value="A$">A$ Australian Dollar (AUD)</option>
-          <option value="NZ$">NZ$ New Zealand Dollar (NZD)</option>
-        </optgroup>
-      </select>
-      </div>
-    </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
-      <div>
-        <label style="font-size:11px;color:var(--sl-text2);display:block;margin-bottom:4px;font-weight:700">Default Blade Kerf (mm)</label>
-        <input type="number" id="pf-kerf" value="3" min="0" max="20" step="0.5" style="background:var(--sl-bg2);border:1px solid var(--sl-border2);color:var(--sl-text)">
-      </div>
-      <div>
-        <label style="font-size:11px;color:var(--sl-text2);display:block;margin-bottom:4px;font-weight:700">Default Sheet W × H</label>
-        <div style="display:flex;gap:4px">
-          <input type="number" id="pf-sw" value="1210" style="background:var(--sl-bg2);border:1px solid var(--sl-border2);color:var(--sl-text)">
-          <input type="number" id="pf-sh" value="2430" style="background:var(--sl-bg2);border:1px solid var(--sl-border2);color:var(--sl-text)">
-        </div>
-      </div>
-    </div>
-    <div style="margin-bottom:14px">
-      <label style="font-size:11px;color:var(--sl-text2);display:block;margin-bottom:4px;font-weight:700">Logo (appears on PDF)</label>
-      <input type="file" id="pf-logo" accept="image/*" class="modal-file-input" onchange="loadLogo(event)">
-      <div id="pf-logo-preview" style="margin-top:6px"></div>
-    </div>
-    <div class="modal-btns">
-      <button class="btn btn-ghost" onclick="closeProfile()">Cancel</button>
-      <button class="btn btn-accent" onclick="saveProfile()">Save Profile</button>
-    </div>
-  </div>
-</div>
+<!-- Print Options Modal -->
 <div class="modal-overlay" id="print-modal" style="display:none" onclick="if(event.target===this)closePrint()">
   <div class="modal">
     <div class="modal-title">&#128424; Print / PDF Options</div>
@@ -851,9 +627,6 @@ table.cuts-table{width:100%;border-collapse:collapse;font-family:var(--mono);fon
 <script>
 // ══ STATE ══
 let panelRows=[],stockRows=[],idC=0,csvTarget='panels';
-let profile = JSON.parse(localStorage.getItem('ecl_profile')||'{}');
-let projects = JSON.parse(localStorage.getItem('ecl_projects')||'[]');
-function getCurrency(){ return profile.currency||'₹'; }
 const COLORS=['#4fffb0','#00d4ff','#ffb830','#ff6b9d','#a78bfa','#34d399','#fb923c','#60a5fa','#f472b6','#fbbf24','#4ade80','#c084fc','#38bdf8','#f87171','#a3e635','#e879f9','#22d3ee','#84cc16','#f97316','#818cf8'];
 const PRINT_FILLS=['#d4f5e9','#cce8f5','#fdf0d0','#fad5e0','#e8e0fa','#d0f0e8','#fde5cc','#d0e6fa','#fad0e8','#fef3c7','#d0fadc','#ede0fa','#ccf0fa','#fad0d0','#edfacc','#fad5f5','#ccfaf5','#e5facc','#fde0cc','#dde0fa'];
 const PRINT_STROKES=['#1a7a4a','#1260a0','#a05c00','#c0004a','#6040b0','#0a6040','#b05010','#1050a0','#900060','#a07800','#1a6030','#7040a0','#006080','#c03030','#506010','#900080','#006060','#407010','#a04010','#404090'];
@@ -884,14 +657,9 @@ function renderPanels(){
   </tr>`).join('')}
 
 // ══ STOCK ══
-function addStock(label='',l=1210,w=2430,qty=1,material='Plywood',price=0){
-  const def = profile.defaultSheetW ? parseInt(profile.defaultSheetW) : 1210;
-  const defH = profile.defaultSheetH ? parseInt(profile.defaultSheetH) : 2430;
-  stockRows.push({id:uid(),label,l:l||def,w:w||defH,qty,material,price:price||0});
-  renderStock();
-}
+function addStock(label='',l=2440,w=1220,qty=1,material='Plywood'){stockRows.push({id:uid(),label,l,w,qty,material});renderStock()}
 function removeStock(id){stockRows=stockRows.filter(r=>r.id!==id);renderStock()}
-function updateStock(id,f,v){const r=stockRows.find(r=>r.id===id);if(r)r[f]=(f==='l'||f==='w'||f==='qty'||f==='price')?+v:v}
+function updateStock(id,f,v){const r=stockRows.find(r=>r.id===id);if(r)r[f]=(f==='l'||f==='w'||f==='qty')?+v:v}
 function renderStock(){
   document.getElementById('stock-tbody').innerHTML=stockRows.map(r=>`<tr>
     <td><input type="text" value="${esc(r.label)}" oninput="updateStock(${r.id},'label',this.value)"></td>
@@ -899,18 +667,17 @@ function renderStock(){
     <td><input type="number" value="${r.w}" min="1" oninput="updateStock(${r.id},'w',this.value)"></td>
     <td><input type="number" value="${r.qty}" min="1" max="99" oninput="updateStock(${r.id},'qty',this.value)"></td>
     <td>${matSel(r.material,`updateStock(${r.id},'material',this.value)`)}</td>
-    <td><input type="number" value="${r.price||0}" min="0" step="50" placeholder="0" oninput="updateStock(${r.id},'price',this.value)" title="Price per sheet"></td>
     <td><button class="del-btn" onclick="removeStock(${r.id})">&#215;</button></td>
   </tr>`).join('')}
 
 // ══ CSV — Format: W  H  QTY  Material  Label ══
 const CSV_SAMPLES={
   panels:`W,H,QTY,Material,Label\n1980,350,1,9172 SH,1980 GROVE\n280,330,2,9172 SH,280 GROVE\n394,287,4,9172 SH,394 GROVE\n540,2370,2,SDL 1020 SHG,2370 GROVE\n130,470,3,SDL 1020 SHG,\n`,
-  stock:`W,H,QTY,Material,Label,Price\n1210,2430,100,DW,,1800\n1210,2430,100,MDF,,1200\n1210,2430,100,SDL 1020 SHG,,2100\n1210,2430,100,SDL 1020 SHG 18MM BOARD,,2500\n`
+  stock:`W,H,QTY,Material,Label\n1210,2430,100,DW,\n1210,2430,100,MDF,\n1210,2430,100,SDL 1020 SHG,\n1210,2430,100,SDL 1020 SHG 18MM BOARD,\n`
 };
 const CSV_HINTS={
-  panels:`Tab or comma separated. First row (header) is skipped automatically.\nColumns: W  H  QTY  Material  Label\n\nExample:\n1980\t350\t1\t9172 SH\t1980 GROVE\n280\t330\t2\t9172 SH\t280 GROVE`,
-  stock:`Tab or comma separated. First row (header) is skipped automatically.\nColumns: W  H  QTY  Material  Label  Price\n\nExample:\n1210\t2430\t100\tDW\t\t1800\n1210\t2430\t100\tMDF\t\t1200`
+  panels:`Tab or comma separated. First row (header) is skipped automatically.\nColumns: W  H  QTY  Material  Label\n\nExample:\n1980\t350\t1\t9172 SH\t1980 GROVE\n280\t330\t2\t9172 SH\t280 GROVE\n394\t287\t4\t9172 SH`,
+  stock:`Tab or comma separated. First row (header) is skipped automatically.\nColumns: W  H  QTY  Material  Label\n\nExample:\n1210\t2430\t100\t9172 SH\n1210\t2430\t100\t9189 MG`
 };
 function openCSV(t){csvTarget=t;document.getElementById('csv-modal-title').textContent=t==='panels'?'Import Panels from CSV':'Import Stock Sheets from CSV';document.getElementById('csv-hint').textContent=CSV_HINTS[t];document.getElementById('csv-textarea').value='';document.getElementById('csv-file-input').value='';document.getElementById('csv-modal').style.display='flex'}
 function closeCSV(){document.getElementById('csv-modal').style.display='none'}
@@ -931,9 +698,9 @@ function applyCSV(){
     const cols=parseLine(t);
     // Skip header row(s) — any row where W or H is non-numeric
     if(isHeaderRow(cols))continue;
-    const W=parseFloat(cols[0]),H=parseFloat(cols[1]),qty=Math.max(1,parseInt(cols[2])||1),mat=(cols[3]||'Plywood').trim()||'Plywood',lbl=(cols[4]||'').trim(),price=parseFloat(cols[5])||0;
+    const W=parseFloat(cols[0]),H=parseFloat(cols[1]),qty=Math.max(1,parseInt(cols[2])||1),mat=(cols[3]||'Plywood').trim()||'Plywood',lbl=(cols[4]||'').trim();
     if(W>0&&H>0){
-      if(csvTarget==='panels')addPanel(lbl,W,H,qty,mat,true);else addStock(lbl,W,H,qty,mat,price);
+      if(csvTarget==='panels')addPanel(lbl,W,H,qty,mat,true);else addStock(lbl,W,H,qty,mat);
       imported++;
     }else errors++;
   }
@@ -946,185 +713,6 @@ function downloadSampleCSV(){
   const blob=new Blob([data],{type:'text/csv'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=fname;a.click();
   URL.revokeObjectURL(a.href);
-}
-
-// ══ NEW PROJECT ══
-function newProject(){
-  if((panelRows.length||stockRows.length)&&!confirm('Start a new blank project? Current panels and stock will be cleared.'))return;
-  panelRows=[];stockRows=[];idC=0;
-  renderPanels();renderStock();
-  document.getElementById('results').style.display='none';
-  document.getElementById('empty-state').style.display='flex';
-}
-function openProfile(){
-  const p=profile;
-  document.getElementById('pf-name').value=p.name||'';
-  document.getElementById('pf-biz').value=p.biz||'';
-  document.getElementById('pf-phone').value=p.phone||'';
-  document.getElementById('pf-currency').value=p.currency||'₹';
-  document.getElementById('pf-kerf').value=p.kerf||3;
-  document.getElementById('pf-sw').value=p.defaultSheetW||1210;
-  document.getElementById('pf-sh').value=p.defaultSheetH||2430;
-  const prev=document.getElementById('pf-logo-preview');
-  prev.innerHTML=p.logo?`<img src="${p.logo}" style="max-height:50px;border-radius:4px;border:1px solid var(--sl-border2)">`:'' ;
-  document.getElementById('profile-modal').style.display='flex';
-}
-function closeProfile(){document.getElementById('profile-modal').style.display='none'}
-function loadLogo(e){
-  const f=e.target.files[0];if(!f)return;
-  const r=new FileReader();
-  r.onload=ev=>{
-    document.getElementById('pf-logo-preview').innerHTML=`<img src="${ev.target.result}" style="max-height:50px;border-radius:4px;border:1px solid var(--sl-border2)">`;
-    profile._pendingLogo=ev.target.result;
-  };
-  r.readAsDataURL(f);
-}
-function saveProfile(){
-  profile={
-    name:  document.getElementById('pf-name').value.trim(),
-    biz:   document.getElementById('pf-biz').value.trim(),
-    phone: document.getElementById('pf-phone').value.trim(),
-    currency: document.getElementById('pf-currency').value,
-    kerf:  +document.getElementById('pf-kerf').value||3,
-    defaultSheetW: +document.getElementById('pf-sw').value||1210,
-    defaultSheetH: +document.getElementById('pf-sh').value||2430,
-    logo:  profile._pendingLogo||profile.logo||null,
-  };
-  localStorage.setItem('ecl_profile', JSON.stringify(profile));
-  // Apply defaults
-  document.getElementById('kerf').value=profile.kerf;
-  closeProfile();
-  alert('Profile saved!');
-}
-
-// ══ PROJECTS ══
-function openSaveProject(){
-  document.getElementById('sp-name').value='';
-  document.getElementById('sp-client').value='';
-  document.getElementById('sp-status').value='draft';
-  document.getElementById('sp-notes').value='';
-  document.getElementById('save-proj-modal').style.display='flex';
-  setTimeout(()=>document.getElementById('sp-name').focus(),100);
-}
-function closeSaveProject(){document.getElementById('save-proj-modal').style.display='none'}
-
-function saveProject(){
-  const name=document.getElementById('sp-name').value.trim();
-  if(!name){alert('Please enter a project name.');return;}
-  const proj={
-    id: Date.now(),
-    name,
-    client: document.getElementById('sp-client').value.trim(),
-    status: document.getElementById('sp-status').value,
-    notes:  document.getElementById('sp-notes').value.trim(),
-    date:   new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}),
-    panels: JSON.parse(JSON.stringify(panelRows)),
-    stocks: JSON.parse(JSON.stringify(stockRows)),
-    kerf:   +document.getElementById('kerf').value||3,
-    matchMat: document.getElementById('mat-toggle').checked,
-    allowRot: document.getElementById('grain-toggle').checked,
-  };
-  projects.unshift(proj);
-  localStorage.setItem('ecl_projects', JSON.stringify(projects));
-  closeSaveProject();
-  alert(`Project "${name}" saved!`);
-}
-
-function openProjects(){
-  renderProjectsList();
-  document.getElementById('projects-modal').style.display='flex';
-}
-function closeProjects(){document.getElementById('projects-modal').style.display='none'}
-
-function renderProjectsList(){
-  const q=(document.getElementById('proj-search')?.value||'').toLowerCase();
-  const filtered=projects.filter(p=>
-    p.name.toLowerCase().includes(q)||
-    (p.client||'').toLowerCase().includes(q)
-  );
-  const el=document.getElementById('projects-list');
-  if(!filtered.length){
-    el.innerHTML=`<div class="proj-empty"><h3>${projects.length?'No projects match your search':'No projects yet'}</h3><p>${projects.length?'Try a different search term':'Save your first project using the Save Project button'}</p></div>`;
-    return;
-  }
-  const statusLabel={draft:'Draft',inprogress:'In Progress',done:'Completed'};
-  const statusClass={draft:'proj-status-draft',inprogress:'proj-status-inprogress',done:'proj-status-done'};
-  el.innerHTML=filtered.map(p=>`
-    <div class="proj-card">
-      <div class="proj-card-top">
-        <div>
-          <div class="proj-card-name">${esc(p.name)}</div>
-          ${p.client?`<div class="proj-card-client">👤 ${esc(p.client)}</div>`:''}
-        </div>
-        <span class="proj-status ${statusClass[p.status]||'proj-status-draft'}">${statusLabel[p.status]||'Draft'}</span>
-      </div>
-      <div class="proj-card-meta">
-        <span class="proj-card-date">📅 ${p.date}</span>
-        <span class="proj-card-counts">📦 ${p.panels.length} panel types · 🪵 ${p.stocks.length} stock sheets</span>
-      </div>
-      ${p.notes?`<div class="proj-notes">${esc(p.notes)}</div>`:''}
-      <div class="proj-card-actions">
-        <button class="proj-act-btn proj-act-load" onclick="loadProject(${p.id})">▶ Load</button>
-        <button class="proj-act-btn proj-act-dup" onclick="duplicateProject(${p.id})">⧉ Duplicate</button>
-        <button class="proj-act-btn proj-act-del" onclick="deleteProject(${p.id})">🗑 Delete</button>
-      </div>
-    </div>`).join('');
-}
-
-function loadProject(id){
-  const p=projects.find(p=>p.id===id);if(!p)return;
-  if(!confirm(`Load project "${p.name}"? Current panels and stock will be replaced.`))return;
-  panelRows=JSON.parse(JSON.stringify(p.panels));
-  stockRows=JSON.parse(JSON.stringify(p.stocks));
-  idC=Math.max(...panelRows.map(r=>r.id),...stockRows.map(r=>r.id),idC)+1;
-  document.getElementById('kerf').value=p.kerf||3;
-  document.getElementById('mat-toggle').checked=p.matchMat!==false;
-  document.getElementById('grain-toggle').checked=p.allowRot!==false;
-  renderPanels();renderStock();
-  closeProjects();
-  // Clear results
-  document.getElementById('results').style.display='none';
-  document.getElementById('empty-state').style.display='flex';
-}
-
-function duplicateProject(id){
-  const p=projects.find(p=>p.id===id);if(!p)return;
-  const copy={...JSON.parse(JSON.stringify(p)),id:Date.now(),name:p.name+' (Copy)',date:new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})};
-  projects.unshift(copy);
-  localStorage.setItem('ecl_projects',JSON.stringify(projects));
-  renderProjectsList();
-}
-
-function deleteProject(id){
-  const p=projects.find(p=>p.id===id);if(!p)return;
-  if(!confirm(`Delete "${p.name}"? This cannot be undone.`))return;
-  projects=projects.filter(p=>p.id!==id);
-  localStorage.setItem('ecl_projects',JSON.stringify(projects));
-  renderProjectsList();
-}
-
-// ══ COST CALCULATION ══
-function calcCost(sheets){
-  // Build price map from stock rows: material → price per sheet
-  const priceMap={};
-  for(const s of stockRows){
-    if(s.price>0) priceMap[s.material]=s.price;
-  }
-  // Count sheets used per material
-  const matSheets={};
-  for(const sh of sheets){
-    matSheets[sh.material]=(matSheets[sh.material]||0)+1;
-  }
-  let total=0,hasPrice=false;
-  const rows=[];
-  for(const[mat,count] of Object.entries(matSheets)){
-    const price=priceMap[mat]||0;
-    const cost=price*count;
-    total+=cost;
-    if(price>0)hasPrice=true;
-    rows.push({mat,count,price,cost});
-  }
-  return{total,rows,hasPrice};
 }
 
 // ══ API CONFIG ══
@@ -1247,8 +835,6 @@ function renderResults(sheets,unfitted,scale){
   let totArea=0,usedArea=0,totPieces=0,totCuts=0,totCutLen=0;
   for(const s of sheets){totArea+=s.L*s.W;for(const p of s.placed){usedArea+=p.pw*p.ph;totPieces++}const cs=calcCuts(s);totCuts+=cs.count;totCutLen+=cs.length}
   const wastedA=totArea-usedArea,wPct=totArea>0?wastedA/totArea*100:0,wc=wPct<15?'good':wPct<30?'warn':'danger';
-  const cur=getCurrency();
-  const cost=calcCost(sheets);
 
   // Build per-material breakdown
   const matMap={};
@@ -1291,17 +877,6 @@ function renderResults(sheets,unfitted,scale){
     <div class="stat-card"><div class="stat-label">Cut Length</div><div class="stat-value">${totCutLen.toLocaleString()} mm</div></div>
     ${unfitted.length?`<div class="stat-card"><div class="stat-label">Unfitted</div><div class="stat-value danger">${unfitted.length}</div></div>`:''}
   </div>
-  ${cost.hasPrice?`
-  <div class="cost-summary no-print">
-    <div class="cost-title">💰 Cost Estimation</div>
-    <div class="cost-main">${cur}${cost.total.toLocaleString('en-IN')}</div>
-    <div class="cost-rows">
-      ${cost.rows.filter(r=>r.price>0).map(r=>`
-        <div class="cost-row">${esc(r.mat)}: <span>${r.count} sheets × ${cur}${r.price.toLocaleString('en-IN')} = ${cur}${r.cost.toLocaleString('en-IN')}</span></div>
-      `).join('')}
-      ${cost.rows.some(r=>r.price===0)?`<div class="cost-row" style="opacity:.6">Some materials have no price set</div>`:''}
-    </div>
-  </div>`:''}
   <div class="mat-summary no-print">
     <div class="mat-summary-title">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
@@ -1390,10 +965,8 @@ function doPrint(){
   // Inject custom headers
   document.querySelectorAll('.print-custom-header').forEach(el=>{
     if(showHdr&&hdrText){
-      el.style.cssText=`font-size:${hdrSize}pt;font-weight:bold;padding:4pt 0 3pt;border-bottom:1pt solid #999;font-family:Arial,sans-serif;color:#000;margin-bottom:2pt;display:flex;align-items:center;gap:10pt;justify-content:space-between`;
-      const logoHtml=profile.logo?`<img src="${profile.logo}" style="max-height:32pt;max-width:80pt;object-fit:contain">` :'';
-      const bizInfo=profile.biz?`<div style="font-size:${Math.round(hdrSize*0.55)}pt;font-weight:normal;color:#555">${esc(profile.biz)}${profile.phone?' · '+esc(profile.phone):''}</div>`:'';
-      el.innerHTML=`<div>${logoHtml}</div><div style="flex:1;text-align:center">${esc(hdrText)}${bizInfo}</div><div></div>`;
+      el.style.cssText=`font-size:${hdrSize}pt;font-weight:bold;padding:4pt 0 3pt;border-bottom:1pt solid #999;font-family:Arial,sans-serif;color:#000;margin-bottom:2pt`;
+      el.textContent=hdrText;
     }else{
       el.style.cssText='';el.textContent='';
     }
@@ -1556,10 +1129,7 @@ function buildSVG(sheet, scale) {
   return o;
 }
 
-// ══ INIT — Apply profile defaults ══
-(function initApp(){
-  if(profile.kerf) document.getElementById('kerf').value=profile.kerf;
-})();
+// ══ INIT — Empty ══
 </script>
 </body>
 </html>
