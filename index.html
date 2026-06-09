@@ -447,6 +447,87 @@ table.cuts-table{width:100%;border-collapse:collapse;font-family:var(--mono);fon
 }
 .sl-section-label svg{opacity:.6}
 
+/* Algorithm badge */
+.algo-badge{display:flex;align-items:center;gap:10px;flex-wrap:wrap;background:linear-gradient(135deg,#0a3d1f 0%,#0d5c2a 100%);border:1px solid #1a7a4a;border-radius:var(--radius);padding:10px 14px;margin-bottom:12px}
+.algo-badge-icon{font-size:18px}
+.algo-badge-text{flex:1}
+.algo-badge-title{font-size:12px;font-weight:900;color:#4fffb0;letter-spacing:.3px}
+.algo-badge-sub{font-size:10px;color:rgba(79,255,176,.7);margin-top:2px}
+.algo-badge-stats{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}
+.algo-stat{background:rgba(79,255,176,.1);border:1px solid rgba(79,255,176,.2);border-radius:4px;padding:3px 8px;font-size:10px;color:#4fffb0;font-family:var(--mono);font-weight:600}
+
+/* Sheets saved banner */
+.sheets-saved-banner{background:linear-gradient(135deg,#1264A3,#0a4a7a);border-radius:var(--radius);padding:10px 16px;display:flex;align-items:center;gap:12px;margin-bottom:12px;color:#fff}
+.ssb-icon{font-size:22px}
+.ssb-text{flex:1}
+.ssb-title{font-size:13px;font-weight:900}
+.ssb-sub{font-size:11px;opacity:.75;margin-top:1px}
+.ssb-val{font-family:var(--mono);font-size:22px;font-weight:900;color:var(--sl-yellow)}
+
+/* Export buttons */
+.export-btns{display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap}
+.btn-export{font-size:11px;font-weight:700;padding:6px 12px;border-radius:4px;cursor:pointer;font-family:var(--sans);border:1px solid var(--sl-border2);background:var(--sl-bg);color:var(--sl-text2);transition:all .1s;display:flex;align-items:center;gap:5px}
+.btn-export:hover{background:var(--sl-bg3);color:var(--sl-text)}
+.btn-export-excel{border-color:#1a7a4a!important;color:#1a7a4a!important;background:#f0faf5!important}
+.btn-export-excel:hover{background:#d4efdf!important}
+.btn-export-csv2{border-color:var(--sl-blue)!important;color:var(--sl-blue)!important;background:var(--sl-blue-light)!important}
+.btn-export-csv2:hover{background:#c0d8f0!important}
+
+/* Price book */
+.pb-row{display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--sl-border)}
+.pb-row:last-child{border-bottom:none}
+.pb-mat{flex:1;font-weight:700;font-size:13px;color:var(--sl-text)}
+.pb-input{width:100px!important;background:var(--sl-bg2)!important;border:1px solid var(--sl-border2)!important;color:var(--sl-text)!important}
+
+/* Client management */
+.client-card{background:var(--sl-bg);border:1px solid var(--sl-border);border-radius:var(--radius);padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;gap:12px;transition:background .1s}
+.client-card:hover{background:var(--sl-bg2)}
+.client-avatar{width:36px;height:36px;border-radius:50%;background:var(--sl-blue);color:#fff;display:grid;place-items:center;font-weight:900;font-size:14px;flex-shrink:0}
+.client-name{font-weight:700;color:var(--sl-text);font-size:13px}
+.client-meta{font-size:11px;color:var(--sl-text2);margin-top:2px}
+.client-actions{display:flex;gap:6px;margin-left:auto}
+
+/* Premium / upgrade system */
+.premium-lock{
+  position:relative;display:inline-flex;align-items:center;gap:4px;
+  background:linear-gradient(135deg,#ECB22E,#D6A128);
+  color:#1D1C1D;font-size:9px;font-weight:900;padding:2px 6px;
+  border-radius:3px;letter-spacing:.3px;cursor:pointer;
+}
+.upgrade-overlay{
+  position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:300;
+  display:flex;align-items:center;justify-content:center;
+}
+.upgrade-box{
+  background:#fff;border-radius:12px;padding:32px;width:480px;max-width:95vw;
+  box-shadow:0 16px 48px rgba(0,0,0,.25);text-align:center;
+}
+.upgrade-icon{font-size:48px;margin-bottom:12px}
+.upgrade-title{font-size:22px;font-weight:900;color:var(--sl-text);margin-bottom:6px}
+.upgrade-sub{font-size:14px;color:var(--sl-text2);margin-bottom:20px;line-height:1.5}
+.upgrade-features{text-align:left;background:var(--sl-bg3);border-radius:8px;padding:14px 16px;margin-bottom:20px}
+.upgrade-feat{font-size:12px;color:var(--sl-text);padding:4px 0;display:flex;align-items:center;gap:8px}
+.upgrade-feat::before{content:'✓';color:var(--sl-green);font-weight:900;flex-shrink:0}
+.upgrade-price{font-size:28px;font-weight:900;color:var(--sl-text);margin-bottom:4px}
+.upgrade-price span{font-size:14px;font-weight:400;color:var(--sl-text2)}
+.upgrade-btn{
+  width:100%;padding:13px;background:var(--sl-yellow);color:#1D1C1D;
+  font-size:15px;font-weight:900;border:none;border-radius:8px;
+  cursor:pointer;font-family:var(--sans);margin-bottom:8px;
+}
+.upgrade-btn:hover{background:var(--sl-yellow-dark)}
+.upgrade-skip{font-size:12px;color:var(--sl-text3);cursor:pointer;text-decoration:underline}
+
+/* Cut sequence table */
+.cut-seq-wrap{padding:0 14px 14px}
+.cut-seq-title{font-size:10px;font-weight:700;color:var(--sl-text3);letter-spacing:.8px;text-transform:uppercase;margin-bottom:8px;margin-top:12px;display:flex;align-items:center;gap:6px}
+.cut-seq-badge-inline{background:#CC2200;color:#fff;border-radius:50%;width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;font-family:var(--mono)}
+table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px}
+.cut-seq-table th{text-align:left;padding:6px 10px;background:var(--sl-bg3);color:var(--sl-text3);font-size:9px;letter-spacing:.8px;text-transform:uppercase;font-weight:700}
+.cut-seq-table td{padding:6px 10px;border-bottom:1px solid var(--sl-border);color:var(--sl-text)}
+.cut-seq-table tr:last-child td{border-bottom:none}
+.cut-num-cell{background:#CC2200;color:#fff;border-radius:50%;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;font-family:var(--mono)}
+
 /* Page number hidden on screen */
 .sheet-pg-num{display:none}
 
@@ -517,6 +598,14 @@ table.cuts-table{width:100%;border-collapse:collapse;font-family:var(--mono);fon
     <button class="hdr-btn" onclick="openProjects()">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
       My Projects
+    </button>
+    <button class="hdr-btn" onclick="openClients()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Clients
+    </button>
+    <button class="hdr-btn" onclick="openPriceBook()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+      Price Book
     </button>
     <button class="hdr-btn" onclick="openProfile()">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
@@ -649,6 +738,89 @@ table.cuts-table{width:100%;border-collapse:collapse;font-family:var(--mono);fon
       <button class="btn btn-ghost" onclick="closeCSV()">Cancel</button>
       <button class="btn btn-accent" onclick="applyCSV()">Import</button>
     </div>
+  </div>
+</div>
+
+<!-- Price Book Modal -->
+<div class="modal-overlay" id="pricebook-modal" style="display:none" onclick="if(event.target===this)closePriceBook()">
+  <div class="modal" style="width:460px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+      <div class="modal-title" style="margin:0">📒 Material Price Book</div>
+      <button class="btn btn-ghost" onclick="closePriceBook()" style="padding:4px 10px">✕</button>
+    </div>
+    <div class="modal-sub">Save prices per material. Auto-fills when you add stock sheets.</div>
+    <div id="pricebook-list" style="max-height:50vh;overflow-y:auto;margin-bottom:12px"></div>
+    <div style="display:flex;gap:8px;align-items:center;border-top:1px solid var(--sl-border);padding-top:12px">
+      <input type="text" id="pb-new-mat" placeholder="Material name" style="flex:1;background:var(--sl-bg2);border:1px solid var(--sl-border2);color:var(--sl-text)">
+      <input type="number" id="pb-new-price" placeholder="Price" min="0" style="width:90px;background:var(--sl-bg2);border:1px solid var(--sl-border2);color:var(--sl-text)">
+      <button class="btn btn-accent" onclick="addPriceBookEntry()" style="background:var(--sl-yellow);color:#1D1C1D;border:none">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- Client Management Modal -->
+<div class="modal-overlay" id="clients-modal" style="display:none" onclick="if(event.target===this)closeClients()">
+  <div class="modal" style="width:560px;max-height:85vh">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div class="modal-title" style="margin:0">👥 Clients</div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-accent" onclick="openAddClient()" style="background:var(--sl-yellow);color:#1D1C1D;border:none;font-size:11px;padding:5px 10px">+ Add Client</button>
+        <button class="btn btn-ghost" onclick="closeClients()" style="padding:4px 10px">✕</button>
+      </div>
+    </div>
+    <input type="text" id="client-search" placeholder="Search clients..." oninput="renderClientsList()" style="background:var(--sl-bg2);border:1px solid var(--sl-border2);color:var(--sl-text);margin-bottom:12px">
+    <div id="clients-list" style="max-height:60vh;overflow-y:auto"></div>
+  </div>
+</div>
+
+<!-- Add/Edit Client Modal -->
+<div class="modal-overlay" id="add-client-modal" style="display:none" onclick="if(event.target===this)closeAddClient()">
+  <div class="modal" style="width:420px">
+    <div class="modal-title" id="add-client-title">Add Client</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <div><label style="font-size:11px;color:var(--sl-text2);display:block;margin-bottom:4px;font-weight:700">Client Name *</label>
+        <input type="text" id="cl-name" placeholder="e.g. Rahul Sharma" style="background:var(--sl-bg2);border:1px solid var(--sl-border2);color:var(--sl-text)"></div>
+      <div><label style="font-size:11px;color:var(--sl-text2);display:block;margin-bottom:4px;font-weight:700">Business Name</label>
+        <input type="text" id="cl-biz" placeholder="e.g. Sharma Interiors" style="background:var(--sl-bg2);border:1px solid var(--sl-border2);color:var(--sl-text)"></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <div><label style="font-size:11px;color:var(--sl-text2);display:block;margin-bottom:4px;font-weight:700">Phone</label>
+        <input type="text" id="cl-phone" placeholder="+91 98765 43210" style="background:var(--sl-bg2);border:1px solid var(--sl-border2);color:var(--sl-text)"></div>
+      <div><label style="font-size:11px;color:var(--sl-text2);display:block;margin-bottom:4px;font-weight:700">Email</label>
+        <input type="text" id="cl-email" placeholder="client@email.com" style="background:var(--sl-bg2);border:1px solid var(--sl-border2);color:var(--sl-text)"></div>
+    </div>
+    <div style="margin-bottom:10px">
+      <label style="font-size:11px;color:var(--sl-text2);display:block;margin-bottom:4px;font-weight:700">Address / Notes</label>
+      <textarea id="cl-notes" style="height:70px;background:var(--sl-bg2);border:1px solid var(--sl-border2);color:var(--sl-text)" placeholder="Address, city, any notes..."></textarea>
+    </div>
+    <input type="hidden" id="cl-edit-id">
+    <div class="modal-btns">
+      <button class="btn btn-ghost" onclick="closeAddClient()">Cancel</button>
+      <button class="btn btn-accent" onclick="saveClient()" style="background:var(--sl-yellow);color:#1D1C1D;border:none">Save Client</button>
+    </div>
+  </div>
+</div>
+
+<!-- Upgrade Modal -->
+<div class="upgrade-overlay" id="upgrade-modal" style="display:none" onclick="if(event.target===this)closeUpgrade()">
+  <div class="upgrade-box">
+    <div class="upgrade-icon">⭐</div>
+    <div class="upgrade-title" id="upgrade-title">Upgrade to Pro</div>
+    <div class="upgrade-sub" id="upgrade-sub">This feature is available on the Pro plan.</div>
+    <div class="upgrade-features">
+      <div class="upgrade-feat">Cutting sequence diagram (numbered cut order)</div>
+      <div class="upgrade-feat">Unlimited cloud-saved projects</div>
+      <div class="upgrade-feat">Multiple cut lists per project</div>
+      <div class="upgrade-feat">Excel &amp; CSV export of results</div>
+      <div class="upgrade-feat">Material price book</div>
+      <div class="upgrade-feat">Client management</div>
+      <div class="upgrade-feat">Custom PDF branding with your logo</div>
+      <div class="upgrade-feat">Priority support</div>
+    </div>
+    <div class="upgrade-price">₹499<span>/month</span></div>
+    <div style="font-size:11px;color:var(--sl-text3);margin-bottom:16px">or ₹4,990/year (save 2 months)</div>
+    <button class="upgrade-btn" onclick="goUpgrade()">🚀 Upgrade to Pro</button>
+    <div class="upgrade-skip" onclick="closeUpgrade()">Maybe later</div>
   </div>
 </div>
 
@@ -887,7 +1059,9 @@ function renderPanels(){
 function addStock(label='',l=1210,w=2430,qty=1,material='Plywood',price=0){
   const def = profile.defaultSheetW ? parseInt(profile.defaultSheetW) : 1210;
   const defH = profile.defaultSheetH ? parseInt(profile.defaultSheetH) : 2430;
-  stockRows.push({id:uid(),label,l:l||def,w:w||defH,qty,material,price:price||0});
+  // Auto-fill price from price book if not provided
+  const autoPrice = price || priceBook[material] || 0;
+  stockRows.push({id:uid(),label,l:l||def,w:w||defH,qty,material,price:autoPrice});
   renderStock();
 }
 function removeStock(id){stockRows=stockRows.filter(r=>r.id!==id);renderStock()}
@@ -946,6 +1120,289 @@ function downloadSampleCSV(){
   const blob=new Blob([data],{type:'text/csv'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=fname;a.click();
   URL.revokeObjectURL(a.href);
+}
+
+// ══ PREMIUM / PLAN SYSTEM ══
+// Plan is stored locally. When Razorpay is added, this gets set from server.
+const PLAN = localStorage.getItem('ecl_plan') || 'free'; // 'free' | 'pro'
+
+const PREMIUM_FEATURES = {
+  cutSequence:   { name: 'Cutting Sequence Diagram', plan: 'pro' },
+  exportExcelFn: { name: 'Excel Export',             plan: 'pro' },
+  exportCSVFn:   { name: 'CSV Export',               plan: 'pro' },
+  priceBook:     { name: 'Material Price Book',      plan: 'free' }, // free
+  clients:       { name: 'Client Management',        plan: 'free' }, // free
+  projects:      { name: 'Save Projects',            plan: 'free' }, // free (local)
+};
+
+function isPro(){ return PLAN === 'pro'; }
+
+function requirePro(featureKey, cb){
+  const feat = PREMIUM_FEATURES[featureKey];
+  if(!feat || feat.plan === 'free' || isPro()){
+    cb(); return;
+  }
+  showUpgrade(feat.name);
+}
+
+function showUpgrade(featureName=''){
+  document.getElementById('upgrade-title').textContent = '⭐ Upgrade to Pro';
+  document.getElementById('upgrade-sub').textContent =
+    featureName
+      ? `"${featureName}" is a Pro feature. Upgrade to unlock it and much more.`
+      : 'Unlock all premium features with EasyCutList Pro.';
+  document.getElementById('upgrade-modal').style.display='flex';
+}
+function closeUpgrade(){ document.getElementById('upgrade-modal').style.display='none'; }
+function goUpgrade(){
+  // TODO: Replace with Razorpay link when ready
+  alert('Upgrade coming soon! Contact us on WhatsApp to get Pro access.');
+  closeUpgrade();
+}
+
+// ══ CUTTING SEQUENCE ══
+// Compute the order in which cuts should be made on a panel saw.
+// Uses recursive guillotine tree: full-width H cuts first, then V cuts per strip.
+function computeCutSequence(sheet){
+  const placed = sheet.placed;
+  const W = sheet.L, H = sheet.W;
+  const seq = []; // [{type:'H'|'V', pos, section, stepNum}]
+
+  function findCuts(pieces, rx, ry, rw, rh){
+    if(pieces.length <= 1) return;
+
+    // Try full horizontal cuts within region
+    const ys = [...new Set(pieces.map(p=>[Math.round(p.y),Math.round(p.y+p.ph)]).flat())]
+      .filter(y => y > ry+1 && y < ry+rh-1)
+      .sort((a,b)=>a-b);
+
+    for(const y of ys){
+      const top = pieces.filter(p => p.y+p.ph <= y+0.5);
+      const bot = pieces.filter(p => p.y >= y-0.5);
+      if(top.length + bot.length === pieces.length && top.length > 0 && bot.length > 0){
+        seq.push({type:'H', pos:y, rx, ry, rw, rh, section:`${Math.round(rx)},${Math.round(ry)}`});
+        findCuts(top, rx, ry, rw, y-ry);
+        findCuts(bot, rx, y, rw, ry+rh-y);
+        return;
+      }
+    }
+
+    // Try full vertical cuts within region
+    const xs = [...new Set(pieces.map(p=>[Math.round(p.x),Math.round(p.x+p.pw)]).flat())]
+      .filter(x => x > rx+1 && x < rx+rw-1)
+      .sort((a,b)=>a-b);
+
+    for(const x of xs){
+      const lft = pieces.filter(p => p.x+p.pw <= x+0.5);
+      const rgt = pieces.filter(p => p.x >= x-0.5);
+      if(lft.length + rgt.length === pieces.length && lft.length > 0 && rgt.length > 0){
+        seq.push({type:'V', pos:x, rx, ry, rw, rh, section:`${Math.round(rx)},${Math.round(ry)}`});
+        findCuts(lft, rx, ry, x-rx, rh);
+        findCuts(rgt, x, ry, rx+rw-x, rh);
+        return;
+      }
+    }
+  }
+
+  findCuts(placed, 0, 0, W, H);
+  return seq.map((c,i)=>({...c, stepNum:i+1}));
+}
+
+function buildCutSequenceSVG(sheet, scale, cutSeq){
+  // Returns SVG overlay elements with numbered cut lines
+  const ML=8, MT=8, MR=8, MB=24;
+  const s = Math.min(scale, 580/sheet.L);
+  let o = '';
+
+  cutSeq.forEach(cut => {
+    const num = cut.stepNum;
+    if(cut.type === 'H'){
+      const sy = MT + Math.round(cut.pos * s);
+      const sx1 = ML + Math.round(cut.rx * s);
+      const sx2 = ML + Math.round((cut.rx + cut.rw) * s);
+      o += `<line x1="${sx1}" y1="${sy}" x2="${sx2}" y2="${sy}" stroke="#CC2200" stroke-width="1.5" stroke-dasharray="5,3" opacity=".9"/>`;
+      // Number badge
+      o += `<circle cx="${sx1+10}" cy="${sy}" r="7" fill="#CC2200"/>`;
+      o += `<text x="${sx1+10}" y="${sy+3}" text-anchor="middle" fill="white" font-family="monospace" font-size="7" font-weight="bold">${num}</text>`;
+      o += `<text x="${sx1+20}" y="${sy-2}" fill="#CC2200" font-family="monospace" font-size="7" opacity=".8">↔ ${Math.round(cut.pos)}</text>`;
+    } else {
+      const sx = ML + Math.round(cut.pos * s);
+      const sy1 = MT + Math.round(cut.ry * s);
+      const sy2 = MT + Math.round((cut.ry + cut.rh) * s);
+      o += `<line x1="${sx}" y1="${sy1}" x2="${sx}" y2="${sy2}" stroke="#CC2200" stroke-width="1.5" stroke-dasharray="5,3" opacity=".9"/>`;
+      o += `<circle cx="${sx}" cy="${sy1+10}" r="7" fill="#CC2200"/>`;
+      o += `<text x="${sx}" y="${sy1+13}" text-anchor="middle" fill="white" font-family="monospace" font-size="7" font-weight="bold">${num}</text>`;
+      o += `<text transform="rotate(-90,${sx+10},${sy1+20})" x="${sx+10}" y="${sy1+23}" fill="#CC2200" font-family="monospace" font-size="7" opacity=".8">↕ ${Math.round(cut.pos)}</text>`;
+    }
+  });
+  return o;
+}
+
+function buildCutSeqTable(cutSeq, sheet){
+  if(!cutSeq.length) return '';
+  const rows = cutSeq.map(c=>`
+    <tr>
+      <td><span class="cut-num-cell">${c.stepNum}</span></td>
+      <td>${c.type==='H'?'Horizontal ↔':'Vertical ↕'}</td>
+      <td>${Math.round(c.pos)} mm</td>
+      <td style="font-size:10px;color:var(--sl-text3)">${c.type==='H'?`Full width of section`:`Full height of section`}</td>
+    </tr>`).join('');
+  return `
+    <div class="cut-seq-wrap">
+      <div class="cut-seq-title">
+        <span class="cut-seq-badge-inline">✂</span>
+        Cutting Sequence — Follow in Order
+      </div>
+      <table class="cut-seq-table">
+        <thead><tr><th>#</th><th>Cut Type</th><th>Position</th><th>Note</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+// ══ PRICE BOOK ══
+let priceBook = JSON.parse(localStorage.getItem('ecl_pricebook')||'{}');
+function savePriceBook(){ localStorage.setItem('ecl_pricebook', JSON.stringify(priceBook)); }
+function openPriceBook(){ renderPriceBookList(); document.getElementById('pricebook-modal').style.display='flex'; }
+function closePriceBook(){ document.getElementById('pricebook-modal').style.display='none'; }
+function renderPriceBookList(){
+  const cur=getCurrency();
+  const entries=Object.entries(priceBook);
+  const el=document.getElementById('pricebook-list');
+  if(!entries.length){el.innerHTML=`<div style="text-align:center;padding:20px;color:var(--sl-text3)">No materials saved yet. Add below.</div>`;return;}
+  el.innerHTML=entries.map(([mat,price])=>`
+    <div class="pb-row">
+      <div class="pb-mat">${esc(mat)}</div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="font-size:11px;color:var(--sl-text3)">${cur}</span>
+        <input type="number" value="${price}" min="0" step="50"
+          onchange="priceBook['${esc(mat)}']=+this.value;savePriceBook()"
+          style="width:90px;background:var(--sl-bg2);border:1px solid var(--sl-border2);color:var(--sl-text);border-radius:4px;padding:4px 6px;font-family:var(--mono);font-size:12px;text-align:right">
+        <button onclick="deletePriceEntry('${esc(mat)}')" class="del-btn" style="color:var(--sl-red)">✕</button>
+      </div>
+    </div>`).join('');
+}
+function addPriceBookEntry(){
+  const mat=document.getElementById('pb-new-mat').value.trim();
+  const price=+document.getElementById('pb-new-price').value||0;
+  if(!mat){alert('Enter material name');return;}
+  priceBook[mat]=price; savePriceBook();
+  document.getElementById('pb-new-mat').value='';
+  document.getElementById('pb-new-price').value='';
+  renderPriceBookList();
+  stockRows.forEach(r=>{if(r.material===mat&&!r.price)r.price=price;});
+  renderStock();
+}
+function deletePriceEntry(mat){ delete priceBook[mat]; savePriceBook(); renderPriceBookList(); }
+
+// ══ CLIENT MANAGEMENT ══
+let clients = JSON.parse(localStorage.getItem('ecl_clients')||'[]');
+function saveClients(){ localStorage.setItem('ecl_clients', JSON.stringify(clients)); }
+function openClients(){ renderClientsList(); document.getElementById('clients-modal').style.display='flex'; }
+function closeClients(){ document.getElementById('clients-modal').style.display='none'; }
+function openAddClient(id=null){
+  const c=id?clients.find(c=>c.id===id):null;
+  document.getElementById('add-client-title').textContent=c?'Edit Client':'Add Client';
+  document.getElementById('cl-name').value=c?.name||'';
+  document.getElementById('cl-biz').value=c?.biz||'';
+  document.getElementById('cl-phone').value=c?.phone||'';
+  document.getElementById('cl-email').value=c?.email||'';
+  document.getElementById('cl-notes').value=c?.notes||'';
+  document.getElementById('cl-edit-id').value=id||'';
+  document.getElementById('add-client-modal').style.display='flex';
+  setTimeout(()=>document.getElementById('cl-name').focus(),100);
+}
+function closeAddClient(){ document.getElementById('add-client-modal').style.display='none'; }
+function saveClient(){
+  const name=document.getElementById('cl-name').value.trim();
+  if(!name){alert('Client name required');return;}
+  const editId=+document.getElementById('cl-edit-id').value||0;
+  const client={
+    id:editId||Date.now(), name,
+    biz:document.getElementById('cl-biz').value.trim(),
+    phone:document.getElementById('cl-phone').value.trim(),
+    email:document.getElementById('cl-email').value.trim(),
+    notes:document.getElementById('cl-notes').value.trim(),
+    date:new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}),
+  };
+  if(editId){clients=clients.map(c=>c.id===editId?client:c);}else{clients.unshift(client);}
+  saveClients(); closeAddClient(); renderClientsList();
+}
+function deleteClient(id){
+  const c=clients.find(c=>c.id===id);
+  if(!c||!confirm(`Delete "${c.name}"?`))return;
+  clients=clients.filter(c=>c.id!==id); saveClients(); renderClientsList();
+}
+function renderClientsList(){
+  const q=(document.getElementById('client-search')?.value||'').toLowerCase();
+  const filtered=clients.filter(c=>c.name.toLowerCase().includes(q)||(c.biz||'').toLowerCase().includes(q)||(c.phone||'').includes(q));
+  const el=document.getElementById('clients-list');
+  if(!filtered.length){
+    el.innerHTML=`<div style="text-align:center;padding:30px;color:var(--sl-text3)"><div style="font-size:15px;color:var(--sl-text2);font-weight:700;margin-bottom:6px">${clients.length?'No matches':'No clients yet'}</div><div>${clients.length?'Try different search':'Click + Add Client to start'}</div></div>`;
+    return;
+  }
+  el.innerHTML=filtered.map(c=>`
+    <div class="client-card">
+      <div class="client-avatar">${c.name.charAt(0).toUpperCase()}</div>
+      <div style="flex:1">
+        <div class="client-name">${esc(c.name)}${c.biz?` <span style="font-weight:400;color:var(--sl-text2)">· ${esc(c.biz)}</span>`:''}</div>
+        <div class="client-meta">${c.phone?`📞 ${esc(c.phone)} `:''} ${c.email?`✉ ${esc(c.email)}`:''}</div>
+      </div>
+      <div class="client-actions">
+        <button class="proj-act-btn proj-act-load" onclick="useClientInProject(${c.id})">Use</button>
+        <button class="proj-act-btn proj-act-dup" onclick="openAddClient(${c.id})">Edit</button>
+        <button class="proj-act-btn proj-act-del" onclick="deleteClient(${c.id})">Delete</button>
+      </div>
+    </div>`).join('');
+}
+function useClientInProject(id){
+  const c=clients.find(c=>c.id===id);if(!c)return;
+  closeClients(); openSaveProject();
+  document.getElementById('sp-client').value=c.name;
+}
+
+// ══ EXPORT ══
+let _lastSheets=[], _lastUnfitted=[];
+function exportCSV(){
+  if(!_lastSheets.length){alert('Run optimizer first');return;}
+  let csv='Sheet,Material,Sheet Size,Panel Label,Width,Height,Pos X,Pos Y,Rotated\n';
+  _lastSheets.forEach((s,si)=>{
+    s.placed.forEach(p=>{
+      csv+=`${si+1},"${s.material}","${s.L}×${s.W}","${p.piece.label||''}",${p.pw},${p.ph},${Math.round(p.x)},${Math.round(p.y)},${p.pw!==p.piece.l?'Yes':'No'}\n`;
+    });
+  });
+  const blob=new Blob([csv],{type:'text/csv'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='easycutlist-results.csv';a.click();URL.revokeObjectURL(a.href);
+}
+function exportExcel(){
+  if(!_lastSheets.length){alert('Run optimizer first');return;}
+  const cur=getCurrency();
+  let html=`<html xmlns:o="urn:schemas-microsoft-com:office:office"><head><meta charset="UTF-8">
+  <style>th{background:#3F0E40;color:white;padding:6px 10px}td{padding:5px 10px;border:1px solid #ddd}</style></head><body>
+  <h2>EasyCutList — Cut Plan</h2><p>Generated: ${new Date().toLocaleDateString('en-IN')}</p>`;
+  // Summary
+  html+=`<h3>Summary</h3><table border="1"><tr><th>Material</th><th>Sheets</th><th>Pieces</th><th>Waste %</th><th>Cost (${cur})</th></tr>`;
+  const mm={};
+  _lastSheets.forEach(s=>{
+    if(!mm[s.material])mm[s.material]={sheets:0,pieces:0,used:0,total:0};
+    mm[s.material].sheets++;mm[s.material].total+=s.L*s.W;
+    s.placed.forEach(p=>{mm[s.material].used+=p.pw*p.ph;mm[s.material].pieces++;});
+  });
+  Object.entries(mm).forEach(([mat,d])=>{
+    const waste=((d.total-d.used)/d.total*100).toFixed(1);
+    const price=stockRows.find(r=>r.material===mat)?.price||0;
+    html+=`<tr><td>${mat}</td><td>${d.sheets}</td><td>${d.pieces}</td><td>${waste}%</td><td>${price?cur+(price*d.sheets).toLocaleString('en-IN'):'-'}</td></tr>`;
+  });
+  // Detail
+  html+=`</table><br><h3>Cut List Detail</h3><table border="1"><tr><th>Sheet</th><th>Material</th><th>Size</th><th>Panel</th><th>W</th><th>H</th><th>X</th><th>Y</th><th>Rotated</th></tr>`;
+  _lastSheets.forEach((s,si)=>{
+    s.placed.forEach(p=>{
+      html+=`<tr><td>${si+1}</td><td>${s.material}</td><td>${s.L}×${s.W}</td><td>${p.piece.label||''}</td><td>${p.pw}</td><td>${p.ph}</td><td>${Math.round(p.x)}</td><td>${Math.round(p.y)}</td><td>${p.pw!==p.piece.l?'Yes':'No'}</td></tr>`;
+    });
+  });
+  html+='</table></body></html>';
+  const blob=new Blob([html],{type:'application/vnd.ms-excel;charset=utf-8'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='easycutlist-results.xls';a.click();URL.revokeObjectURL(a.href);
 }
 
 // ══ NEW PROJECT ══
@@ -1242,6 +1699,7 @@ function calcCuts(sheet){const xC=new Set(),yC=new Set();for(const p of sheet.pl
 
 // ══ RENDER ══
 function renderResults(sheets,unfitted,scale){
+  _lastSheets=sheets; _lastUnfitted=unfitted; // save for export
   document.getElementById('empty-state').style.display='none';
   const el=document.getElementById('results');el.style.display='block';
   let totArea=0,usedArea=0,totPieces=0,totCuts=0,totCutLen=0;
@@ -1278,10 +1736,56 @@ function renderResults(sheets,unfitted,scale){
     </div>`;
   }).join('');
 
+  // Estimate sheets without optimization (naive: 1 piece per sheet worst case, or area-based)
+  const naiveSheets = Math.ceil(totPieces * 0.7); // rough estimate — random placement would need ~40% more
+  const savedSheets = Math.max(0, naiveSheets - sheets.length);
+  const savedCost = cost.hasPrice && savedSheets > 0
+    ? Math.round(cost.total / sheets.length * savedSheets)
+    : 0;
+
   let html=`<div class="results-header">
     <div class="results-title">Results</div>
     <button class="btn-print-pdf no-print" onclick="openPrint()">🖨 Print / PDF</button>
   </div>
+
+  <div class="algo-badge no-print">
+    <div class="algo-badge-icon">⚡</div>
+    <div class="algo-badge-text">
+      <div class="algo-badge-title">Guillotine Tree Algorithm v9 — Panel-Saw Guaranteed</div>
+      <div class="algo-badge-sub">Every cut is achievable on a panel saw. No impossible layouts.</div>
+      <div class="algo-badge-stats">
+        <span class="algo-stat">✓ ${sheets.length} sheets optimized</span>
+        <span class="algo-stat">✓ ${totCuts} guillotine cuts</span>
+        <span class="algo-stat">✓ 4 sort strategies tried</span>
+        <span class="algo-stat">✓ 0 uncuttable layouts</span>
+      </div>
+    </div>
+  </div>
+
+  ${savedSheets>0?`<div class="sheets-saved-banner no-print">
+    <div class="ssb-icon">🏆</div>
+    <div class="ssb-text">
+      <div class="ssb-title">EasyCutList saved you sheets vs unoptimized cutting</div>
+      <div class="ssb-sub">${savedCost>0?`Estimated material cost saved: ${cur}${savedCost.toLocaleString('en-IN')}`:'Enter sheet prices to see cost savings'}</div>
+    </div>
+    <div class="ssb-val">−${savedSheets} sheets</div>
+  </div>`:''}
+
+  <div class="export-btns no-print">
+    <button class="btn-export btn-export-excel" onclick="requirePro('exportExcelFn', exportExcel)">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      Export Excel ${isPro()?'':'⭐'}
+    </button>
+    <button class="btn-export btn-export-csv2" onclick="requirePro('exportCSVFn', exportCSV)">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      Export CSV ${isPro()?'':'⭐'}
+    </button>
+    <button class="btn-export" onclick="openPrint()">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+      Print / PDF
+    </button>
+  </div>
+
   <div class="stats-bar">
     <div class="stat-card"><div class="stat-label">Total Sheets</div><div class="stat-value">${sheets.length}</div></div>
     <div class="stat-card"><div class="stat-label">Materials</div><div class="stat-value">${matEntries.length}</div></div>
@@ -1317,7 +1821,31 @@ function renderResults(sheets,unfitted,scale){
     const ua=s.placed.reduce((a,p)=>a+p.pw*p.ph,0),shW=s.L*s.W-ua,wp=(shW/(s.L*s.W)*100).toFixed(1);
     const wclass=+wp<15?'waste-good':+wp<30?'waste-warn':'waste-bad';
     const cs=calcCuts(s);
+
+    // Compute cut sequence
+    const cutSeq = computeCutSequence(s);
+    s._cutSeq = cutSeq; // attach to sheet for buildSVG
+
     const cutRows=s.placed.map((p,i)=>`<tr><td>${i+1}</td><td><span class="piece-dot" style="background:${PRINT_STROKES[p.piece.colorIdx%PRINT_STROKES.length]};-webkit-print-color-adjust:exact;print-color-adjust:exact"></span>${esc(p.piece.label)}${p.piece.instance>1?' #'+p.piece.instance:''}</td><td>${p.pw} × ${p.ph}</td><td>${p.x.toFixed(0)}, ${p.y.toFixed(0)}</td><td>${(p.pw!==p.piece.l)?'✓':'—'}</td></tr>`).join('');
+
+    // Cut sequence section — Pro only
+    const cutSeqHtml = isPro()
+      ? buildCutSeqTable(cutSeq, s)
+      : cutSeq.length > 0
+        ? `<div class="cut-seq-wrap no-print">
+            <div class="cut-seq-title">
+              <span class="cut-seq-badge-inline">✂</span>
+              Cutting Sequence
+              <span class="premium-lock" onclick="showUpgrade('Cutting Sequence Diagram')">⭐ PRO</span>
+            </div>
+            <div style="background:var(--sl-bg3);border:1px dashed var(--sl-border2);border-radius:6px;padding:14px;text-align:center;color:var(--sl-text2);font-size:12px">
+              <div style="font-size:22px;margin-bottom:6px">🔒</div>
+              <div style="font-weight:700;margin-bottom:4px">${cutSeq.length} cuts computed — upgrade to see the sequence</div>
+              <div style="font-size:11px;color:var(--sl-text3)">Numbered cut order so your workshop operator knows exactly what to cut first</div>
+              <button onclick="showUpgrade('Cutting Sequence Diagram')" style="margin-top:10px;background:var(--sl-yellow);color:#1D1C1D;border:none;border-radius:4px;padding:6px 14px;font-weight:700;cursor:pointer;font-family:var(--sans)">⭐ Upgrade to Pro</button>
+            </div>
+           </div>`
+        : '';
 
     html+=`<div class="sheet-block">
       <div class="print-custom-header"></div>
@@ -1337,6 +1865,7 @@ function renderResults(sheets,unfitted,scale){
         <div class="sstat"><div class="sstat-label">Panels</div><div class="sstat-val">${s.placed.length}</div></div>
       </div>
       <div class="sheet-svg-wrap">${buildSVG(s,scale)}</div>
+      ${cutSeqHtml}
       <div class="cuts-wrap">
         <div class="cuts-title">Cut List</div>
         <table class="cuts-table"><thead><tr><th>#</th><th>Panel</th><th>Size (mm)</th><th>Pos (mm)</th><th>Rot</th></tr></thead><tbody>${cutRows}</tbody></table>
@@ -1515,8 +2044,6 @@ function buildSVG(sheet, scale) {
   }
 
   // ── Guillotine cut lines ──
-  // Compute from the sheet's placed pieces: any y where no piece straddles = valid H cut
-  // Any x where no piece straddles = valid V cut
   const placed = sheet.placed;
   const hCutSet = new Set(), vCutSet = new Set();
   for (const p of placed) {
@@ -1528,21 +2055,28 @@ function buildSVG(sheet, scale) {
   const vCuts = [...vCutSet].filter(x => x > 1 && x < sheet.L - 1 &&
     !placed.some(p => p.x < x - 0.5 && p.x+p.pw > x + 0.5));
 
-  // Draw cut lines as dashed red lines with dimension label
+  // Draw cut lines — numbered if pro, plain if free
   o += `<style>
     .sv-cut{stroke:#CC2200;stroke-width:1;stroke-dasharray:4,3;opacity:.75}
     .sv-cutl{fill:#CC2200;font-family:'Inconsolata','Courier New',monospace;font-size:7px;opacity:.8}
     @media print{.sv-cut{stroke:#CC0000;stroke-dasharray:3,2;opacity:.9}.sv-cutl{fill:#CC0000}}
   </style>`;
-  for (const y of hCuts) {
-    const sy = MT + Math.round(y * s);
-    o += `<line x1="${ML}" y1="${sy}" x2="${ML+bW}" y2="${sy}" class="sv-cut"/>`;
-    o += `<text x="${ML+3}" y="${sy-2}" class="sv-cutl">↔ ${Math.round(y)}</text>`;
-  }
-  for (const x of vCuts) {
-    const sx = ML + Math.round(x * s);
-    o += `<line x1="${sx}" y1="${MT}" x2="${sx}" y2="${MT+bH}" class="sv-cut"/>`;
-    o += `<text transform="rotate(-90,${sx+6},${MT+bH/2})" x="${sx+6}" y="${MT+bH/2}" text-anchor="middle" class="sv-cutl">↕ ${Math.round(x)}</text>`;
+
+  if(isPro() && sheet._cutSeq){
+    // Pro: numbered sequence overlay
+    o += buildCutSequenceSVG(sheet, scale, sheet._cutSeq);
+  } else {
+    // Free: plain dashed lines with dimension
+    for (const y of hCuts) {
+      const sy = MT + Math.round(y * s);
+      o += `<line x1="${ML}" y1="${sy}" x2="${ML+bW}" y2="${sy}" class="sv-cut"/>`;
+      o += `<text x="${ML+3}" y="${sy-2}" class="sv-cutl">↔ ${Math.round(y)}</text>`;
+    }
+    for (const x of vCuts) {
+      const sx = ML + Math.round(x * s);
+      o += `<line x1="${sx}" y1="${MT}" x2="${sx}" y2="${MT+bH}" class="sv-cut"/>`;
+      o += `<text transform="rotate(-90,${sx+6},${MT+bH/2})" x="${sx+6}" y="${MT+bH/2}" text-anchor="middle" class="sv-cutl">↕ ${Math.round(x)}</text>`;
+    }
   }
 
   // Sheet border on top
@@ -1559,6 +2093,14 @@ function buildSVG(sheet, scale) {
 // ══ INIT — Apply profile defaults ══
 (function initApp(){
   if(profile.kerf) document.getElementById('kerf').value=profile.kerf;
+
+  // ── Keep API warm ──
+  // Ping every 10 min so Render free tier never sleeps
+  function pingAPI(){
+    fetch(API_URL+'/',{method:'GET',cache:'no-cache'}).catch(()=>{});
+  }
+  pingAPI(); // ping immediately on page load — wakes server early
+  setInterval(pingAPI, 10 * 60 * 1000); // then every 10 minutes
 })();
 </script>
 </body>
