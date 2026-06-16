@@ -613,6 +613,8 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
   .piece-dot{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
 </style>
+<!-- Supabase JS — for Google login -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
 <header>
@@ -645,9 +647,26 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
       Price Book
     </button>
-    <button class="hdr-btn" onclick="openProfile()">
+    <button class="hdr-btn" onclick="openProfile()" id="hdr-profile-btn" style="display:none">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
       My Profile
+    </button>
+    <!-- Auth buttons (one of these will be visible depending on login state) -->
+    <button class="hdr-btn" onclick="signInGoogle()" id="hdr-signin-btn">
+      <svg width="13" height="13" viewBox="0 0 48 48" style="background:#fff;border-radius:2px;padding:1px">
+        <path fill="#4285F4" d="M44.5 20H24v8.5h11.8C34.7 33.9 30.1 37 24 37c-7.2 0-13-5.8-13-13s5.8-13 13-13c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 4.1 29.6 2 24 2 11.8 2 2 11.8 2 24s9.8 22 22 22c11 0 21-8 21-22 0-1.3-.2-2.7-.5-4z"/>
+        <path fill="#34A853" d="M6.3 14.7l7 5.1C15.2 16.1 19.2 13 24 13c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 6.1 29.6 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/>
+        <path fill="#FBBC05" d="M24 44c5.5 0 10.4-1.9 14-5l-6.5-5.3C29.5 35.1 26.9 36 24 36c-6 0-11.1-3.7-13-9l-7 5.4C7.6 39.7 15.2 44 24 44z"/>
+        <path fill="#EA4335" d="M44.5 20H24v8.5h11.8C34.9 31.2 33 33.5 30.5 35l6.5 5.3C40.9 36.9 44 31 44 24c0-1.3-.2-2.7-.5-4z"/>
+      </svg>
+      Sign in
+    </button>
+    <div id="hdr-user" style="display:none;align-items:center;gap:6px;padding:0 10px;height:28px;color:rgba(255,255,255,.9);font-size:11px;background:rgba(255,255,255,.08);border-radius:4px">
+      <span id="hdr-user-email" style="max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">user@example.com</span>
+      <span id="hdr-user-plan" style="background:rgba(236,178,46,.2);color:#ECB22E;padding:1px 6px;border-radius:3px;font-size:9px;font-weight:900;letter-spacing:.5px">FREE</span>
+    </div>
+    <button class="hdr-btn" onclick="signOut()" id="hdr-signout-btn" style="display:none;padding:0 8px" title="Sign out">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
     </button>
   </div>
 </header>
@@ -1109,6 +1128,81 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
 </div>
 
 <script>
+// ══ AUTH (Supabase) ══
+const SUPABASE_URL_FE  = 'https://reklrjwsvgtrliksodwu.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_nRwWXeWmRPKs6WqjPBm57w_MjfCP4zw';
+
+const supa = (window.supabase && window.supabase.createClient)
+  ? window.supabase.createClient(SUPABASE_URL_FE, SUPABASE_ANON_KEY, {
+      auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: true }
+    })
+  : null;
+
+let CURRENT_SESSION = null;
+let CURRENT_USER    = null;
+
+async function refreshAuthUI(){
+  if(!supa) return;
+  const { data: { session } } = await supa.auth.getSession();
+  CURRENT_SESSION = session;
+  CURRENT_USER    = session?.user || null;
+
+  const signinBtn  = document.getElementById('hdr-signin-btn');
+  const userChip   = document.getElementById('hdr-user');
+  const signoutBtn = document.getElementById('hdr-signout-btn');
+  const profileBtn = document.getElementById('hdr-profile-btn');
+  const emailEl    = document.getElementById('hdr-user-email');
+
+  if(session){
+    if(signinBtn)  signinBtn.style.display  = 'none';
+    if(userChip)   userChip.style.display   = 'flex';
+    if(signoutBtn) signoutBtn.style.display = '';
+    if(profileBtn) profileBtn.style.display = '';
+    if(emailEl)    emailEl.textContent      = session.user.email || '';
+  } else {
+    if(signinBtn)  signinBtn.style.display  = '';
+    if(userChip)   userChip.style.display   = 'none';
+    if(signoutBtn) signoutBtn.style.display = 'none';
+    if(profileBtn) profileBtn.style.display = 'none';
+  }
+}
+
+async function signInGoogle(){
+  if(!supa){ alert('Sign-in is loading, please wait a moment and try again.'); return; }
+  const { error } = await supa.auth.signInWithOAuth({
+    provider: 'google',
+    options:  { redirectTo: window.location.origin }
+  });
+  if(error) alert('Sign-in failed: ' + error.message);
+}
+
+async function signOut(){
+  if(!supa) return;
+  await supa.auth.signOut();
+  CURRENT_SESSION = null;
+  CURRENT_USER    = null;
+  PLAN = 'free';
+  localStorage.removeItem('ecl_plan');
+  refreshAuthUI();
+  const planEl = document.getElementById('hdr-user-plan');
+  if(planEl) planEl.textContent = 'FREE';
+}
+
+function authHeader(){
+  return CURRENT_SESSION?.access_token
+    ? { 'Authorization': 'Bearer ' + CURRENT_SESSION.access_token }
+    : {};
+}
+
+if(supa){
+  supa.auth.onAuthStateChange((event, session) => {
+    CURRENT_SESSION = session;
+    CURRENT_USER    = session?.user || null;
+    refreshAuthUI();
+    if(event === 'SIGNED_IN' && typeof fetchPlanAndFlags === 'function') fetchPlanAndFlags();
+  });
+}
+
 // ══ STATE ══
 let panelRows=[],stockRows=[],idC=0,csvTarget='panels';
 let profile = JSON.parse(localStorage.getItem('ecl_profile')||'{}');
@@ -1264,13 +1358,15 @@ let FEATURE_FLAGS = JSON.parse(localStorage.getItem('ecl_flags')||'{}');
 async function fetchPlanAndFlags(){
   try {
     const [planRes, flagsRes] = await Promise.all([
-      fetch(`${API_URL}/my-plan`),
+      fetch(`${API_URL}/my-plan`, { headers: authHeader() }),
       fetch(`${API_URL}/flags`)
     ]);
     if(planRes.ok){
       const {plan} = await planRes.json();
       PLAN = plan;
       localStorage.setItem('ecl_plan', plan);
+      const planEl = document.getElementById('hdr-user-plan');
+      if(planEl) planEl.textContent = (plan||'free').toUpperCase();
     }
     if(flagsRes.ok){
       FEATURE_FLAGS = await flagsRes.json();
@@ -1928,7 +2024,7 @@ async function calculate() {
 
     const res = await fetch(`${API_URL}/optimize`, {
       method:  'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', ...authHeader() },
       body:    JSON.stringify(payload),
     });
 
@@ -2453,7 +2549,7 @@ function buildSVG(sheet, scale) {
   // ── Keep API warm + fetch plan/flags ──
   function pingAPI(){ fetch(API_URL+'/',{method:'GET',cache:'no-cache'}).catch(()=>{}); }
   pingAPI();
-  fetchPlanAndFlags(); // fetch plan and feature flags
+  refreshAuthUI().then(() => fetchPlanAndFlags());
   setInterval(pingAPI,10*60*1000);
 })();
 </script>
