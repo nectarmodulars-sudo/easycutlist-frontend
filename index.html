@@ -1194,11 +1194,31 @@ function authHeader(){
     : {};
 }
 
+// Per-user project storage key. Anonymous users share the legacy 'ecl_projects' key.
+// Signed-in users get their own scoped key so their projects stay private.
+function projectsKey(){
+  return CURRENT_USER?.id
+    ? 'ecl_projects_' + CURRENT_USER.id
+    : 'ecl_projects';
+}
+
+// Reload the projects array from the storage key matching the current user.
+// Re-renders the projects modal if it's currently open.
+function reloadProjects(){
+  if(typeof projects === 'undefined') return;
+  projects = JSON.parse(localStorage.getItem(projectsKey()) || '[]');
+  const modal = document.getElementById('projects-modal');
+  if(modal && modal.style.display !== 'none' && typeof renderProjectsList === 'function'){
+    renderProjectsList();
+  }
+}
+
 if(supa){
   supa.auth.onAuthStateChange((event, session) => {
     CURRENT_SESSION = session;
     CURRENT_USER    = session?.user || null;
     refreshAuthUI();
+    reloadProjects();
     if(event === 'SIGNED_IN' && typeof fetchPlanAndFlags === 'function') fetchPlanAndFlags();
   });
 }
@@ -1206,7 +1226,7 @@ if(supa){
 // ══ STATE ══
 let panelRows=[],stockRows=[],idC=0,csvTarget='panels';
 let profile = JSON.parse(localStorage.getItem('ecl_profile')||'{}');
-let projects = JSON.parse(localStorage.getItem('ecl_projects')||'[]');
+let projects = JSON.parse(localStorage.getItem(projectsKey())||'[]');
 function getCurrency(){ return profile.currency||'₹'; }
 const COLORS=['#4fffb0','#00d4ff','#ffb830','#ff6b9d','#a78bfa','#34d399','#fb923c','#60a5fa','#f472b6','#fbbf24','#4ade80','#c084fc','#38bdf8','#f87171','#a3e635','#e879f9','#22d3ee','#84cc16','#f97316','#818cf8'];
 const PRINT_FILLS=['#d4f5e9','#cce8f5','#fdf0d0','#fad5e0','#e8e0fa','#d0f0e8','#fde5cc','#d0e6fa','#fad0e8','#fef3c7','#d0fadc','#ede0fa','#ccf0fa','#fad0d0','#edfacc','#fad5f5','#ccfaf5','#e5facc','#fde0cc','#dde0fa'];
@@ -1384,13 +1404,26 @@ const PREMIUM_FEATURES = {
   projects:      { name: 'Save Projects',            plan: 'free' }, // free (local)
 };
 
+// Map between code's internal keys and the admin flag keys
+const FLAG_KEY_MAP = {
+  exportExcelFn:    'exportExcel',
+  exportCSVFn:      'exportCSV',
+  cutSequence:      'cutSequenceTable',
+};
+
 function isPro(){ return PLAN === 'pro'; }
 
+// Returns true if the feature is currently accessible:
+// either the user is Pro, OR the admin has set this flag to "free".
+function hasFeature(flagKey){
+  if(isPro()) return true;
+  return FEATURE_FLAGS && FEATURE_FLAGS[flagKey] === 'free';
+}
+
 function requirePro(featureKey, cb){
-  const feat = PREMIUM_FEATURES[featureKey];
-  if(!feat || feat.plan === 'free' || isPro()){
-    cb(); return;
-  }
+  const flagKey = FLAG_KEY_MAP[featureKey] || featureKey;
+  if(hasFeature(flagKey)){ cb(); return; }
+  const feat = PREMIUM_FEATURES[featureKey] || { name: featureKey };
   showUpgrade(feat.name);
 }
 
@@ -1781,7 +1814,7 @@ function saveProject(){
       cutlists: [cutlistData],
     };
     projects.unshift(proj);
-    localStorage.setItem('ecl_projects', JSON.stringify(projects));
+    localStorage.setItem(projectsKey(), JSON.stringify(projects));
     closeSaveProject();
     alert(`Saved to project "${name}" → Cut list "${cutlistData.name}"`);
   } else {
@@ -1794,7 +1827,7 @@ function saveProject(){
     if(!proj){alert('Project not found.');return;}
     if(!proj.cutlists) proj.cutlists=[];
     proj.cutlists.push(cutlistData);
-    localStorage.setItem('ecl_projects', JSON.stringify(projects));
+    localStorage.setItem(projectsKey(), JSON.stringify(projects));
     closeSaveProject();
     alert(`Saved to "${proj.name}" → "${clName}"`);
   }
@@ -1903,7 +1936,7 @@ function deleteCutList(projId, clId){
   const cl = proj.cutlists.find(c=>c.id===clId);
   if(!cl||!confirm(`Delete cut list "${cl.name}"?`)) return;
   proj.cutlists = proj.cutlists.filter(c=>c.id!==clId);
-  localStorage.setItem('ecl_projects', JSON.stringify(projects));
+  localStorage.setItem(projectsKey(), JSON.stringify(projects));
   renderProjectsList();
 }
 
@@ -1928,7 +1961,7 @@ function duplicateProject(id){
   const p=projects.find(p=>p.id===id);if(!p)return;
   const copy={...JSON.parse(JSON.stringify(p)),id:Date.now(),name:p.name+' (Copy)',date:new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})};
   projects.unshift(copy);
-  localStorage.setItem('ecl_projects',JSON.stringify(projects));
+  localStorage.setItem(projectsKey(),JSON.stringify(projects));
   renderProjectsList();
 }
 
@@ -1936,7 +1969,7 @@ function deleteProject(id){
   const p=projects.find(p=>p.id===id);if(!p)return;
   if(!confirm(`Delete "${p.name}" and all its cut lists? This cannot be undone.`))return;
   projects=projects.filter(p=>p.id!==id);
-  localStorage.setItem('ecl_projects',JSON.stringify(projects));
+  localStorage.setItem(projectsKey(),JSON.stringify(projects));
   renderProjectsList();
 }
 
@@ -2154,11 +2187,11 @@ function renderResults(sheets,unfitted,scale){
   <div class="export-btns no-print">
     <button class="btn-export btn-export-excel" onclick="requirePro('exportExcelFn', exportExcel)">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-      Export Excel ${isPro()?'':'⭐'}
+      Export Excel ${hasFeature('exportExcel')?'':'⭐'}
     </button>
     <button class="btn-export btn-export-csv2" onclick="requirePro('exportCSVFn', exportCSV)">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-      Export CSV ${isPro()?'':'⭐'}
+      Export CSV ${hasFeature('exportCSV')?'':'⭐'}
     </button>
     <button class="btn-export" onclick="openPrint()">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
@@ -2210,7 +2243,7 @@ function renderResults(sheets,unfitted,scale){
 
     // Cut sequence section — numbers on diagram FREE, detailed table PRO only
     const cutSeqHtml = cutSeq.length > 0
-      ? isPro()
+      ? hasFeature('cutSequenceTable')
         ? buildCutSeqTable(cutSeq, s)
         : `<div class="cut-seq-wrap no-print">
             <div class="cut-seq-title">
@@ -2260,12 +2293,18 @@ function renderResults(sheets,unfitted,scale){
 
 // ══ PRINT MODAL ══
 function openPrint(){
-  // Lock branding for free users
-  ['po-logo','po-companyname','po-clientname','po-header'].forEach(id=>{
+  // Map each PDF branding checkbox to its own admin flag
+  const pdfFlagMap = {
+    'po-logo':         'pdfLogoHeader',
+    'po-companyname':  'pdfCompanyName',
+    'po-clientname':   'pdfClientName',
+    'po-header':       'pdfCustomText',
+  };
+  Object.entries(pdfFlagMap).forEach(([id, flag])=>{
     const el=document.getElementById(id);
     if(!el) return;
     const row=el.closest('.print-opt-row');
-    if(!isPro()){
+    if(!hasFeature(flag)){
       el.disabled=true; el.checked=false;
       if(row){ row.style.opacity='.5'; row.title='Upgrade to Pro'; }
     } else {
@@ -2273,8 +2312,10 @@ function openPrint(){
       if(row){ row.style.opacity=''; row.title=''; }
     }
   });
+  // Hide the section-level "PRO" badge if ALL 4 PDF features are free (or user is pro)
+  const allPdfFree = Object.values(pdfFlagMap).every(k => hasFeature(k));
   const lockEl=document.getElementById('pdf-branding-lock');
-  if(lockEl) lockEl.style.display=isPro()?'none':'inline';
+  if(lockEl) lockEl.style.display = allPdfFree ? 'none' : 'inline';
   document.getElementById('print-modal').style.display='flex';
   document.getElementById('po-header').onchange=function(){
     document.getElementById('po-header-opts').style.display=this.checked?'block':'none';
@@ -2288,11 +2329,11 @@ function closePrint(){document.getElementById('print-modal').style.display='none
 function doPrint(){
   const showStats   = document.getElementById('po-stats').checked;
   const showCuts    = document.getElementById('po-cutlist').checked;
-  const showLogo    = isPro() && document.getElementById('po-logo').checked;
-  const showCompany = isPro() && document.getElementById('po-companyname').checked;
-  const showClient  = isPro() && document.getElementById('po-clientname').checked;
+  const showLogo    = hasFeature('pdfLogoHeader')  && document.getElementById('po-logo').checked;
+  const showCompany = hasFeature('pdfCompanyName') && document.getElementById('po-companyname').checked;
+  const showClient  = hasFeature('pdfClientName')  && document.getElementById('po-clientname').checked;
   const clientText  = document.getElementById('po-client-text')?.value.trim()||'';
-  const showHdr     = isPro() && document.getElementById('po-header').checked;
+  const showHdr     = hasFeature('pdfCustomText')  && document.getElementById('po-header').checked;
   const hdrText     = document.getElementById('po-header-text').value.trim();
   const matFont     = +document.getElementById('po-mat-font').value||18;
   const diagFont    = +document.getElementById('po-diag-font').value||16;
@@ -2549,7 +2590,7 @@ function buildSVG(sheet, scale) {
   // ── Keep API warm + fetch plan/flags ──
   function pingAPI(){ fetch(API_URL+'/',{method:'GET',cache:'no-cache'}).catch(()=>{}); }
   pingAPI();
-  refreshAuthUI().then(() => fetchPlanAndFlags());
+  refreshAuthUI().then(() => { reloadProjects(); fetchPlanAndFlags(); });
   setInterval(pingAPI,10*60*1000);
 })();
 </script>
