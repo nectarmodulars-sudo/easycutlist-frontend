@@ -558,6 +558,21 @@ table.cuts-table{width:100%;border-collapse:collapse;font-family:var(--mono);fon
 
 /* Cut sequence table */
 .cut-seq-wrap{padding:0 14px 14px}
+
+/* Pricing modal */
+.pricing-plans{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
+.plan-card{border:2px solid var(--sl-border2);border-radius:8px;padding:16px;text-align:center;cursor:pointer;transition:all .15s;position:relative}
+.plan-card:hover{border-color:var(--sl-yellow);box-shadow:0 4px 12px rgba(236,178,46,.2)}
+.plan-card.selected{border-color:var(--sl-yellow);background:#fffdf5}
+.plan-card-name{font-size:13px;font-weight:900;color:var(--sl-text);margin-bottom:4px}
+.plan-card-price{font-size:26px;font-weight:900;color:var(--sl-text);font-family:var(--mono)}
+.plan-card-price span{font-size:13px;font-weight:400;color:var(--sl-text2)}
+.plan-card-save{font-size:10px;font-weight:700;color:var(--sl-green);margin-top:4px}
+.plan-popular{position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:var(--sl-yellow);color:#1D1C1D;font-size:9px;font-weight:900;padding:2px 10px;border-radius:10px;white-space:nowrap}
+.trial-bar{background:var(--sl-orange-light);border:1px solid rgba(232,145,45,.3);border-radius:var(--radius);padding:8px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px;font-size:12px}
+.trial-bar-icon{font-size:18px}
+.trial-bar-text{flex:1;color:var(--sl-orange)}
+.trial-bar-count{font-family:var(--mono);font-weight:900;font-size:16px;color:var(--sl-orange)}
 .cut-seq-title{font-size:10px;font-weight:700;color:var(--sl-text3);letter-spacing:.8px;text-transform:uppercase;margin-bottom:8px;margin-top:12px;display:flex;align-items:center;gap:6px}
 .cut-seq-badge-inline{background:#CC2200;color:#fff;border-radius:50%;width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:900;font-family:var(--mono)}
 table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:11px}
@@ -615,6 +630,8 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
 </style>
 <!-- Supabase JS — for Google login -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Razorpay Checkout -->
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
 </head>
 <body>
 <header>
@@ -635,6 +652,9 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
     <div style="color:rgba(255,255,255,.5);font-size:11px;font-family:var(--mono);letter-spacing:.3px">Cut smarter. Waste less.</div>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
+    <button id="hdr-upgrade-btn" onclick="showUpgrade()" style="display:none;background:linear-gradient(135deg,#ECB22E,#D6A128);color:#1D1C1D;border:none;border-radius:5px;padding:6px 14px;font-weight:900;font-size:12px;cursor:pointer;font-family:var(--sans);letter-spacing:.3px;box-shadow:0 2px 6px rgba(236,178,46,.4);transition:all .15s" onmouseover="this.style.transform='scale(1.04)'" onmouseout="this.style.transform=''">
+      ⭐ UPGRADE
+    </button>
     <button class="hdr-btn" onclick="openProjects()">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
       My Projects
@@ -1165,6 +1185,7 @@ async function refreshAuthUI(){
     if(signoutBtn) signoutBtn.style.display = 'none';
     if(profileBtn) profileBtn.style.display = 'none';
   }
+  updateUpgradeBtn();
 }
 
 async function signInGoogle(){
@@ -1382,12 +1403,20 @@ async function fetchPlanAndFlags(){
       fetch(`${API_URL}/flags`)
     ]);
     if(planRes.ok){
-      const {plan} = await planRes.json();
+      const data = await planRes.json();
+      const {plan, trialExportsUsed, planExpiresAt, trialLimit} = data;
       PLAN = plan;
+      TRIAL_EXPORTS_USED = trialExportsUsed || 0;
+      PLAN_EXPIRES_AT    = planExpiresAt || null;
+      TRIAL_LIMIT        = trialLimit || 3;
       localStorage.setItem('ecl_plan', plan);
       const planEl = document.getElementById('hdr-user-plan');
       if(planEl) planEl.textContent = (plan||'free').toUpperCase();
+      // Show UPGRADE button only for free users who are signed in
+      const upgradeBtn = document.getElementById('hdr-upgrade-btn');
+      if(upgradeBtn) upgradeBtn.style.display = (plan === 'pro') ? 'none' : '';
     }
+    updateUpgradeBtn();
     if(flagsRes.ok){
       FEATURE_FLAGS = await flagsRes.json();
       localStorage.setItem('ecl_flags', JSON.stringify(FEATURE_FLAGS));
@@ -1417,7 +1446,17 @@ function isPro(){ return PLAN === 'pro'; }
 // either the user is Pro, OR the admin has set this flag to "free".
 function hasFeature(flagKey){
   if(isPro()) return true;
-  return FEATURE_FLAGS && FEATURE_FLAGS[flagKey] === 'free';
+  // Also check the feature flags from the server
+  const flag = FEATURE_FLAGS && FEATURE_FLAGS[flagKey];
+  return flag === 'free' || flag === true;
+}
+
+// Also show/hide upgrade button based on current plan
+function updateUpgradeBtn(){
+  const btn = document.getElementById('hdr-upgrade-btn');
+  if(!btn) return;
+  // Show to everyone except confirmed Pro users
+  btn.style.display = isPro() ? 'none' : '';
 }
 
 function requirePro(featureKey, cb){
@@ -1428,18 +1467,182 @@ function requirePro(featureKey, cb){
 }
 
 function showUpgrade(featureName=''){
-  document.getElementById('upgrade-title').textContent = '⭐ Upgrade to Pro';
-  document.getElementById('upgrade-sub').textContent =
-    featureName
-      ? `"${featureName}" is a Pro feature. Upgrade to unlock it and much more.`
-      : 'Unlock all premium features with EasyCutList Pro.';
-  document.getElementById('upgrade-modal').style.display='flex';
+  if(CURRENT_USER){
+    openPricing(featureName);
+  } else {
+    document.getElementById('upgrade-title').textContent = '⭐ Upgrade to Pro';
+    document.getElementById('upgrade-sub').textContent =
+      featureName
+        ? `"${featureName}" is a Pro feature. Sign in to upgrade.`
+        : 'Sign in to upgrade to EasyCutList Pro.';
+    document.getElementById('upgrade-modal').style.display='flex';
+  }
 }
 function closeUpgrade(){ document.getElementById('upgrade-modal').style.display='none'; }
 function goUpgrade(){
-  // TODO: Replace with Razorpay link when ready
-  alert('Upgrade coming soon! Contact us on WhatsApp to get Pro access.');
   closeUpgrade();
+  openPricing();
+}
+
+// ══ PRICING & PAYMENTS ══
+let _selectedPlan = '6month';
+let _pricingData  = null;
+let TRIAL_EXPORTS_USED = 0;
+let TRIAL_LIMIT = 3;
+let PLAN_EXPIRES_AT = null;
+
+async function openPricing(featureName=''){
+  if(!CURRENT_USER){ signInGoogle(); return; }
+  const sub = document.getElementById('pricing-sub');
+  if(featureName && sub) sub.textContent = `"${featureName}" is a Pro feature. Upgrade to unlock it and much more.`;
+  else if(sub) sub.textContent = 'Unlock all features. Pay once per period, cancel anytime.';
+  document.getElementById('pricing-modal').style.display = 'flex';
+  await loadPricing();
+}
+
+function closePricing(){
+  document.getElementById('pricing-modal').style.display = 'none';
+}
+
+async function loadPricing(){
+  try {
+    const res = await fetch(`${API_URL}/payments/pricing`);
+    if(!res.ok) return;
+    _pricingData = await res.json();
+    // Update price display
+    const fmt = v => '₹' + Math.round(v/100).toLocaleString('en-IN');
+    if(_pricingData['3month']) document.getElementById('price-3month').innerHTML = fmt(_pricingData['3month'].amountPaise) + '<span>/3mo</span>';
+    if(_pricingData['6month']) document.getElementById('price-6month').innerHTML = fmt(_pricingData['6month'].amountPaise) + '<span>/6mo</span>';
+    if(_pricingData['1year'])  document.getElementById('price-1year').innerHTML  = fmt(_pricingData['1year'].amountPaise)  + '<span>/yr</span>';
+    // Calculate savings vs 3-month rate
+    if(_pricingData['3month'] && _pricingData['6month']){
+      const base6  = _pricingData['3month'].amountPaise * 2;
+      const actual6 = _pricingData['6month'].amountPaise;
+      if(base6 > actual6){
+        const pct = Math.round((base6-actual6)/base6*100);
+        const saveEl = document.getElementById('save-6month');
+        if(saveEl) saveEl.textContent = `Save ${pct}%`;
+      }
+    }
+    if(_pricingData['3month'] && _pricingData['1year']){
+      const base12   = _pricingData['3month'].amountPaise * 4;
+      const actual12 = _pricingData['1year'].amountPaise;
+      if(base12 > actual12){
+        const pct = Math.round((base12-actual12)/base12*100);
+        const saveEl = document.getElementById('save-1year');
+        if(saveEl) saveEl.textContent = `Save ${pct}%`;
+      }
+    }
+  } catch(e){ console.error('loadPricing:', e); }
+}
+
+function selectPlan(planId){
+  _selectedPlan = planId;
+  ['3month','6month','1year'].forEach(id => {
+    const el = document.getElementById('plan-'+id);
+    if(el) el.className = 'plan-card' + (id===planId?' selected':'');
+  });
+}
+
+async function startPayment(){
+  if(!CURRENT_USER){ signInGoogle(); return; }
+  const btn = document.getElementById('pricing-pay-btn');
+  if(btn){ btn.disabled=true; btn.textContent='Creating order...'; }
+
+  try {
+    const res = await fetch(`${API_URL}/payments/create-order`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json', ...authHeader()},
+      body: JSON.stringify({
+        planId:  _selectedPlan,
+        userId:  CURRENT_USER.id,
+        email:   CURRENT_USER.email,
+      })
+    });
+    const order = await res.json();
+    if(!res.ok) throw new Error(order.error || 'Failed to create order');
+
+    // Launch Razorpay checkout
+    const rzp = new Razorpay({
+      key:         order.keyId,
+      amount:      order.amount,
+      currency:    order.currency,
+      order_id:    order.orderId,
+      name:        'EasyCutList Pro',
+      description: _pricingData?.[_selectedPlan]?.label || 'Pro Plan',
+      prefill:     { email: CURRENT_USER.email || '' },
+      theme:       { color: '#3F0E40' },
+      handler: async function(response){
+        await verifyPayment(response, order.orderId);
+      },
+      modal: {
+        ondismiss: function(){
+          if(btn){ btn.disabled=false; btn.textContent='🚀 Pay & Upgrade Now'; }
+        }
+      }
+    });
+    rzp.open();
+  } catch(e){
+    alert('Error: ' + e.message);
+    if(btn){ btn.disabled=false; btn.textContent='🚀 Pay & Upgrade Now'; }
+  }
+}
+
+async function verifyPayment(response, orderId){
+  try {
+    const res = await fetch(`${API_URL}/payments/verify`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json', ...authHeader()},
+      body: JSON.stringify({
+        razorpay_order_id:   orderId,
+        razorpay_payment_id: response.razorpay_payment_id,
+        razorpay_signature:  response.razorpay_signature,
+        userId:  CURRENT_USER.id,
+        planId:  _selectedPlan,
+      })
+    });
+    const result = await res.json();
+    if(!res.ok) throw new Error(result.error || 'Verification failed');
+
+    // Success — update local state
+    PLAN = 'pro';
+    PLAN_EXPIRES_AT = result.expiresAt;
+    localStorage.setItem('ecl_plan', 'pro');
+    const planEl = document.getElementById('hdr-user-plan');
+    if(planEl) planEl.textContent = 'PRO';
+    updateUpgradeBtn();
+    closePricing();
+    closeUpgrade();
+
+    // Refresh plan from server
+    await fetchPlanAndFlags();
+
+    const expDate = new Date(result.expiresAt).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+    alert(`🎉 Welcome to EasyCutList Pro!\nYour plan is active until ${expDate}.`);
+  } catch(e){
+    alert('Payment verification failed: ' + e.message + '\nPlease contact support with your payment ID: ' + response.razorpay_payment_id);
+  }
+}
+
+// Show trial bar in results if on free plan
+function renderTrialBar(){
+  const existing = document.getElementById('trial-bar');
+  if(existing) existing.remove();
+  if(isPro() || !CURRENT_USER) return;
+  const remaining = Math.max(0, TRIAL_LIMIT - TRIAL_EXPORTS_USED);
+  if(TRIAL_EXPORTS_USED === 0) return; // don't show before first export
+  const bar = document.createElement('div');
+  bar.id = 'trial-bar';
+  bar.className = 'trial-bar no-print';
+  bar.innerHTML = `
+    <div class="trial-bar-icon">⏳</div>
+    <div class="trial-bar-text">
+      <strong>${remaining} free export${remaining!==1?'s':''} remaining</strong> — upgrade to Pro for unlimited access
+    </div>
+    <div class="trial-bar-count">${TRIAL_EXPORTS_USED}/${TRIAL_LIMIT}</div>
+    <button onclick="openPricing()" style="background:var(--sl-yellow);color:#1D1C1D;border:none;border-radius:4px;padding:5px 12px;font-weight:900;cursor:pointer;font-family:var(--sans);font-size:11px;white-space:nowrap">⭐ Upgrade</button>`;
+  const results = document.getElementById('results');
+  if(results && results.firstChild) results.insertBefore(bar, results.firstChild);
 }
 
 // ══ CUTTING SEQUENCE ══
@@ -2161,15 +2364,23 @@ function renderResults(sheets,unfitted,scale){
     <button class="btn-print-pdf no-print" onclick="openPrint()">🖨 Print / PDF</button>
   </div>
 
+  <div class="no-print" style="display:flex;align-items:center;gap:8px;margin-bottom:14px;background:var(--sl-bg2);border:1px solid var(--sl-border);border-radius:var(--radius);padding:10px 14px">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--sl-text3)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+    <input type="text" id="result-client-name" placeholder="Customer name (appears on all exports & prints)" oninput="onResultClientInput(this.value)"
+      style="flex:1;background:transparent;border:none;outline:none;color:var(--sl-text);font-size:13px;font-family:var(--sans)" autocomplete="off">
+    <div id="result-client-suggestions" style="position:relative"></div>
+  </div>
+  <div id="result-client-dropdown" style="display:none;position:absolute;z-index:150;background:#fff;border:1px solid var(--sl-border2);border-radius:var(--radius);box-shadow:0 4px 16px rgba(0,0,0,.12);min-width:260px;max-height:200px;overflow-y:auto"></div>
+
   <div class="algo-badge no-print">
     <div class="algo-badge-icon">⚡</div>
     <div class="algo-badge-text">
-      <div class="algo-badge-title">Guillotine Tree Algorithm v9 — Panel-Saw Guaranteed</div>
+      <div class="algo-badge-title">Guillotine Tree Algorithm v2 — Panel-Saw Guaranteed</div>
       <div class="algo-badge-sub">Every cut is achievable on a panel saw. No impossible layouts.</div>
       <div class="algo-badge-stats">
         <span class="algo-stat">✓ ${sheets.length} sheets optimized</span>
         <span class="algo-stat">✓ ${totCuts} guillotine cuts</span>
-        <span class="algo-stat">✓ 4 sort strategies tried</span>
+        <span class="algo-stat">✓ 32 strategies tried</span>
         <span class="algo-stat">✓ 0 uncuttable layouts</span>
       </div>
     </div>
@@ -2181,7 +2392,8 @@ function renderResults(sheets,unfitted,scale){
       <div class="ssb-title">EasyCutList saved you sheets vs unoptimized cutting</div>
       <div class="ssb-sub">${savedCost>0?`Estimated material cost saved: ${cur}${savedCost.toLocaleString('en-IN')}`:'Enter sheet prices to see cost savings'}</div>
     </div>
-    <div class="ssb-val">−${savedSheets} sheets</div>
+    <div class="ssb-val" style="font-size:32px;font-weight:900;font-family:var(--mono);color:var(--sl-yellow)">−${savedSheets}</div>
+    <div style="font-size:11px;color:rgba(255,255,255,.6);margin-left:-8px;margin-top:4px">sheets</div>
   </div>`:''}
 
   <div class="export-btns no-print">
@@ -2192,6 +2404,10 @@ function renderResults(sheets,unfitted,scale){
     <button class="btn-export btn-export-csv2" onclick="requirePro('exportCSVFn', exportCSV)">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
       Export CSV ${hasFeature('exportCSV')?'':'⭐'}
+    </button>
+    <button class="btn-export" style="border-color:#7c3aed!important;color:#7c3aed!important;background:#f5f3ff!important" onclick="openExportOrder()">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      Export Order
     </button>
     <button class="btn-export" onclick="openPrint()">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
@@ -2289,6 +2505,7 @@ function renderResults(sheets,unfitted,scale){
     </div>`;
   }
   el.innerHTML=html;
+  renderTrialBar();
 }
 
 // ══ PRINT MODAL ══
@@ -2332,7 +2549,10 @@ function doPrint(){
   const showLogo    = hasFeature('pdfLogoHeader')  && document.getElementById('po-logo').checked;
   const showCompany = hasFeature('pdfCompanyName') && document.getElementById('po-companyname').checked;
   const showClient  = hasFeature('pdfClientName')  && document.getElementById('po-clientname').checked;
-  const clientText  = document.getElementById('po-client-text')?.value.trim()||'';
+  // Pre-fill client text from the result customer name box if empty
+  const clientTextEl = document.getElementById('po-client-text');
+  if(clientTextEl && !clientTextEl.value && _resultClientName) clientTextEl.value = _resultClientName;
+  const clientText  = clientTextEl?.value.trim()||'';
   const showHdr     = hasFeature('pdfCustomText')  && document.getElementById('po-header').checked;
   const hdrText     = document.getElementById('po-header-text').value.trim();
   const matFont     = +document.getElementById('po-mat-font').value||18;
@@ -2557,6 +2777,196 @@ function buildSVG(sheet, scale) {
   return o;
 }
 
+// ══ RESULT CLIENT NAME (customer name box in results) ══
+let _resultClientName = '';
+
+function onResultClientInput(val){
+  _resultClientName = val.trim();
+  const dropdown = document.getElementById('result-client-dropdown');
+  if(!dropdown) return;
+  if(!val.trim() || !clients.length){ dropdown.style.display='none'; return; }
+  const q = val.toLowerCase();
+  const matches = clients.filter(c =>
+    c.name.toLowerCase().includes(q) || (c.biz||'').toLowerCase().includes(q)
+  ).slice(0, 6);
+  if(!matches.length){ dropdown.style.display='none'; return; }
+  // Position dropdown under the input
+  const inputEl = document.getElementById('result-client-name');
+  const rect = inputEl ? inputEl.getBoundingClientRect() : null;
+  if(rect){
+    dropdown.style.position = 'fixed';
+    dropdown.style.left = rect.left + 'px';
+    dropdown.style.top  = (rect.bottom + 4) + 'px';
+    dropdown.style.width = Math.max(260, rect.width) + 'px';
+  }
+  dropdown.style.display = 'block';
+  dropdown.innerHTML = matches.map(c => `
+    <div onclick="selectResultClient('${esc(c.name)}')"
+      style="padding:8px 12px;cursor:pointer;font-size:12px;border-bottom:1px solid var(--sl-border);display:flex;align-items:center;gap:8px"
+      onmouseover="this.style.background='var(--sl-bg2)'" onmouseout="this.style.background=''">
+      <div style="width:28px;height:28px;border-radius:50%;background:var(--sl-blue);color:#fff;display:grid;place-items:center;font-weight:900;font-size:11px;flex-shrink:0">${c.name.charAt(0).toUpperCase()}</div>
+      <div>
+        <div style="font-weight:700;color:var(--sl-text)">${esc(c.name)}</div>
+        ${c.biz?`<div style="font-size:10px;color:var(--sl-text3)">${esc(c.biz)}</div>`:''}
+      </div>
+    </div>`).join('');
+}
+
+function selectResultClient(name){
+  _resultClientName = name;
+  const input = document.getElementById('result-client-name');
+  if(input) input.value = name;
+  const dropdown = document.getElementById('result-client-dropdown');
+  if(dropdown) dropdown.style.display = 'none';
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', e => {
+  const dropdown = document.getElementById('result-client-dropdown');
+  const input    = document.getElementById('result-client-name');
+  if(dropdown && input && !dropdown.contains(e.target) && e.target !== input){
+    dropdown.style.display = 'none';
+  }
+});
+
+// ══ EXPORT ORDER (laminate purchase order) ══
+function openExportOrder(){
+  if(!_lastSheets.length){ alert('Run optimizer first'); return; }
+  document.getElementById('export-order-modal').style.display = 'flex';
+  // Pre-fill customer from result-client-name box
+  const clientEl = document.getElementById('result-client-name');
+  const eoClient = document.getElementById('eo-client');
+  if(eoClient && clientEl) eoClient.value = clientEl.value || _resultClientName || '';
+  // Pre-fill company from profile
+  const eoBiz = document.getElementById('eo-biz');
+  if(eoBiz) eoBiz.value = profile.biz || '';
+  renderOrderPreview();
+}
+
+function closeExportOrder(){
+  document.getElementById('export-order-modal').style.display = 'none';
+}
+
+function renderOrderPreview(){
+  const el = document.getElementById('eo-preview');
+  if(!el) return;
+  const matMap = {};
+  for(const s of _lastSheets){
+    if(!matMap[s.material]) matMap[s.material] = { sheets:0, size:`${s.L}×${s.W}` };
+    matMap[s.material].sheets++;
+  }
+  const MAT_COLORS=['#1264A3','#007A5A','#E8912D','#E01E5A','#611F69','#0F7173','#895129','#1F6B75'];
+  el.innerHTML = Object.entries(matMap).map(([mat,d],i)=>`
+    <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--sl-border)">
+      <div style="width:10px;height:10px;border-radius:2px;flex-shrink:0;background:${MAT_COLORS[i%MAT_COLORS.length]}"></div>
+      <div style="flex:1;font-weight:700;color:var(--sl-text)">${esc(mat)}</div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--sl-text2)">${d.size} mm</div>
+      <div style="font-family:var(--mono);font-weight:900;font-size:14px;color:var(--sl-blue)">${d.sheets} sheet${d.sheets!==1?'s':''}</div>
+    </div>`).join('');
+}
+
+function doExportOrderPDF(){
+  const clientName = document.getElementById('eo-client')?.value.trim() || _resultClientName || '';
+  const bizName    = document.getElementById('eo-biz')?.value.trim() || profile.biz || '';
+  const matMap = {};
+  for(const s of _lastSheets){
+    if(!matMap[s.material]) matMap[s.material] = { sheets:0, size:`${s.L}×${s.W}` };
+    matMap[s.material].sheets++;
+  }
+  const date = new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+  const MAT_COLORS=['#1264A3','#007A5A','#E8912D','#E01E5A','#611F69','#0F7173','#895129','#1F6B75'];
+
+  const rows = Object.entries(matMap).map(([mat,d],i)=>`
+    <tr>
+      <td style="padding:10px 14px;border-bottom:1px solid #eee">
+        <div style="display:flex;align-items:center;gap:8px">
+          <div style="width:10px;height:10px;border-radius:2px;background:${MAT_COLORS[i%MAT_COLORS.length]};-webkit-print-color-adjust:exact;print-color-adjust:exact;flex-shrink:0"></div>
+          <strong>${esc(mat)}</strong>
+        </div>
+      </td>
+      <td style="padding:10px 14px;border-bottom:1px solid #eee;font-family:monospace;color:#555">${d.size} mm</td>
+      <td style="padding:10px 14px;border-bottom:1px solid #eee;font-weight:900;font-size:18px;color:#1264A3;font-family:monospace">${d.sheets}</td>
+    </tr>`).join('');
+
+  const win = window.open('','_blank','width=800,height:600');
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <title>Laminate Order</title>
+    <style>
+      @media print{@page{margin:12mm 10mm}body{margin:0}}
+      body{font-family:Arial,sans-serif;font-size:13px;color:#1D1C1D;max-width:700px;margin:24px auto;padding:0 16px}
+      h1{font-size:22px;font-weight:900;margin:0 0 2px;color:#1D1C1D}
+      table{width:100%;border-collapse:collapse;margin-top:16px}
+      th{background:#3F0E40;color:#fff;text-align:left;padding:10px 14px;font-size:11px;letter-spacing:.5px;text-transform:uppercase;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+      .no-print{display:flex;gap:8px;margin-top:20px}
+      @media print{.no-print{display:none}}
+      button{padding:8px 18px;border:none;border-radius:5px;cursor:pointer;font-weight:700;font-size:13px}
+    </style>
+  </head><body>
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #3F0E40">
+      <div>
+        ${bizName?`<div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">${esc(bizName)}</div>`:''}
+        <h1>Laminate Purchase Order</h1>
+        ${clientName?`<div style="font-size:13px;color:#555;margin-top:4px">Customer: <strong>${esc(clientName)}</strong></div>`:''}
+      </div>
+      <div style="text-align:right;font-size:11px;color:#888">
+        <div>Generated by EasyCutList</div>
+        <div style="margin-top:2px">${date}</div>
+      </div>
+    </div>
+    <table>
+      <thead><tr><th>Material</th><th>Sheet Size</th><th>Qty (Sheets)</th></tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot>
+        <tr style="background:#f8f8f8">
+          <td colspan="2" style="padding:10px 14px;font-weight:900;text-align:right">TOTAL SHEETS:</td>
+          <td style="padding:10px 14px;font-weight:900;font-size:20px;color:#1264A3;font-family:monospace">${_lastSheets.length}</td>
+        </tr>
+      </tfoot>
+    </table>
+    <div class="no-print">
+      <button onclick="window.print()" style="background:#3F0E40;color:#fff">🖨 Print / Save PDF</button>
+      <button onclick="window.close()" style="background:#f1f1f1;color:#333">Close</button>
+    </div>
+  </body></html>`);
+  win.document.close();
+  closeExportOrder();
+}
+
+function doExportOrderExcel(){
+  const clientName = document.getElementById('eo-client')?.value.trim() || _resultClientName || '';
+  const bizName    = document.getElementById('eo-biz')?.value.trim() || profile.biz || '';
+  const date = new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+  const matMap = {};
+  for(const s of _lastSheets){
+    if(!matMap[s.material]) matMap[s.material] = { sheets:0, size:`${s.L}×${s.W}` };
+    matMap[s.material].sheets++;
+  }
+  let html = `<html xmlns:o="urn:schemas-microsoft-com:office:office">
+  <head><meta charset="UTF-8">
+  <style>
+    th{background:#3F0E40;color:white;padding:8px 12px;font-size:12px}
+    td{padding:7px 12px;border:1px solid #ddd}
+    .total{font-weight:900;background:#f0f5ff}
+  </style></head><body>
+  <h2 style="font-family:Arial">Laminate Purchase Order</h2>
+  ${bizName?`<p style="font-family:Arial;color:#555">Company: <strong>${esc(bizName)}</strong></p>`:''}
+  ${clientName?`<p style="font-family:Arial;color:#555">Customer: <strong>${esc(clientName)}</strong></p>`:''}
+  <p style="font-family:Arial;color:#888;font-size:11px">Generated: ${date} · EasyCutList</p>
+  <table border="1" style="font-family:Arial;border-collapse:collapse">
+    <tr><th>Material</th><th>Sheet Size</th><th>Qty (Sheets)</th></tr>
+    ${Object.entries(matMap).map(([mat,d])=>`<tr><td>${esc(mat)}</td><td>${d.size} mm</td><td style="font-weight:900;font-size:16px;color:#1264A3">${d.sheets}</td></tr>`).join('')}
+    <tr class="total"><td colspan="2" style="text-align:right;font-weight:900">TOTAL SHEETS:</td><td style="font-weight:900;font-size:18px;color:#1264A3">${_lastSheets.length}</td></tr>
+  </table>
+  </body></html>`;
+  const blob = new Blob([html], {type:'application/vnd.ms-excel;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `laminate-order${clientName?'-'+clientName.replace(/\s+/g,'-'):''}${bizName?'-'+bizName.replace(/\s+/g,'-'):''}.xls`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+  closeExportOrder();
+}
+
 // ══ INIT — Apply profile defaults ══
 (function initApp(){
   if(profile.kerf) document.getElementById('kerf').value=profile.kerf;
@@ -2590,9 +3000,80 @@ function buildSVG(sheet, scale) {
   // ── Keep API warm + fetch plan/flags ──
   function pingAPI(){ fetch(API_URL+'/',{method:'GET',cache:'no-cache'}).catch(()=>{}); }
   pingAPI();
-  refreshAuthUI().then(() => { reloadProjects(); fetchPlanAndFlags(); });
+  refreshAuthUI().then(() => { reloadProjects(); fetchPlanAndFlags(); updateUpgradeBtn(); });
   setInterval(pingAPI,10*60*1000);
 })();
 </script>
+<!-- Pricing / Upgrade Modal -->
+<div class="upgrade-overlay" id="pricing-modal" style="display:none" onclick="if(event.target===this)closePricing()">
+  <div class="upgrade-box" style="width:560px;max-width:95vw">
+    <div class="upgrade-icon">⭐</div>
+    <div class="upgrade-title">Upgrade to EasyCutList Pro</div>
+    <div class="upgrade-sub" id="pricing-sub">Unlock all features. Cancel anytime.</div>
+    <div class="upgrade-features" style="margin-bottom:16px">
+      <div class="upgrade-feat">Cutting sequence diagram (numbered cut order)</div>
+      <div class="upgrade-feat">Excel &amp; CSV export of results</div>
+      <div class="upgrade-feat">Custom PDF branding with your logo</div>
+      <div class="upgrade-feat">Unlimited cloud-saved projects</div>
+      <div class="upgrade-feat">Client management &amp; price book</div>
+      <div class="upgrade-feat">Priority support</div>
+    </div>
+    <div class="pricing-plans" id="pricing-plans">
+      <div class="plan-card" id="plan-3month" onclick="selectPlan('3month')">
+        <div class="plan-card-name">3 Months</div>
+        <div class="plan-card-price" id="price-3month">₹999<span>/3mo</span></div>
+      </div>
+      <div class="plan-card selected" id="plan-6month" onclick="selectPlan('6month')" style="border-color:var(--sl-yellow)">
+        <div class="plan-popular">POPULAR</div>
+        <div class="plan-card-name">6 Months</div>
+        <div class="plan-card-price" id="price-6month">₹1,799<span>/6mo</span></div>
+        <div class="plan-card-save" id="save-6month">Save 10%</div>
+      </div>
+      <div class="plan-card" id="plan-1year" onclick="selectPlan('1year')">
+        <div class="plan-card-name">1 Year</div>
+        <div class="plan-card-price" id="price-1year">₹2,999<span>/yr</span></div>
+        <div class="plan-card-save" id="save-1year">Save 25%</div>
+      </div>
+    </div>
+    <button class="upgrade-btn" id="pricing-pay-btn" onclick="startPayment()">🚀 Pay &amp; Upgrade Now</button>
+    <div class="upgrade-skip" onclick="closePricing()">Maybe later</div>
+  </div>
+</div>
+
+<!-- Export Order Modal -->
+<div class="modal-overlay" id="export-order-modal" style="display:none" onclick="if(event.target===this)closeExportOrder()">
+  <div class="modal" style="width:500px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+      <div class="modal-title" style="margin:0">📋 Export Laminate Order</div>
+      <button class="btn btn-ghost" onclick="closeExportOrder()" style="padding:4px 10px">✕</button>
+    </div>
+    <div class="modal-sub">Material names and quantities only — for placing your laminate purchase order.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <div>
+        <label style="font-size:11px;color:var(--sl-text2);display:block;margin-bottom:4px;font-weight:700">Customer Name</label>
+        <input type="text" id="eo-client" placeholder="e.g. Rahul Sharma" style="background:var(--sl-bg2);border:1px solid var(--sl-border2);color:var(--sl-text)">
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--sl-text2);display:block;margin-bottom:4px;font-weight:700">Your Company Name</label>
+        <input type="text" id="eo-biz" placeholder="e.g. Nectar Modular" style="background:var(--sl-bg2);border:1px solid var(--sl-border2);color:var(--sl-text)">
+      </div>
+    </div>
+    <div style="background:var(--sl-bg2);border:1px solid var(--sl-border);border-radius:var(--radius);padding:12px 14px;margin-bottom:14px;max-height:300px;overflow-y:auto">
+      <div style="font-size:10px;font-weight:700;color:var(--sl-text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px">Order Summary</div>
+      <div id="eo-preview"></div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn btn-ghost" onclick="closeExportOrder()">Cancel</button>
+      <button class="btn" onclick="doExportOrderExcel()" style="background:#1a7a4a;color:#fff;border:none;font-size:12px;padding:7px 14px">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="vertical-align:middle;margin-right:4px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Excel
+      </button>
+      <button class="btn btn-accent" onclick="doExportOrderPDF()">
+        🖨 PDF
+      </button>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>
