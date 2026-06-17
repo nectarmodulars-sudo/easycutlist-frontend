@@ -562,8 +562,8 @@ table.cuts-table{width:100%;border-collapse:collapse;font-family:var(--mono);fon
 /* Pricing modal */
 .pricing-plans{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
 .plan-card{border:2px solid var(--sl-border2);border-radius:8px;padding:16px;text-align:center;cursor:pointer;transition:all .15s;position:relative}
-.plan-card:hover{border-color:var(--sl-yellow);box-shadow:0 4px 12px rgba(236,178,46,.2)}
-.plan-card.selected{border-color:var(--sl-yellow);background:#fffdf5}
+.plan-card:hover{border-color:#3F0E40;box-shadow:0 4px 12px rgba(63,14,64,.15)}
+.plan-card.selected{border-color:#3F0E40;background:#f9f5ff;box-shadow:0 4px 16px rgba(63,14,64,.2)}
 .plan-card-name{font-size:13px;font-weight:900;color:var(--sl-text);margin-bottom:4px}
 .plan-card-price{font-size:26px;font-weight:900;color:var(--sl-text);font-family:var(--mono)}
 .plan-card-price span{font-size:13px;font-weight:400;color:var(--sl-text2)}
@@ -3023,7 +3023,7 @@ function doExportOrderExcel(){
         <div class="plan-card-name">3 Months</div>
         <div class="plan-card-price" id="price-3month">₹999<span>/3mo</span></div>
       </div>
-      <div class="plan-card selected" id="plan-6month" onclick="selectPlan('6month')" style="border-color:var(--sl-yellow)">
+      <div class="plan-card selected" id="plan-6month" onclick="selectPlan('6month')">
         <div class="plan-popular">POPULAR</div>
         <div class="plan-card-name">6 Months</div>
         <div class="plan-card-price" id="price-6month">₹1,799<span>/6mo</span></div>
