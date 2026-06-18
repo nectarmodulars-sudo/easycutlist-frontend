@@ -556,8 +556,196 @@ table.cuts-table{width:100%;border-collapse:collapse;font-family:var(--mono);fon
 .upgrade-btn:hover{background:var(--sl-yellow-dark)}
 .upgrade-skip{font-size:12px;color:var(--sl-text3);cursor:pointer;text-decoration:underline}
 
-/* Cut sequence table */
-.cut-seq-wrap{padding:0 14px 14px}
+/* Hide mobile nav on desktop */
+#mob-nav { display: none; }
+#mob-menu-btn { display: none; }
+
+/* Mobile nav positioning (applies when shown on mobile) */
+#mob-nav {
+  position: fixed; top: 48px; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,.5); z-index: 200;
+}
+#mob-nav-inner {
+  background: var(--sl-topbar-bg);
+  width: 260px; height: 100%;
+  padding: 16px 0;
+  display: flex; flex-direction: column; gap: 2px;
+}
+
+/* ══ MOBILE RESPONSIVE ══════════════════════════════════════ */
+@media (max-width: 768px) {
+
+  /* Topbar — collapse to logo + hamburger only */
+  header { padding: 0 12px; height: 48px; position: fixed; width: 100%; }
+  .hbadge { display: none; }
+
+  /* Hide all topbar nav buttons except UPGRADE and sign-in */
+  .hdr-btn { display: none !important; }
+  #hdr-upgrade-btn {
+    font-size: 11px !important;
+    padding: 5px 10px !important;
+  }
+
+  /* Hamburger menu button */
+  #mob-menu-btn {
+    display: flex !important;
+    align-items: center; justify-content: center;
+    width: 36px; height: 36px;
+    background: rgba(255,255,255,.1);
+    border: none; border-radius: 6px; cursor: pointer; color: #fff;
+    font-size: 18px; flex-shrink: 0;
+  }
+
+  /* Mobile nav drawer - hidden until opened */
+  #mob-nav { display: none; }
+  #mob-nav.open { display: block; }
+  #mob-nav-inner {
+    background: var(--sl-topbar-bg);
+    width: 260px; height: 100%;
+    padding: 16px 0;
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .mob-nav-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 20px; color: var(--sl-sidebar-text);
+    font-size: 14px; font-weight: 700; cursor: pointer;
+    border: none; background: transparent; width: 100%; text-align: left;
+  }
+  .mob-nav-item:hover { background: var(--sl-sidebar-hover); color: #fff; }
+
+  /* App layout — single column */
+  body { padding-top: 48px; }
+  .app {
+    display: flex !important;
+    flex-direction: column !important;
+    min-height: calc(100vh - 48px);
+  }
+
+  /* Resize handle — hide on mobile */
+  .resize-handle { display: none !important; }
+
+  /* Sidebar — full width */
+  .left-panel {
+    width: 100% !important;
+    max-height: none !important;
+    overflow-y: visible !important;
+  }
+
+  /* Right panel — full width, below sidebar */
+  .right-panel {
+    width: 100% !important;
+    max-height: none !important;
+    overflow-y: visible !important;
+    padding: 12px !important;
+  }
+
+  /* Panel/stock input rows — make columns touch-friendly */
+  .row-grid {
+    grid-template-columns: 1fr 1fr 60px 1fr 32px !important;
+    gap: 4px !important;
+  }
+
+  /* Input fields — bigger touch targets */
+  input[type=text], input[type=number], select {
+    min-height: 38px !important;
+    font-size: 14px !important;
+  }
+
+  /* Section headers */
+  .section-hdr { padding: 10px 12px !important; }
+  .section-label { font-size: 13px !important; }
+
+  /* Options section */
+  .options-grid {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+  }
+
+  /* Run optimizer button — always full width, fixed at bottom */
+  .run-bar {
+    position: sticky !important;
+    bottom: 0 !important;
+    z-index: 50 !important;
+    padding: 10px 12px !important;
+  }
+  .btn-run {
+    font-size: 16px !important;
+    padding: 14px !important;
+    border-radius: 8px !important;
+  }
+
+  /* Results — full width */
+  #results { padding: 12px !important; }
+  .results-header { flex-direction: column; gap: 8px; align-items: flex-start; }
+  .btn-print-pdf { width: 100%; justify-content: center; }
+
+  /* Export buttons — wrap on mobile */
+  .export-btns {
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+  }
+  .btn-export { font-size: 11px !important; padding: 7px 10px !important; }
+
+  /* Sheets-saved banner */
+  .sheets-saved-banner { flex-wrap: wrap; gap: 8px; }
+  .ssb-val { font-size: 28px !important; }
+
+  /* Summary stats — 2 columns on mobile */
+  .summary-stats {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 8px !important;
+  }
+
+  /* Sheets by material — hide waste on mobile to save space */
+  .mat-row-waste { display: none !important; }
+
+  /* SVG diagrams — full width */
+  .sheet-svg-wrap { width: 100% !important; }
+
+  /* Modals — full screen on mobile */
+  .modal-overlay, .upgrade-overlay {
+    align-items: flex-end !important;
+    padding: 0 !important;
+  }
+  .modal, .upgrade-box {
+    width: 100% !important;
+    max-width: 100% !important;
+    border-radius: 16px 16px 0 0 !important;
+    max-height: 90vh !important;
+    overflow-y: auto !important;
+  }
+
+  /* Pricing plans — stack on mobile */
+  .pricing-plans {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+
+  /* Hide client dropdown result box on mobile (covered by keyboard) */
+  #result-client-dropdown { display: none !important; }
+
+  /* Algorithm badge — compact on mobile */
+  .algo-badge { flex-direction: column; gap: 8px; }
+  .algo-badge-stats { flex-wrap: wrap; gap: 4px; }
+
+  /* Topbar right section */
+  .hdr-right { gap: 6px !important; }
+
+  /* Sign in button — smaller */
+  #hdr-signin-btn { font-size: 11px !important; padding: 5px 10px !important; }
+
+  /* User chip — compact */
+  #hdr-user-chip { gap: 4px !important; }
+  #hdr-user-email { display: none !important; }
+}
+
+/* Very small phones */
+@media (max-width: 380px) {
+  .row-grid {
+    grid-template-columns: 1fr 1fr 50px 1fr 28px !important;
+  }
+  header { padding: 0 8px; }
+}
 
 /* Pricing modal */
 .pricing-plans{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
@@ -651,7 +839,7 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
     <div style="color:rgba(255,255,255,.35);font-size:16px;font-weight:200">|</div>
     <div style="color:rgba(255,255,255,.5);font-size:11px;font-family:var(--mono);letter-spacing:.3px">Cut smarter. Waste less.</div>
   </div>
-  <div style="display:flex;align-items:center;gap:8px">
+  <div style="display:flex;align-items:center;gap:8px" class="hdr-right">
     <button id="hdr-upgrade-btn" onclick="showUpgrade()" style="display:none;background:linear-gradient(135deg,#ECB22E,#D6A128);color:#1D1C1D;border:none;border-radius:5px;padding:6px 14px;font-weight:900;font-size:12px;cursor:pointer;font-family:var(--sans);letter-spacing:.3px;box-shadow:0 2px 6px rgba(236,178,46,.4);transition:all .15s" onmouseover="this.style.transform='scale(1.04)'" onmouseout="this.style.transform=''">
       ⭐ UPGRADE
     </button>
@@ -688,8 +876,25 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
     <button class="hdr-btn" onclick="signOut()" id="hdr-signout-btn" style="display:none;padding:0 8px" title="Sign out">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
     </button>
+    <button id="mob-menu-btn" style="display:none" onclick="toggleMobNav()">☰</button>
   </div>
 </header>
+
+<!-- Mobile nav drawer -->
+<div id="mob-nav" onclick="if(event.target===this)toggleMobNav()">
+  <div id="mob-nav-inner">
+    <button class="mob-nav-item" onclick="openProjects();toggleMobNav()">📁 My Projects</button>
+    <button class="mob-nav-item" onclick="openClients();toggleMobNav()">👥 Clients</button>
+    <button class="mob-nav-item" onclick="openPriceBook();toggleMobNav()">📖 Price Book</button>
+    <button class="mob-nav-item" onclick="openProfile();toggleMobNav()">👤 My Profile</button>
+    <button class="mob-nav-item" onclick="newProject();toggleMobNav()">➕ New Project</button>
+    <div style="height:1px;background:rgba(255,255,255,.1);margin:8px 0"></div>
+    <button class="mob-nav-item" id="mob-signin-btn" onclick="signInGoogle();toggleMobNav()" style="display:none">🔐 Sign In</button>
+    <button class="mob-nav-item" id="mob-signout-btn" onclick="signOut();toggleMobNav()" style="display:none">🚪 Sign Out</button>
+    <button class="mob-nav-item" onclick="openPricing();toggleMobNav()" style="color:var(--sl-yellow)">⭐ Upgrade to Pro</button>
+  </div>
+</div>
+
 <div class="app">
 <div class="left-panel">
 
@@ -1179,11 +1384,19 @@ async function refreshAuthUI(){
     if(signoutBtn) signoutBtn.style.display = '';
     if(profileBtn) profileBtn.style.display = '';
     if(emailEl)    emailEl.textContent      = session.user.email || '';
+    const mobSignin  = document.getElementById('mob-signin-btn');
+    const mobSignout = document.getElementById('mob-signout-btn');
+    if(mobSignin)  mobSignin.style.display  = 'none';
+    if(mobSignout) mobSignout.style.display = '';
   } else {
     if(signinBtn)  signinBtn.style.display  = '';
     if(userChip)   userChip.style.display   = 'none';
     if(signoutBtn) signoutBtn.style.display = 'none';
     if(profileBtn) profileBtn.style.display = 'none';
+    const mobSignin  = document.getElementById('mob-signin-btn');
+    const mobSignout = document.getElementById('mob-signout-btn');
+    if(mobSignin)  mobSignin.style.display  = '';
+    if(mobSignout) mobSignout.style.display = 'none';
   }
   updateUpgradeBtn();
 }
@@ -1452,10 +1665,14 @@ function hasFeature(flagKey){
 }
 
 // Also show/hide upgrade button based on current plan
+function toggleMobNav(){
+  const nav = document.getElementById('mob-nav');
+  nav.classList.toggle('open');
+}
+
 function updateUpgradeBtn(){
   const btn = document.getElementById('hdr-upgrade-btn');
   if(!btn) return;
-  // Show to everyone except confirmed Pro users
   btn.style.display = isPro() ? 'none' : '';
 }
 
@@ -2296,6 +2513,13 @@ async function calculate() {
     }));
 
     renderResults(sheets, unfitted, scale);
+
+    // On mobile, scroll to results automatically
+    if(window.innerWidth <= 768){
+      setTimeout(()=>{
+        document.getElementById('results')?.scrollIntoView({behavior:'smooth', block:'start'});
+      }, 300);
+    }
 
   } catch (err) {
     clearTimeout(coldStartTimer);
