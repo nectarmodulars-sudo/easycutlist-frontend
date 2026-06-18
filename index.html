@@ -840,9 +840,6 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
     <div style="color:rgba(255,255,255,.5);font-size:11px;font-family:var(--mono);letter-spacing:.3px">Cut smarter. Waste less.</div>
   </div>
   <div style="display:flex;align-items:center;gap:8px" class="hdr-right">
-    <button id="hdr-upgrade-btn" onclick="showUpgrade()" style="display:none;background:linear-gradient(135deg,#ECB22E,#D6A128);color:#1D1C1D;border:none;border-radius:5px;padding:6px 14px;font-weight:900;font-size:12px;cursor:pointer;font-family:var(--sans);letter-spacing:.3px;box-shadow:0 2px 6px rgba(236,178,46,.4);transition:all .15s" onmouseover="this.style.transform='scale(1.04)'" onmouseout="this.style.transform=''">
-      ⭐ UPGRADE
-    </button>
     <button class="hdr-btn" onclick="openProjects()">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
       My Projects
@@ -859,7 +856,7 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
       My Profile
     </button>
-    <!-- Auth buttons (one of these will be visible depending on login state) -->
+    <!-- Auth buttons -->
     <button class="hdr-btn" onclick="signInGoogle()" id="hdr-signin-btn">
       <svg width="13" height="13" viewBox="0 0 48 48" style="background:#fff;border-radius:2px;padding:1px">
         <path fill="#4285F4" d="M44.5 20H24v8.5h11.8C34.7 33.9 30.1 37 24 37c-7.2 0-13-5.8-13-13s5.8-13 13-13c3.1 0 5.9 1.1 8.1 2.9l6.4-6.4C34.6 4.1 29.6 2 24 2 11.8 2 2 11.8 2 24s9.8 22 22 22c11 0 21-8 21-22 0-1.3-.2-2.7-.5-4z"/>
@@ -875,6 +872,9 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
     </div>
     <button class="hdr-btn" onclick="signOut()" id="hdr-signout-btn" style="display:none;padding:0 8px" title="Sign out">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+    </button>
+    <button id="hdr-upgrade-btn" onclick="showUpgrade()" style="display:none;background:linear-gradient(135deg,#ECB22E,#D6A128);color:#1D1C1D;border:none;border-radius:5px;padding:6px 14px;font-weight:900;font-size:12px;cursor:pointer;font-family:var(--sans);letter-spacing:.3px;box-shadow:0 2px 6px rgba(236,178,46,.4);transition:all .15s" onmouseover="this.style.transform='scale(1.04)'" onmouseout="this.style.transform=''">
+      ⭐ UPGRADE
     </button>
     <button id="mob-menu-btn" style="display:none" onclick="toggleMobNav()">☰</button>
   </div>
