@@ -624,6 +624,9 @@ table.cuts-table{width:100%;border-collapse:collapse;font-family:var(--mono);fon
   /* Resize handle — hide on mobile */
   .resize-handle { display: none !important; }
 
+  /* Topbar: hide tagline on small screens to prevent overlap */
+  .hdr-tagline, .hdr-tagline-sep { display: none !important; }
+
   /* Sidebar — full width */
   .left-panel {
     width: 100% !important;
@@ -831,13 +834,13 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
     </div>
     Easy<span>CutList</span>
   </div>
-  <div style="position:absolute;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:8px">
+  <div style="display:flex;align-items:center;gap:8px">
     <button class="hdr-btn hdr-btn-new" onclick="newProject()" title="Clear all and start fresh">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
       New Project
     </button>
-    <div style="color:rgba(255,255,255,.35);font-size:16px;font-weight:200">|</div>
-    <div style="color:rgba(255,255,255,.5);font-size:11px;font-family:var(--mono);letter-spacing:.3px">Cut smarter. Waste less.</div>
+    <div style="color:rgba(255,255,255,.35);font-size:16px;font-weight:200" class="hdr-tagline-sep">|</div>
+    <div style="color:rgba(255,255,255,.5);font-size:11px;font-family:var(--mono);letter-spacing:.3px" class="hdr-tagline">Cut smarter. Waste less.</div>
   </div>
   <div style="display:flex;align-items:center;gap:8px" class="hdr-right">
     <button class="hdr-btn" onclick="openProjects()">
@@ -945,12 +948,13 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
     <div class="sidebar-table-wrap">
       <table class="input-table">
         <thead><tr>
-          <th style="width:18%">Label</th>
-          <th style="width:13%">W</th>
-          <th style="width:13%">H</th>
-          <th style="width:9%">Qty</th>
-          <th style="width:25%">Material</th>
-          <th style="width:15%" title="Price per sheet">₹/sheet</th>
+          <th style="width:16%">Label</th>
+          <th style="width:12%">W</th>
+          <th style="width:12%">H</th>
+          <th style="width:8%">Qty</th>
+          <th style="width:23%">Material</th>
+          <th style="width:13%" title="Price per sheet">₹/sheet</th>
+          <th style="width:9%;text-align:center" title="Grain direction — lock to prevent rotation">Grain</th>
           <th style="width:7%"></th>
         </tr></thead>
         <tbody id="stock-tbody"></tbody>
@@ -1343,6 +1347,16 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
       <div><div class="print-opt-label">Diagram label font (pt)</div></div>
       <div class="print-font-row"><input type="number" id="po-diag-font" value="16" min="5" max="24" step="0.5"></div>
     </div>
+    <div class="print-opt-row">
+      <div><div class="print-opt-label">Cut sequence badge size</div>
+        <div class="print-opt-sub">Red circle number on cut diagram</div></div>
+      <div class="print-font-row"><input type="number" id="po-badge-size" value="7" min="5" max="14" step="1" title="Radius of the red numbered circle (px)"></div>
+    </div>
+    <div class="print-opt-row">
+      <div><div class="print-opt-label">Print cutting sequence table</div>
+        <div class="print-opt-sub">CUTTING SEQUENCE list below each sheet</div></div>
+      <label class="toggle"><input type="checkbox" id="po-cutseq" checked><span class="tt"></span></label>
+    </div>
 
     <div class="modal-btns">
       <button class="btn btn-ghost" onclick="closePrint()">Cancel</button>
@@ -1534,16 +1548,17 @@ function renderPanels(){
   </tr>`).join('')}
 
 // ══ STOCK ══
-function addStock(label='',l=1210,w=2430,qty=1,material='Plywood',price=0){
+function addStock(label='',l=1210,w=2430,qty=1,material='Plywood',price=0,grainLocked=false){
   const def = profile.defaultSheetW ? parseInt(profile.defaultSheetW) : 1210;
   const defH = profile.defaultSheetH ? parseInt(profile.defaultSheetH) : 2430;
   // Auto-fill price from price book if not provided
   const autoPrice = price || priceBook[material] || 0;
-  stockRows.push({id:uid(),label,l:l||def,w:w||defH,qty,material,price:autoPrice});
+  stockRows.push({id:uid(),label,l:l||def,w:w||defH,qty,material,price:autoPrice,grainLocked});
   renderStock();
 }
 function removeStock(id){stockRows=stockRows.filter(r=>r.id!==id);renderStock()}
-function updateStock(id,f,v){const r=stockRows.find(r=>r.id===id);if(r)r[f]=(f==='l'||f==='w'||f==='qty'||f==='price')?+v:v}
+function updateStock(id,f,v){const r=stockRows.find(r=>r.id===id);if(r)r[f]=(f==='l'||f==='w'||f==='qty'||f==='price')?+v:(f==='grainLocked'?v:v)}
+function toggleGrain(id){const r=stockRows.find(r=>r.id===id);if(r){r.grainLocked=!r.grainLocked;renderStock()}}
 function renderStock(){
   document.getElementById('stock-tbody').innerHTML=stockRows.map(r=>`<tr>
     <td><input type="text" value="${esc(r.label)}" oninput="updateStock(${r.id},'label',this.value)"></td>
@@ -1552,6 +1567,7 @@ function renderStock(){
     <td><input type="number" value="${r.qty}" min="1" max="99" oninput="updateStock(${r.id},'qty',this.value)"></td>
     <td>${matSel(r.material,`updateStock(${r.id},'material',this.value)`)}</td>
     <td><input type="number" value="${r.price||0}" min="0" step="50" placeholder="0" oninput="updateStock(${r.id},'price',this.value)" title="Price per sheet"></td>
+    <td style="text-align:center"><button class="rot-btn" title="${r.grainLocked?'Grain locked — click to allow rotation':'Free rotation — click to lock grain'}" style="color:${r.grainLocked?'#ff8ab0':'rgba(255,255,255,.4)'};font-size:13px" onclick="toggleGrain(${r.id})">${r.grainLocked?'🔒':'↻'}</button></td>
     <td><button class="del-btn" onclick="removeStock(${r.id})">&#215;</button></td>
   </tr>`).join('')}
 
@@ -1909,8 +1925,11 @@ function computeCutSequence(sheet){
   return seq.map((c,i)=>({...c, stepNum:i+1}));
 }
 
-function buildCutSequenceSVG(sheet, scale, cutSeq){
+function buildCutSequenceSVG(sheet, scale, cutSeq, badgeR){
   // Returns SVG overlay elements with numbered cut lines
+  // badgeR: radius of the red circle badge (default 7)
+  const r = badgeR || 7;
+  const fs = Math.max(5, r - 1); // font size inside badge
   const ML=8, MT=8, MR=8, MB=24;
   const s = Math.min(scale, 580/sheet.L);
   let o = '';
@@ -1922,18 +1941,17 @@ function buildCutSequenceSVG(sheet, scale, cutSeq){
       const sx1 = ML + Math.round(cut.rx * s);
       const sx2 = ML + Math.round((cut.rx + cut.rw) * s);
       o += `<line x1="${sx1}" y1="${sy}" x2="${sx2}" y2="${sy}" stroke="#CC2200" stroke-width="1.5" stroke-dasharray="5,3" opacity=".9"/>`;
-      // Number badge
-      o += `<circle cx="${sx1+10}" cy="${sy}" r="7" fill="#CC2200"/>`;
-      o += `<text x="${sx1+10}" y="${sy+3}" text-anchor="middle" fill="white" font-family="monospace" font-size="7" font-weight="bold">${num}</text>`;
-      o += `<text x="${sx1+20}" y="${sy-2}" fill="#CC2200" font-family="monospace" font-size="7" opacity=".8">↔ ${Math.round(cut.pos)}</text>`;
+      o += `<circle cx="${sx1+r+1}" cy="${sy}" r="${r}" fill="#CC2200"/>`;
+      o += `<text x="${sx1+r+1}" y="${sy+fs*0.4}" text-anchor="middle" dominant-baseline="middle" fill="white" font-family="monospace" font-size="${fs}" font-weight="bold">${num}</text>`;
+      o += `<text x="${sx1+r*2+4}" y="${sy-2}" fill="#CC2200" font-family="monospace" font-size="7" opacity=".8">↔ ${Math.round(cut.pos)}</text>`;
     } else {
       const sx = ML + Math.round(cut.pos * s);
       const sy1 = MT + Math.round(cut.ry * s);
       const sy2 = MT + Math.round((cut.ry + cut.rh) * s);
       o += `<line x1="${sx}" y1="${sy1}" x2="${sx}" y2="${sy2}" stroke="#CC2200" stroke-width="1.5" stroke-dasharray="5,3" opacity=".9"/>`;
-      o += `<circle cx="${sx}" cy="${sy1+10}" r="7" fill="#CC2200"/>`;
-      o += `<text x="${sx}" y="${sy1+13}" text-anchor="middle" fill="white" font-family="monospace" font-size="7" font-weight="bold">${num}</text>`;
-      o += `<text transform="rotate(-90,${sx+10},${sy1+20})" x="${sx+10}" y="${sy1+23}" fill="#CC2200" font-family="monospace" font-size="7" opacity=".8">↕ ${Math.round(cut.pos)}</text>`;
+      o += `<circle cx="${sx}" cy="${sy1+r+1}" r="${r}" fill="#CC2200"/>`;
+      o += `<text x="${sx}" y="${sy1+r+1}" text-anchor="middle" dominant-baseline="middle" fill="white" font-family="monospace" font-size="${fs}" font-weight="bold">${num}</text>`;
+      o += `<text transform="rotate(-90,${sx+r+2},${sy1+r*2+4})" x="${sx+r+2}" y="${sy1+r*2+7}" fill="#CC2200" font-family="monospace" font-size="7" opacity=".8">↕ ${Math.round(cut.pos)}</text>`;
     }
   });
   return o;
@@ -2780,6 +2798,8 @@ function doPrint(){
   const hdrText     = document.getElementById('po-header-text').value.trim();
   const matFont     = +document.getElementById('po-mat-font').value||18;
   const diagFont    = +document.getElementById('po-diag-font').value||16;
+  const badgeSize   = +document.getElementById('po-badge-size').value||7;
+  const showCutSeq  = document.getElementById('po-cutseq').checked;
 
   ['dyn-print'].forEach(id=>{const e=document.getElementById(id);if(e)e.remove()});
 
@@ -2787,6 +2807,7 @@ function doPrint(){
   let css=`
     .sheet-stats{display:${showStats?'flex':'none'}!important}
     .cuts-wrap{display:${showCuts?'block':'none'}!important}
+    .cut-seq-wrap{display:${showCutSeq?'block':'none'}!important}
     .sheet-material-banner{font-size:${matFont}pt!important;padding:3pt 10pt!important}
     .sh-name{font-size:${Math.round(matFont*0.7)}pt!important}
     .sh-size{font-size:${Math.round(matFont*0.5)}pt!important}
@@ -2814,6 +2835,9 @@ function doPrint(){
     el.style.cssText=`padding:3pt 0;border-bottom:1pt solid #ccc;font-family:Arial;color:#000;margin-bottom:4pt;display:flex;align-items:center;justify-content:space-between`;
     el.innerHTML=`<div>${logoHtml}</div><div style="flex:1;text-align:center">${centerParts.join('')}</div><div style="font-size:7pt;color:#aaa">${new Date().toLocaleDateString('en-IN')}</div>`;
   });
+
+  // Store badge size globally so buildSVG can pick it up on re-render
+  window._printBadgeSize = badgeSize;
 
   closePrint();
   setTimeout(()=>window.print(),150);
@@ -2969,7 +2993,8 @@ function buildSVG(sheet, scale) {
 
   if(sheet._cutSeq && sheet._cutSeq.length > 0){
     // Always show numbered cut sequence on diagram
-    o += buildCutSequenceSVG(sheet, scale, sheet._cutSeq);
+    const bR = (typeof _printBadgeSize !== 'undefined') ? _printBadgeSize : 7;
+    o += buildCutSequenceSVG(sheet, scale, sheet._cutSeq, bR);
   } else {
     // Fallback: plain dashed lines (deduped, no kerf duplicates)
     const seenH = new Set(), seenV = new Set();
@@ -3066,6 +3091,21 @@ function openExportOrder(){
   renderOrderPreview();
 }
 
+function calcEdgeBanding(sheets){
+  // Returns [{material, metres, orderMetres}] — all 4 edges per panel, +10% for wastage
+  const ebMm = {};
+  for(const s of sheets){
+    const mat = s.material;
+    if(!ebMm[mat]) ebMm[mat]=0;
+    for(const p of s.placed) ebMm[mat] += 2*(p.pw + p.ph);
+  }
+  return Object.entries(ebMm).map(([mat,mm])=>({
+    material:    mat,
+    metres:      +(mm/1000).toFixed(2),
+    orderMetres: +(mm/1000*1.10).toFixed(2), // +10% wastage
+  }));
+}
+
 function closeExportOrder(){
   document.getElementById('export-order-modal').style.display = 'none';
 }
@@ -3079,13 +3119,25 @@ function renderOrderPreview(){
     matMap[s.material].sheets++;
   }
   const MAT_COLORS=['#1264A3','#007A5A','#E8912D','#E01E5A','#611F69','#0F7173','#895129','#1F6B75'];
+  const ebData = calcEdgeBanding(_lastSheets);
   el.innerHTML = Object.entries(matMap).map(([mat,d],i)=>`
     <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--sl-border)">
       <div style="width:10px;height:10px;border-radius:2px;flex-shrink:0;background:${MAT_COLORS[i%MAT_COLORS.length]}"></div>
       <div style="flex:1;font-weight:700;color:var(--sl-text)">${esc(mat)}</div>
       <div style="font-family:var(--mono);font-size:11px;color:var(--sl-text2)">${d.size} mm</div>
       <div style="font-family:var(--mono);font-weight:900;font-size:14px;color:var(--sl-blue)">${d.sheets} sheet${d.sheets!==1?'s':''}</div>
-    </div>`).join('');
+    </div>`).join('')
+  + (ebData.length ? `
+    <div style="margin-top:12px;padding-top:10px;border-top:2px solid var(--sl-border)">
+      <div style="font-size:10px;font-weight:700;color:var(--sl-text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Edge Banding Required</div>
+      ${ebData.map(e=>`
+        <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--sl-border)">
+          <div style="flex:1;font-size:12px;color:var(--sl-text)">${esc(e.material)}</div>
+          <div style="font-family:var(--mono);font-size:11px;color:var(--sl-text2)">${e.metres} mtr exact</div>
+          <div style="font-family:var(--mono);font-weight:900;font-size:13px;color:var(--sl-green)">${e.orderMetres} mtr</div>
+        </div>`).join('')}
+      <div style="font-size:10px;color:var(--sl-text3);margin-top:6px">Order quantity includes +10% for joins &amp; waste</div>
+    </div>` : '');
 }
 
 function doExportOrderPDF(){
@@ -3109,6 +3161,14 @@ function doExportOrderPDF(){
       </td>
       <td style="padding:10px 14px;border-bottom:1px solid #eee;font-family:monospace;color:#555">${d.size} mm</td>
       <td style="padding:10px 14px;border-bottom:1px solid #eee;font-weight:900;font-size:18px;color:#1264A3;font-family:monospace">${d.sheets}</td>
+    </tr>`).join('');
+
+  const ebData = calcEdgeBanding(_lastSheets);
+  const ebRows = ebData.map(e=>`
+    <tr>
+      <td style="padding:8px 14px;border-bottom:1px solid #eee">${esc(e.material)}</td>
+      <td style="padding:8px 14px;border-bottom:1px solid #eee;font-family:monospace;color:#555">${e.metres} mtr</td>
+      <td style="padding:8px 14px;border-bottom:1px solid #eee;font-weight:900;font-size:16px;color:#007A5A;font-family:monospace">${e.orderMetres} mtr</td>
     </tr>`).join('');
 
   const win = window.open('','_blank','width=800,height:600');
@@ -3146,6 +3206,17 @@ function doExportOrderPDF(){
         </tr>
       </tfoot>
     </table>
+    ${ebRows?`
+    <h2 style="font-size:16px;font-weight:900;margin:24px 0 6px">Edge Banding Required</h2>
+    <table width="100%" style="border-collapse:collapse;margin-top:4px">
+      <thead><tr>
+        <th style="background:#1a7a4a;color:#fff;text-align:left;padding:8px 14px;font-size:11px;letter-spacing:.5px;text-transform:uppercase;-webkit-print-color-adjust:exact;print-color-adjust:exact">Material</th>
+        <th style="background:#1a7a4a;color:#fff;text-align:left;padding:8px 14px;font-size:11px;-webkit-print-color-adjust:exact;print-color-adjust:exact">Exact (mtr)</th>
+        <th style="background:#1a7a4a;color:#fff;text-align:left;padding:8px 14px;font-size:11px;-webkit-print-color-adjust:exact;print-color-adjust:exact">Order Qty (+10%)</th>
+      </tr></thead>
+      <tbody>${ebRows}</tbody>
+    </table>
+    <p style="font-size:10px;color:#888;margin-top:6px">+10% added for joins and waste</p>`:''}
     <div class="no-print">
       <button onclick="window.print()" style="background:#3F0E40;color:#fff">🖨 Print / Save PDF</button>
       <button onclick="window.close()" style="background:#f1f1f1;color:#333">Close</button>
@@ -3164,12 +3235,15 @@ function doExportOrderExcel(){
     if(!matMap[s.material]) matMap[s.material] = { sheets:0, size:`${s.L}×${s.W}` };
     matMap[s.material].sheets++;
   }
+  const ebData = calcEdgeBanding(_lastSheets);
   let html = `<html xmlns:o="urn:schemas-microsoft-com:office:office">
   <head><meta charset="UTF-8">
   <style>
     th{background:#3F0E40;color:white;padding:8px 12px;font-size:12px}
     td{padding:7px 12px;border:1px solid #ddd}
     .total{font-weight:900;background:#f0f5ff}
+    .eb-th{background:#1a7a4a;color:white;padding:8px 12px;font-size:12px}
+    .eb-order{font-weight:900;color:#007A5A}
   </style></head><body>
   <h2 style="font-family:Arial">Laminate Purchase Order</h2>
   ${bizName?`<p style="font-family:Arial;color:#555">Company: <strong>${esc(bizName)}</strong></p>`:''}
@@ -3180,6 +3254,13 @@ function doExportOrderExcel(){
     ${Object.entries(matMap).map(([mat,d])=>`<tr><td>${esc(mat)}</td><td>${d.size} mm</td><td style="font-weight:900;font-size:16px;color:#1264A3">${d.sheets}</td></tr>`).join('')}
     <tr class="total"><td colspan="2" style="text-align:right;font-weight:900">TOTAL SHEETS:</td><td style="font-weight:900;font-size:18px;color:#1264A3">${_lastSheets.length}</td></tr>
   </table>
+  ${ebData.length?`
+  <br><h3 style="font-family:Arial">Edge Banding Required</h3>
+  <table border="1" style="font-family:Arial;border-collapse:collapse">
+    <tr><th class="eb-th">Material</th><th class="eb-th">Exact (mtr)</th><th class="eb-th">Order Qty +10% (mtr)</th></tr>
+    ${ebData.map(e=>`<tr><td>${esc(e.material)}</td><td>${e.metres}</td><td class="eb-order">${e.orderMetres}</td></tr>`).join('')}
+  </table>
+  <p style="font-family:Arial;font-size:10px;color:#888">+10% added for joins and waste</p>`:''}
   </body></html>`;
   const blob = new Blob([html], {type:'application/vnd.ms-excel;charset=utf-8'});
   const a = document.createElement('a');
