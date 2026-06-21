@@ -820,6 +820,8 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
   .piece-dot{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
 </style>
+<!-- SheetJS for Excel import/export -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <!-- Supabase JS — for Google login -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- Razorpay Checkout -->
@@ -918,8 +920,9 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
     <div class="sidebar-table-wrap">
       <table class="input-table">
         <thead><tr>
-          <th style="width:22%">Label</th>
-          <th style="width:13%">W</th>
+          <th style="width:7%">#</th>
+          <th style="width:20%">Remark</th>
+          <th style="width:12%">W</th>
           <th style="width:13%">H</th>
           <th style="width:9%">Qty</th>
           <th style="width:28%">Material</th>
@@ -1111,7 +1114,55 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
   </div>
 </div>
 
-<!-- Save Project Modal -->
+<!-- Label Export Modal -->
+<div class="modal-overlay" id="label-modal" style="display:none" onclick="if(event.target===this)closeLabelExport()">
+  <div class="modal" style="width:500px">
+    <div class="modal-title">🏷 Export Panel Labels</div>
+    <div class="modal-sub">Printable A4 stickers to paste on each cut panel.</div>
+    <div class="modal-divider"></div>
+
+    <div class="print-opt-row">
+      <div><div class="print-opt-label">Layout</div></div>
+      <div style="display:flex;gap:10px">
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;color:var(--sl-text)"><input type="radio" name="lbl-layout" id="lbl-4" value="4" checked> 4 per A4 (large)</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;color:var(--sl-text)"><input type="radio" name="lbl-layout" id="lbl-8" value="8"> 8 per A4 (compact)</label>
+      </div>
+    </div>
+
+    <div class="print-opt-row">
+      <div><div class="print-opt-label">Font size</div></div>
+      <div class="print-font-row">
+        <input type="range" id="lbl-fontsize" min="8" max="20" value="13" style="width:100px">
+        <span id="lbl-fontsize-val" style="font-size:11px;color:var(--sl-text2);min-width:30px">13px</span>
+      </div>
+    </div>
+
+    <div class="modal-divider"></div>
+    <div style="font-size:10px;font-weight:700;color:var(--sl-text3);letter-spacing:.8px;text-transform:uppercase;margin-bottom:8px">Print fields</div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--sl-text)"><input type="checkbox" id="lbl-srno" checked> Sr. No.</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--sl-text)"><input type="checkbox" id="lbl-size" checked> Size (W × H)</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--sl-text)"><input type="checkbox" id="lbl-remark" checked> Remark</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--sl-text)"><input type="checkbox" id="lbl-material" checked> Material</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--sl-text)"><input type="checkbox" id="lbl-sheet" checked> Sheet No.</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;color:var(--sl-text)"><input type="checkbox" id="lbl-customer" checked> Customer Name</label>
+    </div>
+
+    <div class="modal-divider"></div>
+    <div class="print-opt-row">
+      <div><div class="print-opt-label">Material filter</div></div>
+      <select id="lbl-matfilter" style="background:var(--sl-bg2);border:1px solid var(--sl-border2);color:var(--sl-text);border-radius:4px;padding:5px 8px;font-size:12px">
+        <option value="all">All materials</option>
+      </select>
+    </div>
+
+    <div class="modal-btns">
+      <button class="btn btn-ghost" onclick="closeLabelExport()">Cancel</button>
+      <button class="btn btn-accent" onclick="doExportLabels()">Generate PDF</button>
+    </div>
+  </div>
+</div>
 <div class="modal-overlay" id="save-proj-modal" style="display:none" onclick="if(event.target===this)closeSaveProject()">
   <div class="modal" style="width:440px">
     <div class="modal-title">💾 Save Cut List</div>
@@ -1490,20 +1541,22 @@ function clearPanels(){if(panelRows.length&&!confirm('Clear all panels?'))return
 function clearStock(){if(stockRows.length&&!confirm('Clear all stock sheets?'))return;stockRows=[];renderStock()}
 
 // ══ PANELS ══
-function addPanel(label='',l=600,w=400,qty=1,material='Plywood',canRotate=true){
-  panelRows.push({id:uid(),label,l,w,qty,material,canRotate});
+function addPanel(remark='',l=600,w=400,qty=1,material='Plywood',canRotate=true,srNo=null){
+  const sr = srNo !== null ? srNo : (panelRows.length + 1);
+  panelRows.push({id:uid(),srNo:sr,remark,l,w,qty,material,canRotate});
   renderPanels();
   autoPopulateStock();
 }
 function removePanel(id){
   panelRows=panelRows.filter(r=>r.id!==id);
+  // Re-assign Sr. No. sequentially after deletion
+  panelRows.forEach((r,i)=>r.srNo=i+1);
   renderPanels();
   autoPopulateStock();
 }
 function updatePanel(id,f,v){
   const r=panelRows.find(r=>r.id===id);
   if(r) r[f]=(f==='l'||f==='w'||f==='qty')?+v:v;
-  // If material changed, re-sync stock
   if(f==='material') autoPopulateStock();
 }
 
@@ -1538,8 +1591,9 @@ function autoPopulateStock(){
 }
 function toggleRot(id){const r=panelRows.find(r=>r.id===id);if(r){r.canRotate=!r.canRotate;renderPanels()}}
 function renderPanels(){
-  document.getElementById('panels-tbody').innerHTML=panelRows.map(r=>`<tr>
-    <td><input type="text" value="${esc(r.label)}" oninput="updatePanel(${r.id},'label',this.value)"></td>
+  document.getElementById('panels-tbody').innerHTML=panelRows.map((r,i)=>`<tr>
+    <td style="text-align:center;color:rgba(255,255,255,.4);font-family:var(--mono);font-size:10px;user-select:none">${i+1}</td>
+    <td><input type="text" value="${esc(r.remark||'')}" placeholder="Remark" oninput="updatePanel(${r.id},'remark',this.value)"></td>
     <td><input type="number" value="${r.l}" min="1" oninput="updatePanel(${r.id},'l',this.value)"></td>
     <td><input type="number" value="${r.w}" min="1" oninput="updatePanel(${r.id},'w',this.value)"></td>
     <td><input type="number" value="${r.qty}" min="1" max="999" oninput="updatePanel(${r.id},'qty',this.value)"></td>
@@ -1574,16 +1628,37 @@ function renderStock(){
 
 // ══ CSV — Format: W  H  QTY  Material  Label ══
 const CSV_SAMPLES={
-  panels:`W,H,QTY,Material,Label\n1980,350,1,9172 SH,1980 GROVE\n280,330,2,9172 SH,280 GROVE\n394,287,4,9172 SH,394 GROVE\n540,2370,2,SDL 1020 SHG,2370 GROVE\n130,470,3,SDL 1020 SHG,\n`,
+  panels:`Sr. No.,Remark,W,H,QTY,Material\n1,1980 GROVE,1980,350,1,9172 SH\n2,280 GROVE,280,330,2,9172 SH\n3,394 GROVE,394,287,4,9172 SH\n4,,540,2370,2,SDL 1020 SHG\n5,,130,470,3,SDL 1020 SHG\n`,
   stock:`W,H,QTY,Material,Label,Price\n1210,2430,100,DW,,1800\n1210,2430,100,MDF,,1200\n1210,2430,100,SDL 1020 SHG,,2100\n1210,2430,100,SDL 1020 SHG 18MM BOARD,,2500\n`
 };
 const CSV_HINTS={
-  panels:`Tab or comma separated. First row (header) is skipped automatically.\nColumns: W  H  QTY  Material  Label\n\nExample:\n1980\t350\t1\t9172 SH\t1980 GROVE\n280\t330\t2\t9172 SH\t280 GROVE`,
+  panels:`Tab, comma or Excel file. Header row skipped automatically.\nColumns: Sr. No.  Remark  W  H  QTY  Material\n\nSr. No. is optional — auto-assigned if blank.\n\nExample:\n1\t1980 GROVE\t1980\t350\t1\t9172 SH\n2\t280 GROVE\t280\t330\t2\t9172 SH`,
   stock:`Tab or comma separated. First row (header) is skipped automatically.\nColumns: W  H  QTY  Material  Label  Price\n\nExample:\n1210\t2430\t100\tDW\t\t1800\n1210\t2430\t100\tMDF\t\t1200`
 };
-function openCSV(t){csvTarget=t;document.getElementById('csv-modal-title').textContent=t==='panels'?'Import Panels from CSV':'Import Stock Sheets from CSV';document.getElementById('csv-hint').textContent=CSV_HINTS[t];document.getElementById('csv-textarea').value='';document.getElementById('csv-file-input').value='';document.getElementById('csv-modal').style.display='flex'}
+function openCSV(t){csvTarget=t;document.getElementById('csv-modal-title').textContent=t==='panels'?'Import Panels':'Import Stock Sheets';document.getElementById('csv-hint').textContent=CSV_HINTS[t];document.getElementById('csv-textarea').value='';document.getElementById('csv-file-input').value='';document.getElementById('csv-file-input').accept='.csv,.xlsx,.xls,.txt';document.getElementById('csv-modal').style.display='flex'}
 function closeCSV(){document.getElementById('csv-modal').style.display='none'}
-function loadCSVFile(e){const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=ev=>document.getElementById('csv-textarea').value=ev.target.result;r.readAsText(f)}
+function loadCSVFile(e){
+  const f=e.target.files[0];if(!f)return;
+  const isXlsx=f.name.match(/\.(xlsx|xls)$/i);
+  if(isXlsx){
+    // Use SheetJS if available
+    if(typeof XLSX==='undefined'){
+      alert('Excel import requires the XLSX library. Please paste data manually.');return;
+    }
+    const r=new FileReader();
+    r.onload=ev=>{
+      const wb=XLSX.read(ev.target.result,{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const txt=XLSX.utils.sheet_to_csv(ws);
+      document.getElementById('csv-textarea').value=txt;
+    };
+    r.readAsArrayBuffer(f);
+  } else {
+    const r=new FileReader();
+    r.onload=ev=>document.getElementById('csv-textarea').value=ev.target.result;
+    r.readAsText(f);
+  }
+}
 function parseLine(line){const delim=line.includes('\t')?'\t':',';const res=[];let cur='',inQ=false;for(const c of line){if(c==='"'){inQ=!inQ}else if(c===delim&&!inQ){res.push(cur.trim());cur=''}else{cur+=c}}res.push(cur.trim());return res}
 
 function isHeaderRow(cols){
@@ -1593,30 +1668,104 @@ function isHeaderRow(cols){
 
 function applyCSV(){
   const raw=document.getElementById('csv-textarea').value.trim();if(!raw){closeCSV();return}
-  let imported=0,errors=0;
+  let imported=0,errors=0,autoSr=0;
   const lines=raw.split('\n');
+  const errCheck=document.getElementById('error-check-toggle')?.checked!==false;
+  const hardErrors=[];const warnings=[];
+
+  // Detect column order: new format has Sr.No as col[0] (non-numeric header or number)
+  // We detect by checking if the first data row's col[0] is numeric and col[2]/col[3] are also numeric
+  // New: Sr.No, Remark, W, H, QTY, Material
+  // Old: W, H, QTY, Material, Label
+
   for(let i=0;i<lines.length;i++){
     const t=lines[i].trim();if(!t)continue;
     const cols=parseLine(t);
-    // Skip header row(s) — any row where W or H is non-numeric
     if(isHeaderRow(cols))continue;
-    const W=parseFloat(cols[0]),H=parseFloat(cols[1]),qty=Math.max(1,parseInt(cols[2])||1),mat=(cols[3]||'Plywood').trim()||'Plywood',lbl=(cols[4]||'').trim(),price=parseFloat(cols[5])||0;
+
+    let srNo,remark,W,H,qty,mat;
+
+    // Detect format: if col[0] is a small integer and col[2] & col[3] look like mm sizes → new format
+    const col0n=parseFloat(cols[0]), col1n=parseFloat(cols[1]);
+    const col2n=parseFloat(cols[2]), col3n=parseFloat(cols[3]);
+    const isNewFormat = !isNaN(col2n) && col2n > 0 && !isNaN(col3n) && col3n > 0 && col2n > 50 && col3n > 50;
+    const isOldFormat = !isNaN(col0n) && col0n > 50 && !isNaN(col1n) && col1n > 50;
+
+    if(csvTarget==='panels'){
+      if(isNewFormat){
+        srNo=cols[0]?cols[0].trim():null;
+        remark=(cols[1]||'').trim();
+        W=col2n;H=col3n;qty=Math.max(1,parseInt(cols[4])||1);mat=(cols[5]||'Plywood').trim()||'Plywood';
+      } else {
+        // Old format: W,H,QTY,Material,Label
+        W=col0n;H=col1n;qty=Math.max(1,parseInt(cols[2])||1);mat=(cols[3]||'Plywood').trim()||'Plywood';
+        remark=(cols[4]||'').trim();srNo=null;
+      }
+    } else {
+      // Stock: W,H,QTY,Material,Label,Price
+      W=col0n;H=col1n;qty=Math.max(1,parseInt(cols[2])||1);mat=(cols[3]||'Plywood').trim()||'Plywood';
+      const lbl=(cols[4]||'').trim(),price=parseFloat(cols[5])||0;
+      if(W>0&&H>0){addStock(lbl,W,H,qty,mat,price);imported++;}else errors++;
+      continue;
+    }
+
+    // Error check (panels only)
+    if(errCheck){
+      const rowNum=i+1;
+      if(!W||!H||W<=0||H<=0){hardErrors.push(`Row ${rowNum} — Size is 0 or missing`);errors++;continue;}
+      if(isNaN(W)||isNaN(H)){hardErrors.push(`Row ${rowNum} — Non-numeric size`);errors++;continue;}
+      // Warn: looks like inches
+      if(W<100&&H<100) warnings.push(`Row ${rowNum} — Size ${W}×${H} looks like inches, not mm`);
+      // Warn: too small
+      if(W<50||H<50) warnings.push(`Row ${rowNum} — Very small panel (${W}×${H}mm) — typo?`);
+      // Warn: very high qty
+      if(qty>50) warnings.push(`Row ${rowNum} — Qty ${qty} is unusually high`);
+    }
+
     if(W>0&&H>0){
-      if(csvTarget==='panels')addPanel(lbl,W,H,qty,mat,true);else addStock(lbl,W,H,qty,mat,price);
+      const finalSr=srNo||(++autoSr);
+      addPanel(remark,W,H,qty,mat,true,finalSr);
       imported++;
-    }else errors++;
+    } else errors++;
   }
+
   closeCSV();
-  if(errors) alert(`Imported ${imported}. ${errors} rows skipped (invalid data).`);
   if(csvTarget==='panels') autoPopulateStock();
+
+  // Show validation results
+  if(hardErrors.length||warnings.length){
+    const msg=[];
+    if(hardErrors.length) msg.push(`🔴 ${hardErrors.length} error(s):\n${hardErrors.slice(0,5).join('\n')}`);
+    if(warnings.length) msg.push(`🟡 ${warnings.length} warning(s):\n${warnings.slice(0,5).join('\n')}`);
+    if(imported) msg.push(`✓ ${imported} rows imported`);
+    alert(msg.join('\n\n'));
+  } else if(errors) {
+    alert(`Imported ${imported}. ${errors} rows skipped (invalid data).`);
+  }
 }
 
 function downloadSampleCSV(){
-  const data=CSV_SAMPLES[csvTarget];
-  const fname=csvTarget==='panels'?'sample_panels.csv':'sample_stock.csv';
-  const blob=new Blob([data],{type:'text/csv'});
-  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=fname;a.click();
-  URL.revokeObjectURL(a.href);
+  if(csvTarget==='panels' && typeof XLSX !== 'undefined'){
+    // Download as Excel for panels
+    const data=[
+      ['Sr. No.','Remark','W','H','QTY','Material'],
+      [1,'1980 GROVE',1980,350,1,'9172 SH'],
+      [2,'280 GROVE',280,330,2,'9172 SH'],
+      [3,'394 GROVE',394,287,4,'9172 SH'],
+      [4,'',540,2370,2,'SDL 1020 SHG'],
+      [5,'',130,470,3,'SDL 1020 SHG'],
+    ];
+    const ws=XLSX.utils.aoa_to_sheet(data);
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,'Panels',ws);
+    XLSX.writeFile(wb,'sample_panels.xlsx');
+  } else {
+    const data=CSV_SAMPLES[csvTarget];
+    const fname=csvTarget==='panels'?'sample_panels.csv':'sample_stock.csv';
+    const blob=new Blob([data],{type:'text/csv'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=fname;a.click();
+    URL.revokeObjectURL(a.href);
+  }
 }
 
 // ══ PREMIUM / PLAN SYSTEM ══
@@ -2613,7 +2762,19 @@ function renderResults(sheets,unfitted,scale){
 
   let html=`<div class="results-header">
     <div class="results-title">Results</div>
-    <button class="btn-print-pdf no-print" onclick="openPrint()">🖨 Print / PDF</button>
+    <div class="no-print" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+      <button onclick="calculate()" style="background:#007A5A;color:#fff;border:none;border-radius:4px;padding:6px 14px;font-weight:900;font-size:12px;cursor:pointer;font-family:var(--sans);display:flex;align-items:center;gap:5px">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>Run
+      </button>
+      <button onclick="openSaveProject()" style="background:var(--sl-bg3);border:1px solid var(--sl-border2);color:var(--sl-text2);border-radius:4px;padding:6px 12px;font-weight:700;font-size:12px;cursor:pointer;font-family:var(--sans);display:flex;align-items:center;gap:5px">
+        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Save
+      </button>
+      <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--sl-text2);cursor:pointer;padding:5px 10px;border:1px solid var(--sl-border2);border-radius:4px;background:var(--sl-bg3)" title="Validate panel sizes before running optimizer">
+        <input type="checkbox" id="error-check-toggle" checked style="width:auto;background:none;border:none;padding:0">
+        🔍 Error Check
+      </label>
+      <button class="btn-print-pdf" onclick="openPrint()">🖨 Print / PDF</button>
+    </div>
   </div>
 
   <div class="no-print" style="display:flex;align-items:center;gap:8px;margin-bottom:14px;background:var(--sl-bg2);border:1px solid var(--sl-border);border-radius:var(--radius);padding:10px 14px">
@@ -2639,31 +2800,32 @@ function renderResults(sheets,unfitted,scale){
   </div>
 
   ${savedSheets>0?`<div class="sheets-saved-banner no-print">
-    <div class="ssb-icon">🏆</div>
+    <div class="ssb-icon">✂</div>
     <div class="ssb-text">
-      <div class="ssb-title">EasyCutList saved you sheets vs unoptimized cutting</div>
+      <div class="ssb-title">Saved ${savedSheets} sheets vs unoptimized cutting</div>
       <div class="ssb-sub">${savedCost>0?`Estimated material cost saved: ${cur}${savedCost.toLocaleString('en-IN')}`:'Enter sheet prices to see cost savings'}</div>
     </div>
-    <div class="ssb-val" style="font-size:32px;font-weight:900;font-family:var(--mono);color:var(--sl-yellow)">−${savedSheets}</div>
+    <div class="ssb-val" style="font-size:32px;font-weight:900;font-family:var(--mono);color:#4fffb0">+${savedSheets}</div>
     <div style="font-size:11px;color:rgba(255,255,255,.6);margin-left:-8px;margin-top:4px">sheets</div>
   </div>`:''}
 
+  <div style="font-size:9px;font-weight:700;color:var(--sl-text3);letter-spacing:.8px;text-transform:uppercase;margin-bottom:6px" class="no-print">📦 Material Procurement</div>
   <div class="export-btns no-print">
     <button class="btn-export btn-export-excel" onclick="requirePro('exportExcelFn', exportExcel)">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-      Export Excel ${hasFeature('exportExcel')?'':'⭐'}
+      Cut List (Excel) ${hasFeature('exportExcel')?'':'⭐'}
     </button>
     <button class="btn-export btn-export-csv2" onclick="requirePro('exportCSVFn', exportCSV)">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-      Export CSV ${hasFeature('exportCSV')?'':'⭐'}
+      Cut List (CSV) ${hasFeature('exportCSV')?'':'⭐'}
     </button>
     <button class="btn-export" style="border-color:#7c3aed!important;color:#7c3aed!important;background:#f5f3ff!important" onclick="openExportOrder()">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-      Export Order
+      Material Order
     </button>
-    <button class="btn-export" onclick="openPrint()">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-      Print / PDF
+    <button class="btn-export" style="border-color:#0891b2!important;color:#0891b2!important;background:#ecfeff!important" onclick="openLabelExport()">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-4 0v2"/></svg>
+      Export Labels
     </button>
   </div>
 
@@ -2691,6 +2853,12 @@ function renderResults(sheets,unfitted,scale){
     <div class="mat-summary-title">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
       Sheets by Material
+      <span style="margin-left:auto;display:flex;gap:24px;font-size:9px;color:var(--sl-text3);font-weight:600;letter-spacing:.5px;text-transform:uppercase">
+        <span style="min-width:80px;text-align:center">Sheets</span>
+        <span style="min-width:70px">Pieces</span>
+        <span style="min-width:72px">Edge Band</span>
+        <span>Waste</span>
+      </span>
     </div>
     <div class="mat-rows">${matRowsHtml}</div>
   </div>`;
@@ -3115,6 +3283,102 @@ function calcEdgeBanding(sheets){
     metres:      +(mm/1000).toFixed(2),
     orderMetres: +(mm/1000*1.10).toFixed(2), // +10% wastage
   }));
+}
+
+// ══ LABEL EXPORT ══
+function openLabelExport(){
+  if(!_lastSheets||!_lastSheets.length){alert('Run the optimizer first.');return;}
+  // Populate material filter
+  const sel=document.getElementById('lbl-matfilter');
+  const mats=[...new Set(_lastSheets.map(s=>s.material))];
+  sel.innerHTML='<option value="all">All materials</option>'+mats.map(m=>`<option value="${esc(m)}">${esc(m)}</option>`).join('');
+  // Font size slider live update
+  const slider=document.getElementById('lbl-fontsize');
+  const valEl=document.getElementById('lbl-fontsize-val');
+  slider.oninput=()=>valEl.textContent=slider.value+'px';
+  document.getElementById('label-modal').style.display='flex';
+}
+function closeLabelExport(){document.getElementById('label-modal').style.display='none';}
+
+function doExportLabels(){
+  const perPage  = +document.querySelector('input[name="lbl-layout"]:checked').value;
+  const fs       = +document.getElementById('lbl-fontsize').value;
+  const showSrNo    = document.getElementById('lbl-srno').checked;
+  const showSize    = document.getElementById('lbl-size').checked;
+  const showRemark  = document.getElementById('lbl-remark').checked;
+  const showMat     = document.getElementById('lbl-material').checked;
+  const showSheet   = document.getElementById('lbl-sheet').checked;
+  const showCust    = document.getElementById('lbl-customer').checked;
+  const matFilter   = document.getElementById('lbl-matfilter').value;
+  const customer    = _resultClientName || '';
+
+  // Build sticker data from placed panels
+  const stickers=[];
+  _lastSheets.forEach(sheet=>{
+    if(matFilter!=='all'&&sheet.material!==matFilter)return;
+    sheet.placed.forEach(p=>{
+      // Find matching panel row for srNo and remark
+      const panelMatch = panelRows.find(pr=>(pr.remark||'')===(p.piece.label||''));
+      const srNo = panelMatch?.srNo || p.piece.instance || '';
+      const srDisplay = p.piece.instance > 1
+        ? `${srNo}-${p.piece.instance}`
+        : `${srNo}`;
+      stickers.push({
+        srNo:     srDisplay,
+        size:     `${p.pw} × ${p.ph} mm`,
+        remark:   p.piece.label || '',
+        material: sheet.material,
+        sheet:    `Sheet ${sheet.idx} of ${_lastSheets.filter(s=>s.material===sheet.material).length} (${sheet.material})`,
+        customer,
+      });
+    });
+  });
+
+  if(!stickers.length){alert('No panels to export.');return;}
+  closeLabelExport();
+
+  // Generate A4 HTML with sticker grid
+  const cols = perPage===4 ? 2 : 2;
+  const rows = perPage===4 ? 2 : 4;
+  const sW   = perPage===4 ? '48%' : '48%';
+  const sH   = perPage===4 ? '46%' : '22%';
+
+  let pages='';
+  for(let i=0;i<stickers.length;i+=perPage){
+    const batch=stickers.slice(i,i+perPage);
+    // Pad to full page
+    while(batch.length<perPage) batch.push(null);
+    const stickerHtml=batch.map(s=>{
+      if(!s) return `<div style="width:${sW};height:${sH};border:1px dashed #ddd;border-radius:8px;margin:1%;box-sizing:border-box"></div>`;
+      const lines=[];
+      if(showSrNo&&s.srNo)   lines.push(`<div style="font-size:${fs*1.6}px;font-weight:900;color:#1a1a1a">#${esc(s.srNo)}</div>`);
+      if(showSize)           lines.push(`<div style="font-size:${fs*1.4}px;font-weight:700;color:#222;margin:4px 0;font-family:monospace">${esc(s.size)}</div>`);
+      if(showRemark&&s.remark) lines.push(`<div style="font-size:${fs}px;color:#444;margin-top:4px">${esc(s.remark)}</div>`);
+      if(showMat)            lines.push(`<div style="font-size:${fs*0.85}px;color:#666;margin-top:auto;padding-top:4px;border-top:1px solid #eee">${esc(s.material)}</div>`);
+      if(showSheet)          lines.push(`<div style="font-size:${fs*0.8}px;color:#888">${esc(s.sheet)}</div>`);
+      if(showCust&&customer) lines.push(`<div style="font-size:${fs*0.8}px;color:#888">${esc(customer)}</div>`);
+      return `<div style="width:${sW};height:${sH};border:2px solid #333;border-radius:8px;margin:1%;box-sizing:border-box;padding:10px;display:inline-flex;flex-direction:column;vertical-align:top;page-break-inside:avoid">${lines.join('')}</div>`;
+    }).join('');
+    pages+=`<div style="width:210mm;height:297mm;page-break-after:always;display:flex;flex-wrap:wrap;align-content:flex-start;padding:8mm;box-sizing:border-box">${stickerHtml}</div>`;
+  }
+
+  const win=window.open('','_blank');
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <title>Panel Labels — EasyCutList</title>
+  <style>
+    *{margin:0;padding:0;box-sizing:border-box}
+    body{font-family:Arial,sans-serif;background:#fff}
+    @media print{@page{size:A4 portrait;margin:0}body{margin:0}}
+    .no-print{display:flex;gap:10px;padding:12px 16px;background:#f5f5f5;border-bottom:1px solid #ddd;align-items:center}
+    @media print{.no-print{display:none!important}}
+  </style></head><body>
+  <div class="no-print">
+    <strong style="font-size:14px">Panel Labels — ${stickers.length} stickers</strong>
+    <button onclick="window.print()" style="background:#007A5A;color:#fff;border:none;border-radius:4px;padding:7px 18px;font-weight:700;cursor:pointer;font-size:13px">🖨 Print</button>
+    <span style="font-size:11px;color:#666">In print dialog: set margins to None, disable Headers & Footers</span>
+  </div>
+  ${pages}</body></html>`);
+  win.document.close();
 }
 
 function closeExportOrder(){
