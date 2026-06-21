@@ -3367,13 +3367,16 @@ function doExportLabels(){
 
     sheet.placed.forEach(p=>{
       globalIdx++;
-      const panelMatch=panelRows.find(pr=>(pr.remark||pr.label||'')===(p.piece.label||''));
-      const baseSr = panelMatch?.srNo || p.piece.colorIdx + 1;
+      // Match by remark AND material to get correct row index
+      const panelIdx = panelRows.findIndex(pr =>
+        (pr.remark||pr.label||'') === (p.piece.label||'') &&
+        pr.material === sheet.material
+      );
+      const baseSr = panelIdx >= 0 ? panelIdx + 1 : p.piece.colorIdx + 1;
       const srDisplay = p.piece.instance > 1 ? `${baseSr}-${p.piece.instance}` : `${baseSr}`;
 
       // Show original W×H from panel input, not placed pw×ph (which may be rotated)
-      // pw is the placed width on sheet, ph is placed height
-      // Original panel: panelMatch.l = W, panelMatch.w = H
+      const panelMatch = panelIdx >= 0 ? panelRows[panelIdx] : null;
       const dispW = panelMatch ? panelMatch.l : p.pw;
       const dispH = panelMatch ? panelMatch.w : p.ph;
 
