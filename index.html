@@ -318,6 +318,7 @@ table.cuts-table{width:100%;border-collapse:collapse;font-family:var(--mono);fon
   white-space:nowrap;
 }
 .mat-row-pieces{font-family:var(--mono);font-size:11px;color:var(--sl-text2);min-width:70px}
+.mat-row-eb{min-width:72px;display:flex;align-items:center}
 .mat-row-waste{margin-left:auto}
 
 /* Empty state */
@@ -2569,10 +2570,14 @@ function renderResults(sheets,unfitted,scale){
   const matMap={};
   for(const s of sheets){
     const m=s.material;
-    if(!matMap[m])matMap[m]={sheets:0,pieces:0,usedArea:0,totalArea:0,size:`${s.L}×${s.W}`};
+    if(!matMap[m])matMap[m]={sheets:0,pieces:0,usedArea:0,totalArea:0,size:`${s.L}×${s.W}`,ebMm:0};
     matMap[m].sheets++;
     matMap[m].totalArea+=s.L*s.W;
-    for(const p of s.placed){matMap[m].usedArea+=p.pw*p.ph;matMap[m].pieces++}
+    for(const p of s.placed){
+      matMap[m].usedArea+=p.pw*p.ph;
+      matMap[m].pieces++;
+      matMap[m].ebMm+=2*(p.pw+p.ph);
+    }
   }
   const matEntries=Object.entries(matMap);
 
@@ -2583,12 +2588,18 @@ function renderResults(sheets,unfitted,scale){
     const wp=d.totalArea>0?((d.totalArea-d.usedArea)/d.totalArea*100):0;
     const wc=wp<15?'waste-good':wp<30?'waste-warn':'waste-bad';
     const col=MAT_COLORS[i%MAT_COLORS.length];
+    const ebMtr=+(d.ebMm/1000).toFixed(1);
+    const ebOrder=+(ebMtr*1.10).toFixed(1);
     return `<div class="mat-row">
       <div class="mat-row-color" style="background:${col}"></div>
       <div class="mat-row-name">${esc(mat)}</div>
       <div class="mat-row-size">${d.size} mm</div>
       <div class="mat-row-sheets"><span class="mat-sheets-badge" style="background:${col}18;color:${col};border-color:${col}30">${d.sheets} sheet${d.sheets!==1?'s':''}</span></div>
       <div class="mat-row-pieces">${d.pieces} pieces</div>
+      <div class="mat-row-eb no-print" title="Edge banding — exact: ${ebMtr} mtr · order +10%: ${ebOrder} mtr">
+        <span style="font-family:var(--mono);font-size:11px;color:var(--sl-green);font-weight:700">${ebOrder} mtr</span>
+        <span style="font-size:9px;color:var(--sl-text3);margin-left:2px">EB</span>
+      </div>
       <div class="mat-row-waste"><span class="sheet-waste-badge ${wc}">${wp.toFixed(1)}% waste</span></div>
     </div>`;
   }).join('');
