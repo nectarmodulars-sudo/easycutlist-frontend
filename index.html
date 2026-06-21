@@ -2772,12 +2772,15 @@ function renderResults(sheets,unfitted,scale){
         <span style="font-size:9px;color:var(--sl-text3);margin-left:2px">EB</span>
       </div>
       <div class="mat-row-waste"><span class="sheet-waste-badge ${wc}">${wp.toFixed(1)}% waste</span></div>
-      <div class="mat-row-il no-print" style="display:flex;gap:8px;align-items:center;margin-left:8px">
+      <div class="mat-row-il no-print" style="display:flex;gap:6px;align-items:center;margin-left:8px">
         <label title="1 side inner laminate" style="display:flex;align-items:center;gap:3px;font-size:10px;color:var(--sl-text2);cursor:pointer;white-space:nowrap">
-          <input type="checkbox" ${il1?'checked':''} onchange="setInnerLam('${mat}',1,this.checked)" style="width:auto"> 1
+          <input type="radio" name="il_${i}" value="1" ${(window._innerLam?.[mat]??1)!==2&&(window._innerLam?.[mat])!==0?'checked':''} onchange="setInnerLam('${mat}',1,true)" style="width:auto"> 1
         </label>
         <label title="2 sides inner laminate" style="display:flex;align-items:center;gap:3px;font-size:10px;color:var(--sl-text2);cursor:pointer;white-space:nowrap">
-          <input type="checkbox" ${il2?'checked':''} onchange="setInnerLam('${mat}',2,this.checked)" style="width:auto"> 2
+          <input type="radio" name="il_${i}" value="2" ${(window._innerLam?.[mat])===2?'checked':''} onchange="setInnerLam('${mat}',2,true)" style="width:auto"> 2
+        </label>
+        <label title="No inner laminate" style="display:flex;align-items:center;gap:3px;font-size:10px;color:var(--sl-text2);cursor:pointer;white-space:nowrap">
+          <input type="radio" name="il_${i}" value="0" ${(window._innerLam?.[mat])===0?'checked':''} onchange="setInnerLam('${mat}',0,true)" style="width:auto"> 0
         </label>
       </div>
     </div>`;
@@ -3447,13 +3450,13 @@ function doExportLabels(){
 if(!window._innerLam) window._innerLam={};
 
 function setInnerLam(mat, side, checked){
-  window._innerLam[mat+'_'+side] = checked;
+  // side: 0=none, 1=one side, 2=two sides (radio — mutually exclusive)
+  window._innerLam[mat] = +side;
   updateInnerLamTotal();
 }
 
 function updateInnerLamTotal(){
   if(!_lastSheets||!_lastSheets.length) return;
-  // Build matMap from last sheets
   const matMap={};
   for(const s of _lastSheets){
     if(!matMap[s.material]) matMap[s.material]=0;
@@ -3461,12 +3464,11 @@ function updateInnerLamTotal(){
   }
   let total=0;
   for(const [mat,sheets] of Object.entries(matMap)){
-    const il1 = window._innerLam[mat+'_1']!==false; // default true
-    const il2 = window._innerLam[mat+'_2']===true;
-    total += sheets * (il1?1:0) + sheets * (il2?1:0);
+    const sides = window._innerLam?.[mat] ?? 1; // default 1 side
+    total += sheets * sides;
   }
   const el=document.getElementById('il-total-cell');
-  if(el) el.textContent = total > 0 ? total+' sheets' : '';
+  if(el) el.textContent = total > 0 ? total+' sheets' : '—';
 }
 
 function closeExportOrder(){
@@ -3490,6 +3492,17 @@ function renderOrderPreview(){
       <div style="font-family:var(--mono);font-size:11px;color:var(--sl-text2)">${d.size} mm</div>
       <div style="font-family:var(--mono);font-weight:900;font-size:14px;color:var(--sl-blue)">${d.sheets} sheet${d.sheets!==1?'s':''}</div>
     </div>`).join('')
+  + (() => {
+    const ilData = calcInnerLaminate(_lastSheets);
+    const ilTotal = ilData.reduce((a,r)=>a+r.innerLamSheets,0);
+    if(!ilTotal) return '';
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--sl-border);background:#fdf3e7;border-radius:4px;margin-top:2px">
+      <div style="width:10px;height:10px;border-radius:2px;flex-shrink:0;background:#7c4a00"></div>
+      <div style="flex:1;font-weight:700;color:#7c4a00">Inner Laminate</div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--sl-text2)">—</div>
+      <div style="font-family:var(--mono);font-weight:900;font-size:14px;color:#7c4a00">${ilTotal} sheets</div>
+    </div>`;
+  })()
   + (ebData.length ? `
     <div style="margin-top:12px;padding-top:10px;border-top:2px solid var(--sl-border)">
       <div style="font-size:10px;font-weight:700;color:var(--sl-text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Edge Banding Required</div>
@@ -3500,40 +3513,19 @@ function renderOrderPreview(){
           <div style="font-family:var(--mono);font-weight:900;font-size:13px;color:var(--sl-green)">${e.orderMetres} mtr</div>
         </div>`).join('')}
       <div style="font-size:10px;color:var(--sl-text3);margin-top:6px">Order quantity includes +10% for joins &amp; waste</div>
-    </div>` : '')
-  + (() => {
-    const ilData = calcInnerLaminate(_lastSheets);
-    if(!ilData.length) return '';
-    const ilTotal = ilData.reduce((a,r)=>a+r.innerLamSheets,0);
-    return `
-    <div style="margin-top:12px;padding-top:10px;border-top:2px solid var(--sl-border)">
-      <div style="font-size:10px;font-weight:700;color:var(--sl-text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Inner Laminate Required</div>
-      ${ilData.map(r=>`
-        <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--sl-border)">
-          <div style="flex:1;font-size:12px;color:var(--sl-text)">${esc(r.material)}</div>
-          <div style="font-family:var(--mono);font-size:11px;color:var(--sl-text2)">${r.il1?'1 side':''} ${r.il2?'+ 2 sides':''}</div>
-          <div style="font-family:var(--mono);font-weight:900;font-size:13px;color:#895129">${r.innerLamSheets} sheets</div>
-        </div>`).join('')}
-      <div style="display:flex;justify-content:space-between;padding:6px 0;font-weight:900">
-        <span style="font-size:12px;color:var(--sl-text)">Total inner laminate</span>
-        <span style="font-family:var(--mono);font-size:14px;color:#7c4a00">${ilTotal} sheets</span>
-      </div>
-    </div>`;
-  })();
+    </div>` : '');
 }
 
 function calcInnerLaminate(sheets){
-  // Returns [{material, sheets, il1, il2, innerLamSheets}]
   const matMap={};
   for(const s of sheets){
     if(!matMap[s.material]) matMap[s.material]={sheets:0,size:`${s.L}×${s.W}`};
     matMap[s.material].sheets++;
   }
   return Object.entries(matMap).map(([mat,d])=>{
-    const il1=window._innerLam?.[mat+'_1']!==false;
-    const il2=window._innerLam?.[mat+'_2']===true;
-    const innerLamSheets=d.sheets*(il1?1:0)+d.sheets*(il2?1:0);
-    return{material:mat,sheets:d.sheets,size:d.size,il1,il2,innerLamSheets};
+    const sides = window._innerLam?.[mat] ?? 1; // default 1 side
+    const innerLamSheets = d.sheets * sides;
+    return{material:mat,sheets:d.sheets,size:d.size,sides,innerLamSheets};
   }).filter(r=>r.innerLamSheets>0);
 }
 
@@ -3562,19 +3554,13 @@ function doExportOrderPDF(){
 
   const ebData = calcEdgeBanding(_lastSheets);
   const ilData = calcInnerLaminate(_lastSheets);
+  const ilTotal = ilData.reduce((a,r)=>a+r.innerLamSheets,0);
   const ebRows = ebData.map(e=>`
     <tr>
       <td style="padding:8px 14px;border-bottom:1px solid #eee">${esc(e.material)}</td>
       <td style="padding:8px 14px;border-bottom:1px solid #eee;font-family:monospace;color:#555">${e.metres} mtr</td>
       <td style="padding:8px 14px;border-bottom:1px solid #eee;font-weight:900;font-size:16px;color:#007A5A;font-family:monospace">${e.orderMetres} mtr</td>
     </tr>`).join('');
-  const ilRows = ilData.map(r=>`
-    <tr>
-      <td style="padding:8px 14px;border-bottom:1px solid #eee">${esc(r.material)}</td>
-      <td style="padding:8px 14px;border-bottom:1px solid #eee;font-family:monospace;color:#555">${r.il1?'1 side':''} ${r.il2?'+ 2 sides':''}</td>
-      <td style="padding:8px 14px;border-bottom:1px solid #eee;font-weight:900;font-size:16px;color:#895129;font-family:monospace">${r.innerLamSheets}</td>
-    </tr>`).join('');
-  const ilTotal = ilData.reduce((a,r)=>a+r.innerLamSheets,0);
 
   const win = window.open('','_blank','width=800,height:600');
   win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
@@ -3603,7 +3589,14 @@ function doExportOrderPDF(){
     </div>
     <table>
       <thead><tr><th>Material</th><th>Sheet Size</th><th>Qty (Sheets)</th></tr></thead>
-      <tbody>${rows}</tbody>
+      <tbody>
+        ${rows}
+        ${ilTotal>0?`<tr style="background:#fdf3e7">
+          <td style="padding:10px 14px;border-bottom:1px solid #eee;font-weight:700;color:#7c4a00">Inner Laminate</td>
+          <td style="padding:10px 14px;border-bottom:1px solid #eee;font-family:monospace;color:#888">—</td>
+          <td style="padding:10px 14px;border-bottom:1px solid #eee;font-weight:900;font-size:18px;color:#7c4a00;font-family:monospace">${ilTotal}</td>
+        </tr>`:''}
+      </tbody>
       <tfoot>
         <tr style="background:#f8f8f8">
           <td colspan="2" style="padding:10px 14px;font-weight:900;text-align:right">TOTAL SHEETS:</td>
@@ -3622,20 +3615,6 @@ function doExportOrderPDF(){
       <tbody>${ebRows}</tbody>
     </table>
     <p style="font-size:10px;color:#888;margin-top:6px">+10% added for joins and waste</p>`:''}
-    ${ilRows?`
-    <h2 style="font-size:16px;font-weight:900;margin:24px 0 6px">Inner Laminate Required</h2>
-    <table width="100%" style="border-collapse:collapse;margin-top:4px">
-      <thead><tr>
-        <th style="background:#7c4a00;color:#fff;text-align:left;padding:8px 14px;font-size:11px;letter-spacing:.5px;text-transform:uppercase;-webkit-print-color-adjust:exact;print-color-adjust:exact">Material</th>
-        <th style="background:#7c4a00;color:#fff;text-align:left;padding:8px 14px;font-size:11px;-webkit-print-color-adjust:exact;print-color-adjust:exact">Sides</th>
-        <th style="background:#7c4a00;color:#fff;text-align:left;padding:8px 14px;font-size:11px;-webkit-print-color-adjust:exact;print-color-adjust:exact">Inner Lam Sheets</th>
-      </tr></thead>
-      <tbody>${ilRows}</tbody>
-      <tfoot><tr style="background:#fdf3e7">
-        <td colspan="2" style="padding:8px 14px;font-weight:900;text-align:right">TOTAL INNER LAMINATE:</td>
-        <td style="padding:8px 14px;font-weight:900;font-size:18px;color:#7c4a00;font-family:monospace">${ilTotal} sheets</td>
-      </tr></tfoot>
-    </table>`:''}
     <div class="no-print">
       <button onclick="window.print()" style="background:#3F0E40;color:#fff">🖨 Print / Save PDF</button>
       <button onclick="window.close()" style="background:#f1f1f1;color:#333">Close</button>
@@ -3665,8 +3644,6 @@ function doExportOrderExcel(){
     .total{font-weight:900;background:#f0f5ff}
     .eb-th{background:#1a7a4a;color:white;padding:8px 12px;font-size:12px}
     .eb-order{font-weight:900;color:#007A5A}
-    .il-th{background:#7c4a00;color:white;padding:8px 12px;font-size:12px}
-    .il-qty{font-weight:900;color:#7c4a00}
   </style></head><body>
   <h2 style="font-family:Arial">Laminate Purchase Order</h2>
   ${bizName?`<p style="font-family:Arial;color:#555">Company: <strong>${esc(bizName)}</strong></p>`:''}
@@ -3675,6 +3652,7 @@ function doExportOrderExcel(){
   <table border="1" style="font-family:Arial;border-collapse:collapse">
     <tr><th>Material</th><th>Sheet Size</th><th>Qty (Sheets)</th></tr>
     ${Object.entries(matMap).map(([mat,d])=>`<tr><td>${esc(mat)}</td><td>${d.size} mm</td><td style="font-weight:900;font-size:16px;color:#1264A3">${d.sheets}</td></tr>`).join('')}
+    ${ilTotal2>0?`<tr style="background:#fdf3e7"><td style="font-weight:700;color:#7c4a00">Inner Laminate</td><td>—</td><td style="font-weight:900;color:#7c4a00">${ilTotal2}</td></tr>`:''}
     <tr class="total"><td colspan="2" style="text-align:right;font-weight:900">TOTAL SHEETS:</td><td style="font-weight:900;font-size:18px;color:#1264A3">${_lastSheets.length}</td></tr>
   </table>
   ${ebData.length?`
@@ -3684,13 +3662,6 @@ function doExportOrderExcel(){
     ${ebData.map(e=>`<tr><td>${esc(e.material)}</td><td>${e.metres}</td><td class="eb-order">${e.orderMetres}</td></tr>`).join('')}
   </table>
   <p style="font-family:Arial;font-size:10px;color:#888">+10% added for joins and waste</p>`:''}
-  ${ilData.length?`
-  <br><h3 style="font-family:Arial">Inner Laminate Required</h3>
-  <table border="1" style="font-family:Arial;border-collapse:collapse">
-    <tr><th class="il-th">Material</th><th class="il-th">Sides</th><th class="il-th">Inner Lam Sheets</th></tr>
-    ${ilData.map(r=>`<tr><td>${esc(r.material)}</td><td>${r.il1?'1 side':''} ${r.il2?'+ 2 sides':''}</td><td class="il-qty">${r.innerLamSheets}</td></tr>`).join('')}
-    <tr class="total"><td colspan="2" style="text-align:right;font-weight:900">TOTAL INNER LAMINATE:</td><td style="font-weight:900;color:#7c4a00">${ilTotal2} sheets</td></tr>
-  </table>`:''}
   </body></html>`;
   const blob = new Blob([html], {type:'application/vnd.ms-excel;charset=utf-8'});
   const a = document.createElement('a');
