@@ -2638,12 +2638,13 @@ async function calculate() {
     const payload = {
       panels: panelRows.map(p => ({
         id:        p.id,
-        label:     p.label || '',
-        w:         p.l,          // p.l = width stored internally
-        h:         p.w,          // p.w = height stored internally
+        label:     p.remark || p.label || '',  // remark is the new label field
+        w:         p.l,
+        h:         p.w,
         qty:       p.qty,
         material:  p.material,
         canRotate: p.canRotate,
+        srNo:      p.srNo || null,
       })),
       stocks: stockRows.map(s => ({
         label:    s.label || '',
@@ -3342,7 +3343,7 @@ function doExportLabels(){
       stickers.push({
         srNo:     srDisplay,
         size:     `${dispW} × ${dispH}`,
-        remark:   p.piece.label || '',
+        remark:   p.piece.label || '',   // label IS the remark — set directly from piece
         material: sheet.material,
         sheet:    `Sheet ${matSheetIdx} of ${matSheets.length}`,
         customer,
@@ -3374,13 +3375,13 @@ function doExportLabels(){
       // Row 2: Size big (W × H)
       if(showSize) html+=`<div style="font-size:${fs*1.5}px;font-weight:700;color:#111;font-family:monospace;margin-bottom:6px">${esc(s.size)} <span style="font-size:${fs*0.9}px;font-weight:400;color:#555">mm</span></div>`;
 
-      // Row 3: Remark — prominent
-      if(showRemark&&s.remark) html+=`<div style="font-size:${fs*1.1}px;font-weight:700;color:#222;margin-bottom:4px;padding:3px 0">${esc(s.remark)}</div>`;
+      // Row 3: Remark — use piece label directly (it IS the remark)
+      if(showRemark&&s.remark) html+=`<div style="font-size:${fs*1.1}px;font-weight:700;color:#111;margin-bottom:4px;padding:3px 0">${esc(s.remark)}</div>`;
 
-      // Bottom row: Sheet + Customer
-      html+=`<div style="margin-top:auto;padding-top:5px;border-top:1px solid #ddd;display:flex;justify-content:space-between;align-items:flex-end">`;
-      html+= showSheet ? `<div style="font-size:${fs*0.85}px;color:#888">${esc(s.sheet)}</div>` : `<div></div>`;
-      html+= showCust&&customer ? `<div style="font-size:${fs*0.85}px;color:#888;text-align:right">${esc(customer)}</div>` : '';
+      // Bottom row: Sheet + Customer — black bold
+      html+=`<div style="margin-top:auto;padding-top:5px;border-top:1px solid #bbb;display:flex;justify-content:space-between;align-items:flex-end">`;
+      html+= showSheet ? `<div style="font-size:${fs*0.9}px;color:#111;font-weight:700">${esc(s.sheet)}</div>` : `<div></div>`;
+      html+= showCust&&customer ? `<div style="font-size:${fs*0.9}px;color:#111;font-weight:700;text-align:right">${esc(customer)}</div>` : '';
       html+=`</div>`;
 
       return `<div style="width:${sW};height:${sH};border:2px solid #222;border-radius:8px;margin:1%;box-sizing:border-box;padding:12px;display:inline-flex;flex-direction:column;vertical-align:top;page-break-inside:avoid">${html}</div>`;
