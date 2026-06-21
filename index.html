@@ -1414,7 +1414,7 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
     <div class="print-opt-row">
       <div><div class="print-opt-label">Cut sequence badge size</div>
         <div class="print-opt-sub">Red circle number on cut diagram</div></div>
-      <div class="print-font-row"><input type="number" id="po-badge-size" value="7" min="5" max="14" step="1" title="Radius of the red numbered circle (px)"></div>
+      <div class="print-font-row"><input type="number" id="po-badge-size" value="10" min="7" max="18" step="1" title="Radius of the red numbered circle (px)"></div>
     </div>
     <div class="print-opt-row">
       <div><div class="print-opt-label">Print cutting sequence table</div>
@@ -1533,6 +1533,9 @@ if(supa){
     if(event === 'SIGNED_IN' && typeof fetchPlanAndFlags === 'function') fetchPlanAndFlags();
   });
 }
+
+// Default badge size for screen rendering
+window._printBadgeSize = 10;
 
 // ══ STATE ══
 let panelRows=[],stockRows=[],idC=0,csvTarget='panels';
@@ -2093,7 +2096,7 @@ function computeCutSequence(sheet){
 function buildCutSequenceSVG(sheet, scale, cutSeq, badgeR){
   // Returns SVG overlay elements with numbered cut lines
   // badgeR: radius of the red circle badge (default 7)
-  const r = badgeR || 7;
+  const r = badgeR || 10;
   const fs = Math.max(5, r - 1); // font size inside badge
   const ML=8, MT=8, MR=8, MB=24;
   const s = Math.min(scale, 580/sheet.L);
@@ -2281,9 +2284,13 @@ function exportCSV(){
 function exportExcel(){
   if(!_lastSheets.length){alert('Run optimizer first');return;}
   const cur=getCurrency();
+  const eclFooter=`<p style="font-family:Arial;font-size:10px;color:#888;margin-top:16px;border-top:1px solid #eee;padding-top:8px">
+    <strong style="color:#3F0E40">✂ EasyCutList</strong> &nbsp;·&nbsp; easycutlist.com &nbsp;·&nbsp; Generated: ${new Date().toLocaleDateString('en-IN')}
+  </p>`;
   let html=`<html xmlns:o="urn:schemas-microsoft-com:office:office"><head><meta charset="UTF-8">
   <style>th{background:#3F0E40;color:white;padding:6px 10px}td{padding:5px 10px;border:1px solid #ddd}</style></head><body>
-  <h2>EasyCutList — Cut Plan</h2><p>Generated: ${new Date().toLocaleDateString('en-IN')}</p>`;
+  <p style="font-family:Arial;font-size:18px;font-weight:900;color:#3F0E40;margin-bottom:4px">✂ EasyCutList — Cut Plan</p>
+  <p style="font-family:Arial;font-size:11px;color:#888">easycutlist.com &nbsp;·&nbsp; Generated: ${new Date().toLocaleDateString('en-IN')}</p>`;
   // Summary
   html+=`<h3>Summary</h3><table border="1"><tr><th>Material</th><th>Sheets</th><th>Pieces</th><th>Waste %</th><th>Cost (${cur})</th></tr>`;
   const mm={};
@@ -2304,7 +2311,7 @@ function exportExcel(){
       html+=`<tr><td>${si+1}</td><td>${s.material}</td><td>${s.L}×${s.W}</td><td>${p.piece.label||''}</td><td>${p.pw}</td><td>${p.ph}</td><td>${Math.round(p.x)}</td><td>${Math.round(p.y)}</td><td>${p.pw!==p.piece.l?'Yes':'No'}</td></tr>`;
     });
   });
-  html+='</table></body></html>';
+  html+='</table>'+eclFooter+'</body></html>';
   const blob=new Blob([html],{type:'application/vnd.ms-excel;charset=utf-8'});
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='easycutlist-results.xls';a.click();URL.revokeObjectURL(a.href);
 }
@@ -3076,10 +3083,10 @@ function buildSVG(sheet, scale) {
   let o = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${svgW} ${svgH}" style="display:block;width:100%;height:auto">
   <defs><style>
     .sv-bg{fill:#EFEFEF}.sv-bdr{stroke:#AAAAAA;fill:none}.sv-gr{stroke:#DCDCDC}
-    .sv-sz{fill:#888888;font-family:'Inconsolata','Courier New',monospace;font-size:9px}
+    .sv-sz{fill:#555555;font-family:'Inconsolata','Courier New',monospace;font-size:11px;font-weight:600}
     @media print{
       .sv-bg{fill:#f0f0f0}.sv-bdr{stroke:#999}.sv-gr{stroke:#ddd}
-      .sv-sz{fill:#444;font-family:'Courier New',monospace;font-size:9px}
+      .sv-sz{fill:#222;font-family:'Courier New',monospace;font-size:11px;font-weight:700}
     }
   </style></defs>`;
 
@@ -3110,8 +3117,8 @@ function buildSVG(sheet, scale) {
 
     // Font sizes relative to the smaller dimension
     const minDim = Math.min(pw, ph);
-    const fs     = Math.min(11, Math.max(5, minDim / 7));
-    const fsDim  = Math.max(4.5, fs * 0.82);
+    const fs     = Math.min(13, Math.max(6, minDim / 6));
+    const fsDim  = Math.max(6, fs * 0.88);
 
     const widthTxt  = String(p.pw);
     const heightTxt = String(p.ph);
@@ -3119,12 +3126,12 @@ function buildSVG(sheet, scale) {
     o += `<g>`;
     o += `<style>
       .pc${ci}r{fill:${sc}20;stroke:${sc};stroke-width:1.2}
-      .pc${ci}t{fill:${sc};font-family:'Inconsolata','Courier New',monospace;font-size:${fs}px;font-weight:600}
-      .pc${ci}s{fill:${sc}bb;font-family:'Inconsolata','Courier New',monospace;font-size:${fsDim}px}
+      .pc${ci}t{fill:${sc};font-family:'Inconsolata','Courier New',monospace;font-size:${fs}px;font-weight:700}
+      .pc${ci}s{fill:${sc}dd;font-family:'Inconsolata','Courier New',monospace;font-size:${fsDim}px;font-weight:600}
       @media print{
         .pc${ci}r{fill:${pf};stroke:${ps};stroke-width:1pt}
-        .pc${ci}t{fill:${ps};font-family:'Courier New',monospace}
-        .pc${ci}s{fill:${ps};font-family:'Courier New',monospace;opacity:.85}
+        .pc${ci}t{fill:${ps};font-family:'Courier New',monospace;font-weight:700}
+        .pc${ci}s{fill:${ps};font-family:'Courier New',monospace;opacity:1;font-weight:700}
       }
     </style>`;
     o += `<rect x="${px}" y="${py}" width="${pw}" height="${ph}" rx="2" class="pc${ci}r"/>`;
@@ -3439,12 +3446,15 @@ function doExportLabels(){
     @media print{@page{size:A4 portrait;margin:0}body{margin:0}}
     .no-print{display:flex;gap:10px;padding:12px 16px;background:#f5f5f5;border-bottom:1px solid #ddd;align-items:center}
     @media print{.no-print{display:none!important}}
+    .ecl-footer{position:fixed;bottom:0;left:0;right:0;text-align:center;font-size:8px;color:#aaa;padding:4px;border-top:1px solid #eee;font-family:Arial;background:#fff}
+    @media screen{.ecl-footer{display:none}}
   </style></head><body>
   <div class="no-print">
     <strong style="font-size:14px">Panel Labels — ${stickers.length} stickers</strong>
     <button onclick="window.print()" style="background:#007A5A;color:#fff;border:none;border-radius:4px;padding:7px 18px;font-weight:700;cursor:pointer;font-size:13px">🖨 Print</button>
     <span style="font-size:11px;color:#666">Print dialog: margins=None, uncheck Headers &amp; Footers</span>
   </div>
+  <div class="ecl-footer">✂ EasyCutList &nbsp;·&nbsp; easycutlist.com &nbsp;·&nbsp; Generated: ${new Date().toLocaleDateString('en-IN')}</div>
   ${pages}</body></html>`);
   win.document.close();
 }
@@ -3577,17 +3587,26 @@ function doExportOrderPDF(){
       .no-print{display:flex;gap:8px;margin-top:20px}
       @media print{.no-print{display:none}}
       button{padding:8px 18px;border:none;border-radius:5px;cursor:pointer;font-weight:700;font-size:13px}
+      .ecl-brand{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+      .ecl-brand-logo{background:#ECB22E;border-radius:5px;width:24px;height:24px;display:inline-flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
+      .ecl-brand-name{font-size:13px;font-weight:900;color:#3F0E40}
+      .ecl-footer{margin-top:32px;padding-top:10px;border-top:1px solid #eee;font-size:10px;color:#aaa;text-align:center}
+      @media print{.ecl-footer{position:fixed;bottom:6mm;left:0;right:0;text-align:center}}
     </style>
   </head><body>
     <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;padding-bottom:12px;border-bottom:2px solid #3F0E40">
       <div>
+        <div class="ecl-brand">
+          <div class="ecl-brand-logo">✂</div>
+          <span class="ecl-brand-name">EasyCutList</span>
+          <span style="font-size:11px;color:#aaa">easycutlist.com</span>
+        </div>
         ${bizName?`<div style="font-size:11px;color:#888;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">${esc(bizName)}</div>`:''}
         <h1>Laminate Purchase Order</h1>
         ${clientName?`<div style="font-size:13px;color:#555;margin-top:4px">Customer: <strong>${esc(clientName)}</strong></div>`:''}
       </div>
       <div style="text-align:right;font-size:11px;color:#888">
-        <div>Generated by EasyCutList</div>
-        <div style="margin-top:2px">${date}</div>
+        <div>${date}</div>
       </div>
     </div>
     <table>
@@ -3615,6 +3634,7 @@ function doExportOrderPDF(){
       <tbody>${ebRows}</tbody>
     </table>
     <p style="font-size:10px;color:#888;margin-top:6px">+10% added for joins and waste</p>`:''}
+    <div class="ecl-footer">✂ EasyCutList &nbsp;·&nbsp; easycutlist.com &nbsp;·&nbsp; Cut smarter. Waste less.</div>
     <div class="no-print">
       <button onclick="window.print()" style="background:#3F0E40;color:#fff">🖨 Print / Save PDF</button>
       <button onclick="window.close()" style="background:#f1f1f1;color:#333">Close</button>
@@ -3645,10 +3665,11 @@ function doExportOrderExcel(){
     .eb-th{background:#1a7a4a;color:white;padding:8px 12px;font-size:12px}
     .eb-order{font-weight:900;color:#007A5A}
   </style></head><body>
-  <h2 style="font-family:Arial">Laminate Purchase Order</h2>
+  <p style="font-family:Arial;font-size:16px;font-weight:900;color:#3F0E40;margin-bottom:2px">✂ EasyCutList — Laminate Purchase Order</p>
+  <p style="font-family:Arial;font-size:10px;color:#aaa">easycutlist.com &nbsp;·&nbsp; Generated: ${date}</p>
   ${bizName?`<p style="font-family:Arial;color:#555">Company: <strong>${esc(bizName)}</strong></p>`:''}
   ${clientName?`<p style="font-family:Arial;color:#555">Customer: <strong>${esc(clientName)}</strong></p>`:''}
-  <p style="font-family:Arial;color:#888;font-size:11px">Generated: ${date} · EasyCutList</p>
+  <p style="font-family:Arial;color:#888;font-size:11px"></p>
   <table border="1" style="font-family:Arial;border-collapse:collapse">
     <tr><th>Material</th><th>Sheet Size</th><th>Qty (Sheets)</th></tr>
     ${Object.entries(matMap).map(([mat,d])=>`<tr><td>${esc(mat)}</td><td>${d.size} mm</td><td style="font-weight:900;font-size:16px;color:#1264A3">${d.sheets}</td></tr>`).join('')}
@@ -3662,6 +3683,7 @@ function doExportOrderExcel(){
     ${ebData.map(e=>`<tr><td>${esc(e.material)}</td><td>${e.metres}</td><td class="eb-order">${e.orderMetres}</td></tr>`).join('')}
   </table>
   <p style="font-family:Arial;font-size:10px;color:#888">+10% added for joins and waste</p>`:''}
+  <p style="font-family:Arial;font-size:10px;color:#aaa;margin-top:16px;border-top:1px solid #eee;padding-top:8px">✂ EasyCutList &nbsp;·&nbsp; easycutlist.com &nbsp;·&nbsp; Cut smarter. Waste less.</p>
   </body></html>`;
   const blob = new Blob([html], {type:'application/vnd.ms-excel;charset=utf-8'});
   const a = document.createElement('a');
