@@ -1162,6 +1162,13 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
       </select>
     </div>
 
+    <div class="print-opt-row">
+      <div><div class="print-opt-label">Customer name</div>
+        <div class="print-opt-sub">Appears on each sticker</div></div>
+      <input type="text" id="lbl-customer-name" placeholder="Enter customer name"
+        style="background:var(--sl-bg2);border:1px solid var(--sl-border2);color:var(--sl-text);border-radius:4px;padding:5px 8px;font-size:12px;width:180px">
+    </div>
+
     <div class="modal-btns">
       <button class="btn btn-ghost" onclick="closeLabelExport()">Cancel</button>
       <button class="btn btn-accent" onclick="doExportLabels()">Generate PDF</button>
@@ -3288,6 +3295,9 @@ function openLabelExport(){
   const sel=document.getElementById('lbl-matfilter');
   const mats=[...new Set(_lastSheets.map(s=>s.material))];
   sel.innerHTML='<option value="all">All materials</option>'+mats.map(m=>`<option value="${esc(m)}">${esc(m)}</option>`).join('');
+  // Pre-fill customer name from result box or profile
+  const custEl=document.getElementById('lbl-customer-name');
+  if(custEl) custEl.value = _resultClientName || profile.biz || '';
   // Font size slider live update
   const slider=document.getElementById('lbl-fontsize');
   const valEl=document.getElementById('lbl-fontsize-val');
@@ -3306,7 +3316,7 @@ function doExportLabels(){
   const showSheet   = document.getElementById('lbl-sheet').checked;
   const showCust    = document.getElementById('lbl-customer').checked;
   const matFilter   = document.getElementById('lbl-matfilter').value;
-  const customer    = _resultClientName || '';
+  const customer = (document.getElementById('lbl-customer-name')?.value.trim()) || _resultClientName || '';
 
   // Build a global panel counter for Sr.No
   let globalIdx = 0;
@@ -3319,15 +3329,19 @@ function doExportLabels(){
 
     sheet.placed.forEach(p=>{
       globalIdx++;
-      // Try to find Sr.No from panelRows by matching label/remark
       const panelMatch=panelRows.find(pr=>(pr.remark||pr.label||'')===(p.piece.label||''));
       const baseSr = panelMatch?.srNo || p.piece.colorIdx + 1;
-      // If qty > 1, append instance number
       const srDisplay = p.piece.instance > 1 ? `${baseSr}-${p.piece.instance}` : `${baseSr}`;
+
+      // Show original W×H from panel input, not placed pw×ph (which may be rotated)
+      // pw is the placed width on sheet, ph is placed height
+      // Original panel: panelMatch.l = W, panelMatch.w = H
+      const dispW = panelMatch ? panelMatch.l : p.pw;
+      const dispH = panelMatch ? panelMatch.w : p.ph;
 
       stickers.push({
         srNo:     srDisplay,
-        size:     `${p.pw} × ${p.ph}`,
+        size:     `${dispW} × ${dispH}`,
         remark:   p.piece.label || '',
         material: sheet.material,
         sheet:    `Sheet ${matSheetIdx} of ${matSheets.length}`,
@@ -3351,22 +3365,22 @@ function doExportLabels(){
       if(!s) return `<div style="width:${sW};height:${sH};border:1px dashed #ddd;border-radius:8px;margin:1%;box-sizing:border-box;display:inline-block;vertical-align:top"></div>`;
 
       let html='';
-      // Row 1: Sr.No (large, left) + Material (same weight as size, right)
+      // Row 1: Sr.No (large, left) + Material (prominent, right)
       html+=`<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">`;
       html+= showSrNo&&s.srNo ? `<div style="font-size:${fs*1.8}px;font-weight:900;color:#111;font-family:Arial">#${esc(s.srNo)}</div>` : `<div></div>`;
-      html+= showMat ? `<div style="font-size:${fs*1.1}px;font-weight:700;color:#333;font-family:monospace;text-align:right;max-width:55%">${esc(s.material)}</div>` : '';
+      html+= showMat ? `<div style="font-size:${fs*1.1}px;font-weight:900;color:#111;font-family:Arial;text-align:right;max-width:55%">${esc(s.material)}</div>` : '';
       html+=`</div>`;
 
-      // Row 2: Size big
-      if(showSize) html+=`<div style="font-size:${fs*1.5}px;font-weight:700;color:#111;font-family:monospace;margin-bottom:4px">${esc(s.size)} <span style="font-size:${fs*0.9}px;font-weight:400">mm</span></div>`;
+      // Row 2: Size big (W × H)
+      if(showSize) html+=`<div style="font-size:${fs*1.5}px;font-weight:700;color:#111;font-family:monospace;margin-bottom:6px">${esc(s.size)} <span style="font-size:${fs*0.9}px;font-weight:400;color:#555">mm</span></div>`;
 
-      // Row 3: Remark
-      if(showRemark&&s.remark) html+=`<div style="font-size:${fs}px;color:#444;margin-bottom:4px">${esc(s.remark)}</div>`;
+      // Row 3: Remark — prominent
+      if(showRemark&&s.remark) html+=`<div style="font-size:${fs*1.1}px;font-weight:700;color:#222;margin-bottom:4px;padding:3px 0">${esc(s.remark)}</div>`;
 
       // Bottom row: Sheet + Customer
       html+=`<div style="margin-top:auto;padding-top:5px;border-top:1px solid #ddd;display:flex;justify-content:space-between;align-items:flex-end">`;
-      html+= showSheet ? `<div style="font-size:${fs*0.8}px;color:#888">${esc(s.sheet)}</div>` : `<div></div>`;
-      html+= showCust&&customer ? `<div style="font-size:${fs*0.8}px;color:#888;text-align:right">${esc(customer)}</div>` : '';
+      html+= showSheet ? `<div style="font-size:${fs*0.85}px;color:#888">${esc(s.sheet)}</div>` : `<div></div>`;
+      html+= showCust&&customer ? `<div style="font-size:${fs*0.85}px;color:#888;text-align:right">${esc(customer)}</div>` : '';
       html+=`</div>`;
 
       return `<div style="width:${sW};height:${sH};border:2px solid #222;border-radius:8px;margin:1%;box-sizing:border-box;padding:12px;display:inline-flex;flex-direction:column;vertical-align:top;page-break-inside:avoid">${html}</div>`;
