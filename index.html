@@ -998,6 +998,11 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
       Save Project
     </button>
+    <div class="toggle-row" style="padding:6px 16px">
+      <div><div class="tl">Error Check</div>
+        <div class="ts-sub">Validate sizes before optimizing</div></div>
+      <label class="toggle"><input type="checkbox" id="error-check-toggle" checked><span class="tt"></span></label>
+    </div>
     <button class="calc-btn" onclick="calculate()">
       <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
       Run Optimizer
@@ -2764,19 +2769,7 @@ function renderResults(sheets,unfitted,scale){
 
   let html=`<div class="results-header">
     <div class="results-title">Results</div>
-    <div class="no-print" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-      <button onclick="calculate()" style="background:#007A5A;color:#fff;border:none;border-radius:4px;padding:6px 14px;font-weight:900;font-size:12px;cursor:pointer;font-family:var(--sans);display:flex;align-items:center;gap:5px">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>Run
-      </button>
-      <button onclick="openSaveProject()" style="background:var(--sl-bg3);border:1px solid var(--sl-border2);color:var(--sl-text2);border-radius:4px;padding:6px 12px;font-weight:700;font-size:12px;cursor:pointer;font-family:var(--sans);display:flex;align-items:center;gap:5px">
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>Save
-      </button>
-      <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--sl-text2);cursor:pointer;padding:5px 10px;border:1px solid var(--sl-border2);border-radius:4px;background:var(--sl-bg3)" title="Validate panel sizes before running optimizer">
-        <input type="checkbox" id="error-check-toggle" checked style="width:auto;background:none;border:none;padding:0">
-        🔍 Error Check
-      </label>
-      <button class="btn-print-pdf" onclick="openPrint()">🖨 Print / PDF</button>
-    </div>
+    <button class="btn-print-pdf no-print" onclick="openPrint()">🖨 Print / PDF</button>
   </div>
 
   <div class="no-print" style="display:flex;align-items:center;gap:8px;margin-bottom:14px;background:var(--sl-bg2);border:1px solid var(--sl-border);border-radius:var(--radius);padding:10px 14px">
