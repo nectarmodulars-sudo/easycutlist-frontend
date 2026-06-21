@@ -2749,13 +2749,19 @@ function renderResults(sheets,unfitted,scale){
   // Color palette for material rows (cycles)
   const MAT_COLORS=['#1264A3','#007A5A','#E8912D','#E01E5A','#611F69','#0F7173','#895129','#1F6B75'];
 
+  // Inner laminate state — persisted per material name
+  if(!window._innerLam) window._innerLam={};
+
   let matRowsHtml=matEntries.map(([mat,d],i)=>{
     const wp=d.totalArea>0?((d.totalArea-d.usedArea)/d.totalArea*100):0;
     const wc=wp<15?'waste-good':wp<30?'waste-warn':'waste-bad';
     const col=MAT_COLORS[i%MAT_COLORS.length];
     const ebMtr=+(d.ebMm/1000).toFixed(1);
     const ebOrder=+(ebMtr*1.10).toFixed(1);
-    return `<div class="mat-row">
+    const mid=`il_${i}`;
+    const il1=window._innerLam[mat+'_1']!==false; // 1-side default checked
+    const il2=window._innerLam[mat+'_2']===true;  // 2-side default unchecked
+    return `<div class="mat-row" id="matrow_${i}">
       <div class="mat-row-color" style="background:${col}"></div>
       <div class="mat-row-name">${esc(mat)}</div>
       <div class="mat-row-size">${d.size} mm</div>
@@ -2766,8 +2772,31 @@ function renderResults(sheets,unfitted,scale){
         <span style="font-size:9px;color:var(--sl-text3);margin-left:2px">EB</span>
       </div>
       <div class="mat-row-waste"><span class="sheet-waste-badge ${wc}">${wp.toFixed(1)}% waste</span></div>
+      <div class="mat-row-il no-print" style="display:flex;gap:8px;align-items:center;margin-left:8px">
+        <label title="1 side inner laminate" style="display:flex;align-items:center;gap:3px;font-size:10px;color:var(--sl-text2);cursor:pointer;white-space:nowrap">
+          <input type="checkbox" ${il1?'checked':''} onchange="setInnerLam('${mat}',1,this.checked)" style="width:auto"> 1
+        </label>
+        <label title="2 sides inner laminate" style="display:flex;align-items:center;gap:3px;font-size:10px;color:var(--sl-text2);cursor:pointer;white-space:nowrap">
+          <input type="checkbox" ${il2?'checked':''} onchange="setInnerLam('${mat}',2,this.checked)" style="width:auto"> 2
+        </label>
+      </div>
     </div>`;
   }).join('');
+
+  // Total row
+  const totSheets = matEntries.reduce((a,[,d])=>a+d.sheets,0);
+  const totPcs    = matEntries.reduce((a,[,d])=>a+d.pieces,0);
+  const totEB     = +(matEntries.reduce((a,[,d])=>a+d.ebMm,0)/1000*1.10).toFixed(1);
+  matRowsHtml += `<div class="mat-row" style="background:var(--sl-bg2);border-top:2px solid var(--sl-border2);font-weight:700">
+    <div class="mat-row-color" style="background:transparent"></div>
+    <div class="mat-row-name" style="font-weight:900;color:var(--sl-text)">TOTAL</div>
+    <div class="mat-row-size"></div>
+    <div class="mat-row-sheets"><span class="mat-sheets-badge" style="background:#1D1C1D18;color:var(--sl-text);border-color:#1D1C1D30;font-weight:900">${totSheets} sheets</span></div>
+    <div class="mat-row-pieces" style="font-weight:900;color:var(--sl-text)">${totPcs} pieces</div>
+    <div class="mat-row-eb no-print"><span style="font-family:var(--mono);font-size:11px;color:var(--sl-green);font-weight:900">${totEB} mtr</span><span style="font-size:9px;color:var(--sl-text3);margin-left:2px">EB</span></div>
+    <div class="mat-row-waste"></div>
+    <div class="mat-row-il no-print" id="il-total-cell" style="font-family:var(--mono);font-size:11px;font-weight:900;color:var(--sl-text);margin-left:8px;min-width:60px"></div>
+  </div>`;
 
   // Estimate sheets without optimization (naive: 1 piece per sheet worst case, or area-based)
   const naiveSheets = Math.ceil(totPieces * 0.7); // rough estimate — random placement would need ~40% more
@@ -2813,7 +2842,10 @@ function renderResults(sheets,unfitted,scale){
     <div style="font-size:11px;color:rgba(255,255,255,.6);margin-left:-8px;margin-top:4px">sheets</div>
   </div>`:''}
 
-  <div style="font-size:9px;font-weight:700;color:var(--sl-text3);letter-spacing:.8px;text-transform:uppercase;margin-bottom:6px" class="no-print">📦 Material Procurement</div>
+  <div style="font-size:15px;font-weight:900;color:var(--sl-text);letter-spacing:0;margin-bottom:8px;padding:10px 14px;border:2px solid var(--sl-border2);border-radius:var(--radius);background:var(--sl-bg2);display:flex;align-items:center;gap:8px" class="no-print">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><line x1="3" y1="6" x2="21" y2="6"/><path d="M16 10a4 4 0 0 1-8 0"/></svg>
+    Material Procurement
+  </div>
   <div class="export-btns no-print">
     <button class="btn-export btn-export-excel" onclick="requirePro('exportExcelFn', exportExcel)">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
@@ -2857,11 +2889,12 @@ function renderResults(sheets,unfitted,scale){
     <div class="mat-summary-title">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
       Sheets by Material
-      <span style="margin-left:auto;display:flex;gap:24px;font-size:9px;color:var(--sl-text3);font-weight:600;letter-spacing:.5px;text-transform:uppercase">
+      <span style="margin-left:auto;display:flex;gap:16px;font-size:9px;color:var(--sl-text3);font-weight:600;letter-spacing:.5px;text-transform:uppercase">
         <span style="min-width:80px;text-align:center">Sheets</span>
         <span style="min-width:70px">Pieces</span>
         <span style="min-width:72px">Edge Band</span>
-        <span>Waste</span>
+        <span style="min-width:50px">Waste</span>
+        <span class="no-print" style="min-width:70px;text-align:center">Inner Lam</span>
       </span>
     </div>
     <div class="mat-rows">${matRowsHtml}</div>
@@ -2930,6 +2963,7 @@ function renderResults(sheets,unfitted,scale){
   }
   el.innerHTML=html;
   renderTrialBar();
+  setTimeout(updateInnerLamTotal, 50);
 }
 
 // ══ PRINT MODAL ══
@@ -3407,6 +3441,32 @@ function doExportLabels(){
   </div>
   ${pages}</body></html>`);
   win.document.close();
+}
+
+// ══ INNER LAMINATE ══
+if(!window._innerLam) window._innerLam={};
+
+function setInnerLam(mat, side, checked){
+  window._innerLam[mat+'_'+side] = checked;
+  updateInnerLamTotal();
+}
+
+function updateInnerLamTotal(){
+  if(!_lastSheets||!_lastSheets.length) return;
+  // Build matMap from last sheets
+  const matMap={};
+  for(const s of _lastSheets){
+    if(!matMap[s.material]) matMap[s.material]=0;
+    matMap[s.material]++;
+  }
+  let total=0;
+  for(const [mat,sheets] of Object.entries(matMap)){
+    const il1 = window._innerLam[mat+'_1']!==false; // default true
+    const il2 = window._innerLam[mat+'_2']===true;
+    total += sheets * (il1?1:0) + sheets * (il2?1:0);
+  }
+  const el=document.getElementById('il-total-cell');
+  if(el) el.textContent = total > 0 ? total+' sheets' : '';
 }
 
 function closeExportOrder(){
