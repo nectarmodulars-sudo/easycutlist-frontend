@@ -3500,7 +3500,41 @@ function renderOrderPreview(){
           <div style="font-family:var(--mono);font-weight:900;font-size:13px;color:var(--sl-green)">${e.orderMetres} mtr</div>
         </div>`).join('')}
       <div style="font-size:10px;color:var(--sl-text3);margin-top:6px">Order quantity includes +10% for joins &amp; waste</div>
-    </div>` : '');
+    </div>` : '')
+  + (() => {
+    const ilData = calcInnerLaminate(_lastSheets);
+    if(!ilData.length) return '';
+    const ilTotal = ilData.reduce((a,r)=>a+r.innerLamSheets,0);
+    return `
+    <div style="margin-top:12px;padding-top:10px;border-top:2px solid var(--sl-border)">
+      <div style="font-size:10px;font-weight:700;color:var(--sl-text3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:6px">Inner Laminate Required</div>
+      ${ilData.map(r=>`
+        <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--sl-border)">
+          <div style="flex:1;font-size:12px;color:var(--sl-text)">${esc(r.material)}</div>
+          <div style="font-family:var(--mono);font-size:11px;color:var(--sl-text2)">${r.il1?'1 side':''} ${r.il2?'+ 2 sides':''}</div>
+          <div style="font-family:var(--mono);font-weight:900;font-size:13px;color:#895129">${r.innerLamSheets} sheets</div>
+        </div>`).join('')}
+      <div style="display:flex;justify-content:space-between;padding:6px 0;font-weight:900">
+        <span style="font-size:12px;color:var(--sl-text)">Total inner laminate</span>
+        <span style="font-family:var(--mono);font-size:14px;color:#7c4a00">${ilTotal} sheets</span>
+      </div>
+    </div>`;
+  })();
+}
+
+function calcInnerLaminate(sheets){
+  // Returns [{material, sheets, il1, il2, innerLamSheets}]
+  const matMap={};
+  for(const s of sheets){
+    if(!matMap[s.material]) matMap[s.material]={sheets:0,size:`${s.L}×${s.W}`};
+    matMap[s.material].sheets++;
+  }
+  return Object.entries(matMap).map(([mat,d])=>{
+    const il1=window._innerLam?.[mat+'_1']!==false;
+    const il2=window._innerLam?.[mat+'_2']===true;
+    const innerLamSheets=d.sheets*(il1?1:0)+d.sheets*(il2?1:0);
+    return{material:mat,sheets:d.sheets,size:d.size,il1,il2,innerLamSheets};
+  }).filter(r=>r.innerLamSheets>0);
 }
 
 function doExportOrderPDF(){
@@ -3527,12 +3561,20 @@ function doExportOrderPDF(){
     </tr>`).join('');
 
   const ebData = calcEdgeBanding(_lastSheets);
+  const ilData = calcInnerLaminate(_lastSheets);
   const ebRows = ebData.map(e=>`
     <tr>
       <td style="padding:8px 14px;border-bottom:1px solid #eee">${esc(e.material)}</td>
       <td style="padding:8px 14px;border-bottom:1px solid #eee;font-family:monospace;color:#555">${e.metres} mtr</td>
       <td style="padding:8px 14px;border-bottom:1px solid #eee;font-weight:900;font-size:16px;color:#007A5A;font-family:monospace">${e.orderMetres} mtr</td>
     </tr>`).join('');
+  const ilRows = ilData.map(r=>`
+    <tr>
+      <td style="padding:8px 14px;border-bottom:1px solid #eee">${esc(r.material)}</td>
+      <td style="padding:8px 14px;border-bottom:1px solid #eee;font-family:monospace;color:#555">${r.il1?'1 side':''} ${r.il2?'+ 2 sides':''}</td>
+      <td style="padding:8px 14px;border-bottom:1px solid #eee;font-weight:900;font-size:16px;color:#895129;font-family:monospace">${r.innerLamSheets}</td>
+    </tr>`).join('');
+  const ilTotal = ilData.reduce((a,r)=>a+r.innerLamSheets,0);
 
   const win = window.open('','_blank','width=800,height:600');
   win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
@@ -3580,6 +3622,20 @@ function doExportOrderPDF(){
       <tbody>${ebRows}</tbody>
     </table>
     <p style="font-size:10px;color:#888;margin-top:6px">+10% added for joins and waste</p>`:''}
+    ${ilRows?`
+    <h2 style="font-size:16px;font-weight:900;margin:24px 0 6px">Inner Laminate Required</h2>
+    <table width="100%" style="border-collapse:collapse;margin-top:4px">
+      <thead><tr>
+        <th style="background:#7c4a00;color:#fff;text-align:left;padding:8px 14px;font-size:11px;letter-spacing:.5px;text-transform:uppercase;-webkit-print-color-adjust:exact;print-color-adjust:exact">Material</th>
+        <th style="background:#7c4a00;color:#fff;text-align:left;padding:8px 14px;font-size:11px;-webkit-print-color-adjust:exact;print-color-adjust:exact">Sides</th>
+        <th style="background:#7c4a00;color:#fff;text-align:left;padding:8px 14px;font-size:11px;-webkit-print-color-adjust:exact;print-color-adjust:exact">Inner Lam Sheets</th>
+      </tr></thead>
+      <tbody>${ilRows}</tbody>
+      <tfoot><tr style="background:#fdf3e7">
+        <td colspan="2" style="padding:8px 14px;font-weight:900;text-align:right">TOTAL INNER LAMINATE:</td>
+        <td style="padding:8px 14px;font-weight:900;font-size:18px;color:#7c4a00;font-family:monospace">${ilTotal} sheets</td>
+      </tr></tfoot>
+    </table>`:''}
     <div class="no-print">
       <button onclick="window.print()" style="background:#3F0E40;color:#fff">🖨 Print / Save PDF</button>
       <button onclick="window.close()" style="background:#f1f1f1;color:#333">Close</button>
@@ -3599,6 +3655,8 @@ function doExportOrderExcel(){
     matMap[s.material].sheets++;
   }
   const ebData = calcEdgeBanding(_lastSheets);
+  const ilData = calcInnerLaminate(_lastSheets);
+  const ilTotal2 = ilData.reduce((a,r)=>a+r.innerLamSheets,0);
   let html = `<html xmlns:o="urn:schemas-microsoft-com:office:office">
   <head><meta charset="UTF-8">
   <style>
@@ -3607,6 +3665,8 @@ function doExportOrderExcel(){
     .total{font-weight:900;background:#f0f5ff}
     .eb-th{background:#1a7a4a;color:white;padding:8px 12px;font-size:12px}
     .eb-order{font-weight:900;color:#007A5A}
+    .il-th{background:#7c4a00;color:white;padding:8px 12px;font-size:12px}
+    .il-qty{font-weight:900;color:#7c4a00}
   </style></head><body>
   <h2 style="font-family:Arial">Laminate Purchase Order</h2>
   ${bizName?`<p style="font-family:Arial;color:#555">Company: <strong>${esc(bizName)}</strong></p>`:''}
@@ -3624,6 +3684,13 @@ function doExportOrderExcel(){
     ${ebData.map(e=>`<tr><td>${esc(e.material)}</td><td>${e.metres}</td><td class="eb-order">${e.orderMetres}</td></tr>`).join('')}
   </table>
   <p style="font-family:Arial;font-size:10px;color:#888">+10% added for joins and waste</p>`:''}
+  ${ilData.length?`
+  <br><h3 style="font-family:Arial">Inner Laminate Required</h3>
+  <table border="1" style="font-family:Arial;border-collapse:collapse">
+    <tr><th class="il-th">Material</th><th class="il-th">Sides</th><th class="il-th">Inner Lam Sheets</th></tr>
+    ${ilData.map(r=>`<tr><td>${esc(r.material)}</td><td>${r.il1?'1 side':''} ${r.il2?'+ 2 sides':''}</td><td class="il-qty">${r.innerLamSheets}</td></tr>`).join('')}
+    <tr class="total"><td colspan="2" style="text-align:right;font-weight:900">TOTAL INNER LAMINATE:</td><td style="font-weight:900;color:#7c4a00">${ilTotal2} sheets</td></tr>
+  </table>`:''}
   </body></html>`;
   const blob = new Blob([html], {type:'application/vnd.ms-excel;charset=utf-8'});
   const a = document.createElement('a');
