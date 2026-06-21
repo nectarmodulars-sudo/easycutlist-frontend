@@ -3308,23 +3308,29 @@ function doExportLabels(){
   const matFilter   = document.getElementById('lbl-matfilter').value;
   const customer    = _resultClientName || '';
 
-  // Build sticker data from placed panels
+  // Build a global panel counter for Sr.No
+  let globalIdx = 0;
   const stickers=[];
+
   _lastSheets.forEach(sheet=>{
     if(matFilter!=='all'&&sheet.material!==matFilter)return;
+    const matSheets=_lastSheets.filter(s=>s.material===sheet.material);
+    const matSheetIdx=matSheets.indexOf(sheet)+1;
+
     sheet.placed.forEach(p=>{
-      // Find matching panel row for srNo and remark
-      const panelMatch = panelRows.find(pr=>(pr.remark||'')===(p.piece.label||''));
-      const srNo = panelMatch?.srNo || p.piece.instance || '';
-      const srDisplay = p.piece.instance > 1
-        ? `${srNo}-${p.piece.instance}`
-        : `${srNo}`;
+      globalIdx++;
+      // Try to find Sr.No from panelRows by matching label/remark
+      const panelMatch=panelRows.find(pr=>(pr.remark||pr.label||'')===(p.piece.label||''));
+      const baseSr = panelMatch?.srNo || p.piece.colorIdx + 1;
+      // If qty > 1, append instance number
+      const srDisplay = p.piece.instance > 1 ? `${baseSr}-${p.piece.instance}` : `${baseSr}`;
+
       stickers.push({
         srNo:     srDisplay,
-        size:     `${p.pw} × ${p.ph} mm`,
+        size:     `${p.pw} × ${p.ph}`,
         remark:   p.piece.label || '',
         material: sheet.material,
-        sheet:    `Sheet ${sheet.idx} of ${_lastSheets.filter(s=>s.material===sheet.material).length} (${sheet.material})`,
+        sheet:    `Sheet ${matSheetIdx} of ${matSheets.length}`,
         customer,
       });
     });
@@ -3333,28 +3339,39 @@ function doExportLabels(){
   if(!stickers.length){alert('No panels to export.');return;}
   closeLabelExport();
 
-  // Generate A4 HTML with sticker grid
-  const cols = perPage===4 ? 2 : 2;
-  const rows = perPage===4 ? 2 : 4;
-  const sW   = perPage===4 ? '48%' : '48%';
-  const sH   = perPage===4 ? '46%' : '22%';
+  const sW = perPage===4 ? '48%' : '48%';
+  const sH = perPage===4 ? '46%' : '22%';
 
   let pages='';
   for(let i=0;i<stickers.length;i+=perPage){
     const batch=stickers.slice(i,i+perPage);
-    // Pad to full page
     while(batch.length<perPage) batch.push(null);
+
     const stickerHtml=batch.map(s=>{
-      if(!s) return `<div style="width:${sW};height:${sH};border:1px dashed #ddd;border-radius:8px;margin:1%;box-sizing:border-box"></div>`;
-      const lines=[];
-      if(showSrNo&&s.srNo)   lines.push(`<div style="font-size:${fs*1.6}px;font-weight:900;color:#1a1a1a">#${esc(s.srNo)}</div>`);
-      if(showSize)           lines.push(`<div style="font-size:${fs*1.4}px;font-weight:700;color:#222;margin:4px 0;font-family:monospace">${esc(s.size)}</div>`);
-      if(showRemark&&s.remark) lines.push(`<div style="font-size:${fs}px;color:#444;margin-top:4px">${esc(s.remark)}</div>`);
-      if(showMat)            lines.push(`<div style="font-size:${fs*0.85}px;color:#666;margin-top:auto;padding-top:4px;border-top:1px solid #eee">${esc(s.material)}</div>`);
-      if(showSheet)          lines.push(`<div style="font-size:${fs*0.8}px;color:#888">${esc(s.sheet)}</div>`);
-      if(showCust&&customer) lines.push(`<div style="font-size:${fs*0.8}px;color:#888">${esc(customer)}</div>`);
-      return `<div style="width:${sW};height:${sH};border:2px solid #333;border-radius:8px;margin:1%;box-sizing:border-box;padding:10px;display:inline-flex;flex-direction:column;vertical-align:top;page-break-inside:avoid">${lines.join('')}</div>`;
+      if(!s) return `<div style="width:${sW};height:${sH};border:1px dashed #ddd;border-radius:8px;margin:1%;box-sizing:border-box;display:inline-block;vertical-align:top"></div>`;
+
+      let html='';
+      // Row 1: Sr.No (large, left) + Material (same weight as size, right)
+      html+=`<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">`;
+      html+= showSrNo&&s.srNo ? `<div style="font-size:${fs*1.8}px;font-weight:900;color:#111;font-family:Arial">#${esc(s.srNo)}</div>` : `<div></div>`;
+      html+= showMat ? `<div style="font-size:${fs*1.1}px;font-weight:700;color:#333;font-family:monospace;text-align:right;max-width:55%">${esc(s.material)}</div>` : '';
+      html+=`</div>`;
+
+      // Row 2: Size big
+      if(showSize) html+=`<div style="font-size:${fs*1.5}px;font-weight:700;color:#111;font-family:monospace;margin-bottom:4px">${esc(s.size)} <span style="font-size:${fs*0.9}px;font-weight:400">mm</span></div>`;
+
+      // Row 3: Remark
+      if(showRemark&&s.remark) html+=`<div style="font-size:${fs}px;color:#444;margin-bottom:4px">${esc(s.remark)}</div>`;
+
+      // Bottom row: Sheet + Customer
+      html+=`<div style="margin-top:auto;padding-top:5px;border-top:1px solid #ddd;display:flex;justify-content:space-between;align-items:flex-end">`;
+      html+= showSheet ? `<div style="font-size:${fs*0.8}px;color:#888">${esc(s.sheet)}</div>` : `<div></div>`;
+      html+= showCust&&customer ? `<div style="font-size:${fs*0.8}px;color:#888;text-align:right">${esc(customer)}</div>` : '';
+      html+=`</div>`;
+
+      return `<div style="width:${sW};height:${sH};border:2px solid #222;border-radius:8px;margin:1%;box-sizing:border-box;padding:12px;display:inline-flex;flex-direction:column;vertical-align:top;page-break-inside:avoid">${html}</div>`;
     }).join('');
+
     pages+=`<div style="width:210mm;height:297mm;page-break-after:always;display:flex;flex-wrap:wrap;align-content:flex-start;padding:8mm;box-sizing:border-box">${stickerHtml}</div>`;
   }
 
@@ -3371,7 +3388,7 @@ function doExportLabels(){
   <div class="no-print">
     <strong style="font-size:14px">Panel Labels — ${stickers.length} stickers</strong>
     <button onclick="window.print()" style="background:#007A5A;color:#fff;border:none;border-radius:4px;padding:7px 18px;font-weight:700;cursor:pointer;font-size:13px">🖨 Print</button>
-    <span style="font-size:11px;color:#666">In print dialog: set margins to None, disable Headers & Footers</span>
+    <span style="font-size:11px;color:#666">Print dialog: margins=None, uncheck Headers &amp; Footers</span>
   </div>
   ${pages}</body></html>`);
   win.document.close();
