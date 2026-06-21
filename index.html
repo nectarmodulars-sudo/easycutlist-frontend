@@ -820,8 +820,7 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
   .piece-dot{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
 </style>
-<!-- SheetJS for Excel import/export -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- SheetJS loaded on demand for Excel import -->
 <!-- Supabase JS — for Google login -->
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- Razorpay Checkout -->
@@ -1641,18 +1640,21 @@ function loadCSVFile(e){
   const f=e.target.files[0];if(!f)return;
   const isXlsx=f.name.match(/\.(xlsx|xls)$/i);
   if(isXlsx){
-    // Use SheetJS if available
-    if(typeof XLSX==='undefined'){
-      alert('Excel import requires the XLSX library. Please paste data manually.');return;
-    }
-    const r=new FileReader();
-    r.onload=ev=>{
-      const wb=XLSX.read(ev.target.result,{type:'array'});
-      const ws=wb.Sheets[wb.SheetNames[0]];
-      const txt=XLSX.utils.sheet_to_csv(ws);
-      document.getElementById('csv-textarea').value=txt;
+    const doRead=()=>{
+      const r=new FileReader();
+      r.onload=ev=>{
+        const wb=XLSX.read(ev.target.result,{type:'array'});
+        const ws=wb.Sheets[wb.SheetNames[0]];
+        document.getElementById('csv-textarea').value=XLSX.utils.sheet_to_csv(ws);
+      };
+      r.readAsArrayBuffer(f);
     };
-    r.readAsArrayBuffer(f);
+    if(typeof XLSX==='undefined'){
+      const s=document.createElement('script');
+      s.src='https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      s.onload=doRead;
+      document.head.appendChild(s);
+    } else { doRead(); }
   } else {
     const r=new FileReader();
     r.onload=ev=>document.getElementById('csv-textarea').value=ev.target.result;
