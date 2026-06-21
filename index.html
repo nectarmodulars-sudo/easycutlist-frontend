@@ -930,11 +930,11 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
       <table class="input-table">
         <thead><tr>
           <th style="width:7%">#</th>
-          <th style="width:20%">Remark</th>
           <th style="width:12%">W</th>
           <th style="width:13%">H</th>
           <th style="width:9%">Qty</th>
           <th style="width:28%">Material</th>
+          <th style="width:20%">Remark</th>
           <th style="width:8%" title="Rotate?">⟳</th>
           <th style="width:7%"></th>
         </tr></thead>
@@ -1545,7 +1545,10 @@ const DEFAULT_MATS=['Plywood','MDF','Melamine','Chipboard','Solid Wood','OSB','H
 function uid(){return ++idC}
 function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function allMats(){const s=new Set(DEFAULT_MATS);[...panelRows,...stockRows].forEach(r=>r.material&&s.add(r.material));return[...s]}
-function matSel(val,cb){return`<select onchange="${cb}" style="font-size:11px;padding:4px 5px">${allMats().map(m=>`<option${m===val?' selected':''}>${esc(m)}</option>`).join('')}</select>`}
+function matSel(val,cb,listId){
+  const mats=allMats();
+  return`<input type="text" value="${esc(val)}" list="${listId}" onchange="${cb}" autocomplete="off" style="font-size:11px;padding:4px 5px;width:100%;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);border-radius:4px;color:#fff;font-family:var(--mono)"><datalist id="${listId}">${mats.map(m=>`<option value="${esc(m)}">`).join('')}</datalist>`;
+}
 
 // ══ CLEAR ══
 function clearPanels(){if(panelRows.length&&!confirm('Clear all panels?'))return;panelRows=[];renderPanels()}
@@ -1604,11 +1607,11 @@ function toggleRot(id){const r=panelRows.find(r=>r.id===id);if(r){r.canRotate=!r
 function renderPanels(){
   document.getElementById('panels-tbody').innerHTML=panelRows.map((r,i)=>`<tr>
     <td style="text-align:center;color:rgba(255,255,255,.4);font-family:var(--mono);font-size:10px;user-select:none">${i+1}</td>
-    <td><input type="text" value="${esc(r.remark||'')}" placeholder="Remark" oninput="updatePanel(${r.id},'remark',this.value)"></td>
     <td><input type="number" value="${r.l}" min="1" oninput="updatePanel(${r.id},'l',this.value)"></td>
     <td><input type="number" value="${r.w}" min="1" oninput="updatePanel(${r.id},'w',this.value)"></td>
     <td><input type="number" value="${r.qty}" min="1" max="999" oninput="updatePanel(${r.id},'qty',this.value)"></td>
-    <td>${matSel(r.material,`updatePanel(${r.id},'material',this.value)`)}</td>
+    <td>${matSel(r.material,`updatePanel(${r.id},'material',this.value)`,'matlist_p'+r.id)}</td>
+    <td><input type="text" value="${esc(r.remark||'')}" placeholder="Remark" oninput="updatePanel(${r.id},'remark',this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();addPanel();const rows=document.querySelectorAll('#panels-tbody tr');const lastRow=rows[rows.length-1];if(lastRow)lastRow.querySelectorAll('input[type=number]')[0]?.focus()}"></td>
     <td style="text-align:center"><button class="rot-btn" title="${r.canRotate?'ON':'OFF'}" style="color:${r.canRotate?'var(--accent)':'var(--text3)'}" onclick="toggleRot(${r.id})">&#8635;</button></td>
     <td><button class="del-btn" onclick="removePanel(${r.id})">&#215;</button></td>
   </tr>`).join('')}
@@ -1631,7 +1634,7 @@ function renderStock(){
     <td><input type="number" value="${r.l}" min="1" oninput="updateStock(${r.id},'l',this.value)"></td>
     <td><input type="number" value="${r.w}" min="1" oninput="updateStock(${r.id},'w',this.value)"></td>
     <td><input type="number" value="${r.qty}" min="1" max="99" oninput="updateStock(${r.id},'qty',this.value)"></td>
-    <td>${matSel(r.material,`updateStock(${r.id},'material',this.value)`)}</td>
+    <td>${matSel(r.material,`updateStock(${r.id},'material',this.value)`,'matlist_s'+r.id)}</td>
     <td><input type="number" value="${r.price||0}" min="0" step="50" placeholder="0" oninput="updateStock(${r.id},'price',this.value)" title="Price per sheet"></td>
     <td style="text-align:center"><button class="rot-btn" title="${r.grainLocked?'Grain locked — click to allow rotation':'Free rotation — click to lock grain'}" style="color:${r.grainLocked?'#ff8ab0':'rgba(255,255,255,.4)'};font-size:13px" onclick="toggleGrain(${r.id})">${r.grainLocked?'🔒':'↻'}</button></td>
     <td><button class="del-btn" onclick="removeStock(${r.id})">&#215;</button></td>
@@ -1639,11 +1642,11 @@ function renderStock(){
 
 // ══ CSV — Format: W  H  QTY  Material  Label ══
 const CSV_SAMPLES={
-  panels:`Sr. No.,Remark,W,H,QTY,Material\n1,1980 GROVE,1980,350,1,9172 SH\n2,280 GROVE,280,330,2,9172 SH\n3,394 GROVE,394,287,4,9172 SH\n4,,540,2370,2,SDL 1020 SHG\n5,,130,470,3,SDL 1020 SHG\n`,
+  panels:`Sr. No.,W,H,QTY,Material,Remark\n1,1980,350,1,9172 SH,1980 GROVE\n2,280,330,2,9172 SH,280 GROVE\n3,394,287,4,9172 SH,394 GROVE\n4,540,2370,2,SDL 1020 SHG,\n5,130,470,3,SDL 1020 SHG,\n`,
   stock:`W,H,QTY,Material,Label,Price\n1210,2430,100,DW,,1800\n1210,2430,100,MDF,,1200\n1210,2430,100,SDL 1020 SHG,,2100\n1210,2430,100,SDL 1020 SHG 18MM BOARD,,2500\n`
 };
 const CSV_HINTS={
-  panels:`Tab, comma or Excel file. Header row skipped automatically.\nColumns: Sr. No.  Remark  W  H  QTY  Material\n\nSr. No. is optional — auto-assigned if blank.\n\nExample:\n1\t1980 GROVE\t1980\t350\t1\t9172 SH\n2\t280 GROVE\t280\t330\t2\t9172 SH`,
+  panels:`Tab, comma or Excel file. Header row skipped automatically.\nColumns: Sr. No.  W  H  QTY  Material  Remark\n\nSr. No. is optional — auto-assigned if blank.\nRemark is optional — appears on stickers.\n\nExample:\n1\t1980\t350\t1\t9172 SH\t1980 GROVE\n2\t280\t330\t2\t9172 SH\t280 GROVE`,
   stock:`Tab or comma separated. First row (header) is skipped automatically.\nColumns: W  H  QTY  Material  Label  Price\n\nExample:\n1210\t2430\t100\tDW\t\t1800\n1210\t2430\t100\tMDF\t\t1200`
 };
 function openCSV(t){csvTarget=t;document.getElementById('csv-modal-title').textContent=t==='panels'?'Import Panels':'Import Stock Sheets';document.getElementById('csv-hint').textContent=CSV_HINTS[t];document.getElementById('csv-textarea').value='';document.getElementById('csv-file-input').value='';document.getElementById('csv-file-input').accept='.csv,.xlsx,.xls,.txt';document.getElementById('csv-modal').style.display='flex'}
@@ -1699,20 +1702,24 @@ function applyCSV(){
 
     let srNo,remark,W,H,qty,mat;
 
-    // Detect format: if col[0] is a small integer and col[2] & col[3] look like mm sizes → new format
+    // New format: Sr.No, W, H, QTY, Material, Remark
+    // Detected when col[1] and col[2] are numeric mm sizes (>50)
     const col0n=parseFloat(cols[0]), col1n=parseFloat(cols[1]);
     const col2n=parseFloat(cols[2]), col3n=parseFloat(cols[3]);
-    const isNewFormat = !isNaN(col2n) && col2n > 0 && !isNaN(col3n) && col3n > 0 && col2n > 50 && col3n > 50;
+    const isNewFormat = !isNaN(col1n) && col1n > 50 && !isNaN(col2n) && col2n > 50;
     const isOldFormat = !isNaN(col0n) && col0n > 50 && !isNaN(col1n) && col1n > 50;
 
     if(csvTarget==='panels'){
-      if(isNewFormat){
+      if(isNewFormat && !isOldFormat){
+        // New: Sr.No, W, H, QTY, Material, Remark
         srNo=cols[0]?cols[0].trim():null;
-        remark=(cols[1]||'').trim();
-        W=col2n;H=col3n;qty=Math.max(1,parseInt(cols[4])||1);mat=(cols[5]||'Plywood').trim()||'Plywood';
+        W=col1n;H=col2n;qty=Math.max(1,parseInt(cols[3])||1);
+        mat=(cols[4]||'Plywood').trim()||'Plywood';
+        remark=(cols[5]||'').trim();
       } else {
         // Old format: W,H,QTY,Material,Label
-        W=col0n;H=col1n;qty=Math.max(1,parseInt(cols[2])||1);mat=(cols[3]||'Plywood').trim()||'Plywood';
+        W=col0n;H=col1n;qty=Math.max(1,parseInt(cols[2])||1);
+        mat=(cols[3]||'Plywood').trim()||'Plywood';
         remark=(cols[4]||'').trim();srNo=null;
       }
     } else {
@@ -1762,12 +1769,12 @@ function downloadSampleCSV(){
   if(csvTarget==='panels' && typeof XLSX !== 'undefined'){
     // Download as Excel for panels
     const data=[
-      ['Sr. No.','Remark','W','H','QTY','Material'],
-      [1,'1980 GROVE',1980,350,1,'9172 SH'],
-      [2,'280 GROVE',280,330,2,'9172 SH'],
-      [3,'394 GROVE',394,287,4,'9172 SH'],
-      [4,'',540,2370,2,'SDL 1020 SHG'],
-      [5,'',130,470,3,'SDL 1020 SHG'],
+      ['Sr. No.','W','H','QTY','Material','Remark'],
+      [1,1980,350,1,'9172 SH','1980 GROVE'],
+      [2,280,330,2,'9172 SH','280 GROVE'],
+      [3,394,287,4,'9172 SH','394 GROVE'],
+      [4,540,2370,2,'SDL 1020 SHG',''],
+      [5,130,470,3,'SDL 1020 SHG',''],
     ];
     const ws=XLSX.utils.aoa_to_sheet(data);
     const wb=XLSX.utils.book_new();
