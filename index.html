@@ -1702,22 +1702,26 @@ function applyCSV(){
 
     let srNo,remark,W,H,qty,mat;
 
-    // New format: Sr.No, W, H, QTY, Material, Remark
-    // Detected when col[1] and col[2] are numeric mm sizes (>50)
     const col0n=parseFloat(cols[0]), col1n=parseFloat(cols[1]);
     const col2n=parseFloat(cols[2]), col3n=parseFloat(cols[3]);
-    const isNewFormat = !isNaN(col1n) && col1n > 50 && !isNaN(col2n) && col2n > 50;
-    const isOldFormat = !isNaN(col0n) && col0n > 50 && !isNaN(col1n) && col1n > 50;
+
+    // New format: Sr.No(int), W, H, QTY, Material, Remark
+    // Col[0] is a small positive integer (serial number)
+    // Col[1] and col[2] are positive numbers (W and H)
+    const col0isSerial = Number.isInteger(col0n) && col0n > 0 && col0n < 10000;
+    const isNewFormat = col0isSerial && !isNaN(col1n) && col1n > 0 && !isNaN(col2n) && col2n > 0;
+    // Old format: W, H, QTY, Material, Remark — col[0] is W (large number, not serial)
+    const isOldFormat = !col0isSerial && !isNaN(col0n) && col0n > 0 && !isNaN(col1n) && col1n > 0;
 
     if(csvTarget==='panels'){
-      if(isNewFormat && !isOldFormat){
+      if(isNewFormat){
         // New: Sr.No, W, H, QTY, Material, Remark
         srNo=cols[0]?cols[0].trim():null;
         W=col1n;H=col2n;qty=Math.max(1,parseInt(cols[3])||1);
         mat=(cols[4]||'Plywood').trim()||'Plywood';
         remark=(cols[5]||'').trim();
       } else {
-        // Old format: W,H,QTY,Material,Label
+        // Old format: W, H, QTY, Material, Remark
         W=col0n;H=col1n;qty=Math.max(1,parseInt(cols[2])||1);
         mat=(cols[3]||'Plywood').trim()||'Plywood';
         remark=(cols[4]||'').trim();srNo=null;
