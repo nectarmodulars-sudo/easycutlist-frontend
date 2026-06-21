@@ -781,7 +781,7 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
   @page{margin:8mm 6mm 14mm 6mm;size:A4 portrait}
   /* Suppress browser-added URL/title/date — works in Chrome/Edge when "Headers and footers" is off */
   header,.left-panel,.no-print,.results-header,.stats-bar,.mat-summary,.unfitted-box,.modal-overlay{display:none!important}
-  .sheet-pg-num{display:block!important;text-align:center;font-family:Arial,sans-serif;font-size:7pt;color:#888;padding-top:3pt;border-top:.5pt solid #ddd;margin-top:4pt}
+  .sheet-pg-num{display:block!important;font-family:Arial,sans-serif;font-size:7pt;color:#555;padding-top:4pt;border-top:1.5pt solid #ECB22E;margin-top:4pt;display:flex!important;align-items:center;justify-content:space-between}
   body{background:#fff!important;color:#000!important;font-family:Arial,sans-serif!important;font-size:9pt}
   .app{display:block!important}
   .right-panel{max-height:none!important;overflow:visible!important;padding:0!important;background:#fff!important}
@@ -1178,24 +1178,20 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
 <div class="modal-overlay" id="save-proj-modal" style="display:none" onclick="if(event.target===this)closeSaveProject()">
   <div class="modal" style="width:440px">
     <div class="modal-title">💾 Save Cut List</div>
-    <div class="modal-sub">Save to an existing project or create a new one.</div>
+    <div class="modal-sub">Save under a client name. Multiple cut lists per client.</div>
 
     <div style="margin-bottom:12px">
       <label style="font-size:11px;color:var(--sl-text2);display:block;margin-bottom:6px;font-weight:700">Save to:</label>
       <div style="display:flex;gap:8px;margin-bottom:10px">
-        <button id="sp-tab-new" class="btn btn-accent" onclick="switchSaveTab('new')" style="font-size:11px;padding:5px 12px">+ New Project</button>
-        <button id="sp-tab-existing" class="btn btn-ghost" onclick="switchSaveTab('existing')" style="font-size:11px;padding:5px 12px;background:var(--sl-bg3);border:1px solid var(--sl-border2);color:var(--sl-text2)">Existing Project</button>
+        <button id="sp-tab-new" class="btn btn-accent" onclick="switchSaveTab('new')" style="font-size:11px;padding:5px 12px">+ New Client</button>
+        <button id="sp-tab-existing" class="btn btn-ghost" onclick="switchSaveTab('existing')" style="font-size:11px;padding:5px 12px;background:var(--sl-bg3);border:1px solid var(--sl-border2);color:var(--sl-text2)">Existing Client</button>
       </div>
     </div>
 
     <!-- New project fields -->
     <div id="sp-new-fields">
       <div style="margin-bottom:10px">
-        <label style="font-size:11px;color:var(--sl-text2);display:block;margin-bottom:4px;font-weight:700">Project Name *</label>
-        <input type="text" id="sp-name" placeholder="e.g. Sharma Kitchen - June 2026">
-      </div>
-      <div style="margin-bottom:10px">
-        <label style="font-size:11px;color:var(--sl-text2);display:block;margin-bottom:4px;font-weight:700">Client Name</label>
+        <label style="font-size:11px;color:var(--sl-text2);display:block;margin-bottom:4px;font-weight:700">Client Name *</label>
         <input type="text" id="sp-client" placeholder="e.g. Rahul Sharma">
       </div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
@@ -1208,8 +1204,8 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
           </select>
         </div>
         <div>
-          <label style="font-size:11px;color:var(--sl-text2);display:block;margin-bottom:4px;font-weight:700">Cut List Name</label>
-          <input type="text" id="sp-cutlist-name" placeholder="e.g. Carcass">
+          <label style="font-size:11px;color:var(--sl-text2);display:block;margin-bottom:4px;font-weight:700">Cut List Name <span style="font-weight:400;color:var(--sl-text3)">(optional)</span></label>
+          <input type="text" id="sp-cutlist-name" placeholder="Auto: Cut List 1, 2, 3…">
         </div>
       </div>
       <div style="margin-bottom:10px">
@@ -1221,13 +1217,13 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
     <!-- Existing project fields -->
     <div id="sp-existing-fields" style="display:none">
       <div style="margin-bottom:10px">
-        <label style="font-size:11px;color:var(--sl-text2);display:block;margin-bottom:4px;font-weight:700">Select Project *</label>
+        <label style="font-size:11px;color:var(--sl-text2);display:block;margin-bottom:4px;font-weight:700">Select Client *</label>
         <select id="sp-existing-proj" style="background:var(--sl-bg2);border:1px solid var(--sl-border2);color:var(--sl-text);border-radius:4px;padding:6px 8px;width:100%">
-          <option value="">-- Select a project --</option>
+          <option value="">-- Select a client --</option>
         </select>
       </div>
       <div style="margin-bottom:10px">
-        <label style="font-size:11px;color:var(--sl-text2);display:block;margin-bottom:4px;font-weight:700">Cut List Name *</label>
+        <label style="font-size:11px;color:var(--sl-text2);display:block;margin-bottom:4px;font-weight:700">Cut List Name <span style="font-weight:400;color:var(--sl-text3)">(optional — auto-numbered if blank)</span></label>
         <input type="text" id="sp-existing-cutlist-name" placeholder="e.g. Shutters, Drawers, Carcass">
       </div>
     </div>
@@ -2379,19 +2375,18 @@ function switchSaveTab(tab){
 }
 
 function openSaveProject(){
-  document.getElementById('sp-name').value='';
-  document.getElementById('sp-client').value='';
+  document.getElementById('sp-client').value = _resultClientName || '';
   document.getElementById('sp-status').value='draft';
   document.getElementById('sp-notes').value='';
   document.getElementById('sp-cutlist-name').value='';
   document.getElementById('sp-existing-cutlist-name').value='';
-  // Populate existing projects dropdown
+  // Populate existing projects dropdown — keyed by client name
   const sel = document.getElementById('sp-existing-proj');
-  sel.innerHTML = '<option value="">-- Select a project --</option>' +
-    projects.map(p=>`<option value="${p.id}">${esc(p.name)}${p.client?' ('+esc(p.client)+')':''}</option>`).join('');
+  sel.innerHTML = '<option value="">-- Select a client/project --</option>' +
+    projects.map(p=>`<option value="${p.id}">${esc(p.client||p.name)}${p.cutlists?.length?' ('+p.cutlists.length+' cut lists)':''}</option>`).join('');
   switchSaveTab('new');
   document.getElementById('save-proj-modal').style.display='flex';
-  setTimeout(()=>document.getElementById('sp-name').focus(),100);
+  setTimeout(()=>document.getElementById('sp-client').focus(),100);
 }
 function closeSaveProject(){document.getElementById('save-proj-modal').style.display='none'}
 
@@ -2410,13 +2405,15 @@ function saveProject(){
   const isNew = document.getElementById('sp-existing-fields').style.display==='none';
 
   if(isNew){
-    const name = document.getElementById('sp-name').value.trim();
-    if(!name){alert('Please enter a project name.');return;}
-    cutlistData.name = document.getElementById('sp-cutlist-name').value.trim() || 'Cut List 1';
+    const client = document.getElementById('sp-client').value.trim();
+    if(!client){alert('Please enter a client name.');return;}
+    // Auto-assign cut list name if blank
+    const clNameEntered = document.getElementById('sp-cutlist-name').value.trim();
+    cutlistData.name = clNameEntered || 'Cut List 1';
     const proj={
       id: Date.now()+1,
-      name,
-      client: document.getElementById('sp-client').value.trim(),
+      name: client,           // project name = client name
+      client,
       status: document.getElementById('sp-status').value,
       notes:  document.getElementById('sp-notes').value.trim(),
       date:   new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}),
@@ -2425,20 +2422,21 @@ function saveProject(){
     projects.unshift(proj);
     localStorage.setItem(projectsKey(), JSON.stringify(projects));
     closeSaveProject();
-    alert(`Saved to project "${name}" → Cut list "${cutlistData.name}"`);
+    alert(`Saved: ${client} → "${cutlistData.name}"`);
   } else {
     const projId = +document.getElementById('sp-existing-proj').value;
-    if(!projId){alert('Please select a project.');return;}
-    const clName = document.getElementById('sp-existing-cutlist-name').value.trim();
-    if(!clName){alert('Please enter a cut list name.');return;}
-    cutlistData.name = clName;
+    if(!projId){alert('Please select a client/project.');return;}
     const proj = projects.find(p=>p.id===projId);
     if(!proj){alert('Project not found.');return;}
     if(!proj.cutlists) proj.cutlists=[];
+    // Auto-assign serial number if no name entered
+    const clNameEntered = document.getElementById('sp-existing-cutlist-name').value.trim();
+    const nextNum = proj.cutlists.length + 1;
+    cutlistData.name = clNameEntered || `Cut List ${nextNum}`;
     proj.cutlists.push(cutlistData);
     localStorage.setItem(projectsKey(), JSON.stringify(projects));
     closeSaveProject();
-    alert(`Saved to "${proj.name}" → "${clName}"`);
+    alert(`Saved: ${proj.client||proj.name} → "${cutlistData.name}"`);
   }
 }
 
@@ -2968,7 +2966,7 @@ function renderResults(sheets,unfitted,scale){
         <div class="cuts-title">Cut List</div>
         <table class="cuts-table"><thead><tr><th>#</th><th>Panel</th><th>Size (mm)</th><th>Pos (mm)</th><th>Rot</th></tr></thead><tbody>${cutRows}</tbody></table>
       </div>
-      <div class="sheet-pg-num">Sheet ${si} of ${sheets.length} &nbsp;·&nbsp; ${esc(s.material)} &nbsp;·&nbsp; ${s.L}×${s.W} mm</div>
+      <div class="sheet-pg-num" style="display:flex;align-items:center;justify-content:space-between;font-family:Arial,sans-serif;font-size:7pt;color:#555;padding-top:4pt;border-top:1.5pt solid #ECB22E;margin-top:4pt"><span style="display:flex;align-items:center;gap:4pt"><img src="data:image/png;base64,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" style="width:14pt;height:14pt;border-radius:3pt"> <strong style="color:#3F0E40">EasyCutList</strong> &nbsp;·&nbsp; easycutlist.com</span><span>Sheet ${si} of ${sheets.length} &nbsp;·&nbsp; ${esc(s.material)} &nbsp;·&nbsp; ${s.L}×${s.W} mm</span></div>
     </div>`;
   }
   el.innerHTML=html;
@@ -3454,7 +3452,7 @@ function doExportLabels(){
     <button onclick="window.print()" style="background:#007A5A;color:#fff;border:none;border-radius:4px;padding:7px 18px;font-weight:700;cursor:pointer;font-size:13px">🖨 Print</button>
     <span style="font-size:11px;color:#666">Print dialog: margins=None, uncheck Headers &amp; Footers</span>
   </div>
-  <div class="ecl-footer">✂ EasyCutList &nbsp;·&nbsp; easycutlist.com &nbsp;·&nbsp; Generated: ${new Date().toLocaleDateString('en-IN')}</div>
+  <div class="ecl-footer" style="display:flex;align-items:center;justify-content:center;gap:8px"><img src="data:image/png;base64,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" style="width:18px;height:18px;border-radius:3px"> <strong style="color:#3F0E40">EasyCutList</strong> &nbsp;·&nbsp; easycutlist.com &nbsp;·&nbsp; Generated: ${new Date().toLocaleDateString('en-IN')}</div>
   ${pages}</body></html>`);
   win.document.close();
 }
@@ -3634,7 +3632,7 @@ function doExportOrderPDF(){
       <tbody>${ebRows}</tbody>
     </table>
     <p style="font-size:10px;color:#888;margin-top:6px">+10% added for joins and waste</p>`:''}
-    <div class="ecl-footer">✂ EasyCutList &nbsp;·&nbsp; easycutlist.com &nbsp;·&nbsp; Cut smarter. Waste less.</div>
+    <div class="ecl-footer" style="display:flex;align-items:center;justify-content:center;gap:8px"><img src="data:image/png;base64,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" style="width:18px;height:18px;border-radius:3px"> <strong style="color:#3F0E40">EasyCutList</strong> &nbsp;·&nbsp; easycutlist.com &nbsp;·&nbsp; Cut smarter. Waste less.</div>
     <div class="no-print">
       <button onclick="window.print()" style="background:#3F0E40;color:#fff">🖨 Print / Save PDF</button>
       <button onclick="window.close()" style="background:#f1f1f1;color:#333">Close</button>
