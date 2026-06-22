@@ -780,7 +780,7 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
 
 /* ═══ PRINT STYLES ═══ */
 @media print{
-  @page{margin:0.5in;size:A4 portrait}
+  @page{margin:10mm;size:A4 portrait}
   /* Suppress browser-added URL/title/date — works in Chrome/Edge when "Headers and footers" is off */
   header,.left-panel,.no-print,.results-header,.stats-bar,.mat-summary,.unfitted-box,.modal-overlay{display:none!important}
   .sheet-pg-num{display:block!important;font-family:Arial,sans-serif;font-size:7pt;color:#555;padding-top:4pt;border-top:1.5pt solid #ECB22E;margin-top:4pt;display:flex!important;align-items:center;justify-content:space-between}
@@ -791,15 +791,11 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
   /* EACH SHEET = EXACTLY ONE PAGE */
   .sheet-block{
     page-break-after:always;
-    page-break-inside:auto;
+    page-break-inside:avoid;
     border:none!important;border-radius:0!important;margin:0!important;padding:0!important;
     background:#fff!important;
-    overflow:visible!important;
   }
   .sheet-block:last-child{page-break-after:auto}
-  /* Prevent SVG and panel list from breaking across pages */
-  .sheet-svg-wrap{page-break-inside:avoid}
-  .sheet-panel-list{page-break-inside:avoid}
   .print-custom-header{display:block!important;color:#000;font-family:Arial,sans-serif;page-break-after:avoid;margin-bottom:4pt}
   .sheet-header{
     padding:4pt 0!important;border-bottom:1pt solid #999!important;background:#fff!important;
@@ -818,8 +814,8 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
   .sstat-label{font-size:6pt!important;color:#666!important;text-transform:uppercase;margin-bottom:1pt}
   .sstat-val{font-size:7pt!important;font-weight:bold!important;color:#000!important;font-family:'Courier New',monospace!important}
   .sheet-svg-wrap{padding:4pt 0!important;background:#fff!important;overflow:visible!important}
-  .sheet-svg-wrap{flex:1;min-width:0}
-  .sheet-svg-wrap svg{width:100%!important;height:auto!important;display:block!important}
+  .sheet-svg-wrap{width:100%}
+  .sheet-svg-wrap svg{width:100%!important;height:auto!important;max-height:200mm!important;display:block!important}
   .cuts-wrap{padding:4pt 0!important;page-break-inside:avoid}
   .cut-seq-wrap{page-break-inside:avoid}
   .cuts-title{font-size:6pt!important;color:#555!important;margin-bottom:3pt}
@@ -3007,8 +3003,8 @@ function renderResults(sheets,unfitted,scale){
         <div class="sstat"><div class="sstat-label">Cut Len</div><div class="sstat-val">${cs.length.toLocaleString()} mm</div></div>
         <div class="sstat"><div class="sstat-label">Panels</div><div class="sstat-val">${s.placed.length}</div></div>
       </div>
-      <div style="display:flex;gap:12px;align-items:flex-start">
-      <div class="sheet-svg-wrap" style="flex:1;min-width:0">${buildSVG(s,scale)}</div>
+      <div>
+      <div class="sheet-svg-wrap">${buildSVG(s,scale)}</div>
       </div>
       <div class="sheet-panel-list no-screen" style="margin-top:8pt;border:1.5px solid #3F0E40;border-radius:4px;overflow:hidden">
           <div style="background:#3F0E40;color:#fff;font-size:8pt;font-weight:700;padding:4px 8px;letter-spacing:.5px;text-transform:uppercase">Panels — ${esc(s.material)}</div>
