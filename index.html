@@ -1386,7 +1386,7 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
 </div>
 <div class="modal-overlay" id="print-modal" style="display:none" onclick="if(event.target===this)closePrint()">
   <div class="modal">
-    <div class="modal-title">🖨 Print / PDF Options</div>
+    <div class="modal-title">📄 Export PDF Options</div>
     <div class="modal-sub">1 sheet = 1 page.<br><span style="font-size:11px;color:#E8912D">💡 In browser print dialog, uncheck <b>"Headers and footers"</b> to hide URL.</span></div>
 
     <div class="print-opt-row">
@@ -1471,7 +1471,7 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
 
     <div class="modal-btns">
       <button class="btn btn-ghost" onclick="closePrint()">Cancel</button>
-      <button class="btn btn-accent" onclick="doPrint()">🖨 Print Now</button>
+      <button class="btn btn-accent" onclick="doPrint()">📄 Export PDF</button>
     </div>
   </div>
 </div>
@@ -2877,7 +2877,7 @@ function renderResults(sheets,unfitted,scale){
 
   let html=`<div class="results-header">
     <div class="results-title">Results</div>
-    <button class="btn-print-pdf no-print" onclick="openPrint()">🖨 Print / PDF</button>
+    <button class="btn-print-pdf no-print" onclick="openPrint()">📄 Export PDF</button>
   </div>
 
   <div class="no-print" style="display:flex;align-items:center;gap:8px;margin-bottom:14px;background:var(--sl-bg2);border:1px solid var(--sl-border);border-radius:var(--radius);padding:10px 14px">
@@ -3126,8 +3126,7 @@ function doPrint(){
   const showPanelSummary = document.getElementById('po-panelsummary')?.checked !== false;
 
   ['dyn-print'].forEach(id=>{const e=document.getElementById(id);if(e)e.remove()});
-
-  const sty=document.createElement('style');sty.id='dyn-print';sty.media='print';
+  const sty=document.createElement('style');sty.id='dyn-print';
   let css=`
     .sheet-stats{display:${showStats?'flex':'none'}!important}
     .cuts-wrap{display:none!important}
@@ -3154,10 +3153,7 @@ function doPrint(){
     el.classList.toggle('no-summary', !showPanelSummary);
   });
 
-  sty.textContent=css;
-  document.head.appendChild(sty);
-
-  // Build PDF header
+  // Build PDF header HTML for each sheet
   document.querySelectorAll('.print-custom-header').forEach(el=>{
     const hasHeader = showLogo||showCompany||showClient||showHdr;
     if(!hasHeader){ el.style.cssText=''; el.innerHTML=''; return; }
@@ -3172,11 +3168,48 @@ function doPrint(){
     el.innerHTML=`<div>${logoHtml}</div><div style="flex:1;text-align:center">${centerParts.join('')}</div><div style="font-size:7pt;color:#aaa">${new Date().toLocaleDateString('en-IN')}</div>`;
   });
 
-  // Store badge size globally so buildSVG can pick it up on re-render
   window._printBadgeSize = badgeSize;
 
+  // Apply CSS to current document so outerHTML captures correct styles
+  sty.textContent = css;
+  document.head.appendChild(sty);
+
   closePrint();
-  setTimeout(()=>window.print(),150);
+
+  // Open new window with just the sheets content + auto-print
+  const printWin = window.open('','_blank');
+  const sheets = document.querySelectorAll('.sheet-block');
+  let sheetsHtml = '';
+  sheets.forEach(s => { sheetsHtml += s.outerHTML; });
+
+  // Collect all stylesheets
+  let styles = '';
+  document.querySelectorAll('style').forEach(s => { styles += s.outerHTML; });
+
+  const dynStyle = document.getElementById('dyn-print');
+  const dynCss = dynStyle ? dynStyle.textContent : '';
+
+  const html = '<!DOCTYPE html><html><head><meta charset="UTF-8">'
+    + '<title>EasyCutList \u2014 Cut Plan</title>'
+    + styles
+    + '<style>'
+    + '@page { margin: 8mm; size: A4 portrait; }'
+    + 'body { margin: 0; padding: 0; background: #fff; }'
+    + 'header,.left-panel,.no-print,.results-header,.stats-bar,.mat-summary,'
+    + '.unfitted-box,.modal-overlay { display: none !important; }'
+    + '.sheet-pg-num { display: flex !important; }'
+    + '.no-screen { display: block !important; }'
+    + '.app { display: block !important; }'
+    + '.right-panel { padding: 0 !important; margin: 0 !important; background: #fff !important; max-height:none !important; overflow:visible !important; }'
+    + dynCss
+    + '</style>'
+    + '</head><body>'
+    + '<div class="right-panel">' + sheetsHtml + '</div>'
+    + '<script>window.onload=function(){window.print();}<\/script>'
+    + '</body></html>';
+
+  printWin.document.write(html);
+  printWin.document.close();
 }
 
 // ══ SVG ══
