@@ -1365,9 +1365,9 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
     </div>
 
     <div class="print-opt-row">
-      <div><div class="print-opt-label">Show cut list table</div>
-        <div class="print-opt-sub">Panel name, size, position below diagram</div></div>
-      <label class="toggle"><input type="checkbox" id="po-cutlist"><span class="tt"></span></label>
+      <div><div class="print-opt-label">Print Panel Summary Table</div>
+        <div class="print-opt-sub">Sr.No, size and remark list below diagram</div></div>
+      <label class="toggle"><input type="checkbox" id="po-panelsummary" checked><span class="tt"></span></label>
     </div>
 
     <div class="modal-divider"></div>
@@ -3071,7 +3071,6 @@ function closePrint(){document.getElementById('print-modal').style.display='none
 
 function doPrint(){
   const showStats   = document.getElementById('po-stats').checked;
-  const showCuts    = document.getElementById('po-cutlist').checked;
   const showLogo    = hasFeature('pdfLogoHeader')  && document.getElementById('po-logo').checked;
   const showCompany = hasFeature('pdfCompanyName') && document.getElementById('po-companyname').checked;
   const showClient  = hasFeature('pdfClientName')  && document.getElementById('po-clientname').checked;
@@ -3087,15 +3086,16 @@ function doPrint(){
   const showCutSeq  = document.getElementById('po-cutseq').checked;
   const showDims    = document.getElementById('po-dims')?.checked !== false;
   const showPanelList = document.getElementById('po-panellist')?.checked !== false;
+  const showPanelSummary = document.getElementById('po-panelsummary')?.checked !== false;
 
   ['dyn-print'].forEach(id=>{const e=document.getElementById(id);if(e)e.remove()});
 
   const sty=document.createElement('style');sty.id='dyn-print';sty.media='print';
   let css=`
     .sheet-stats{display:${showStats?'flex':'none'}!important}
-    .cuts-wrap{display:${showCuts?'block':'none'}!important}
+    .cuts-wrap{display:none!important}
     .cut-seq-wrap{display:${showCutSeq?'block':'none'}!important}
-    .sheet-panel-list{display:${showPanelList?'block':'none'}!important}
+    .sheet-panel-list{display:${showPanelSummary?'block':'none'}!important}
     .sheet-material-banner{font-size:${matFont}pt!important;padding:3pt 10pt!important}
     .sh-name{font-size:${Math.round(matFont*0.7)}pt!important}
     .sh-size{font-size:${Math.round(matFont*0.5)}pt!important}
