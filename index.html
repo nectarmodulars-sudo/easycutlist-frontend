@@ -2960,12 +2960,12 @@ function renderResults(sheets,unfitted,scale){
 
     // Build panel list for this sheet
     const panelListRows = s.placed.map((p,ri) => {
-      const panelIdx = panelRows.findIndex(pr =>
-        (pr.remark||pr.label||'') === (p.piece.label||'') && pr.material === s.material
-      );
-      const baseSr = panelIdx >= 0 ? panelIdx + 1 : p.piece.colorIdx + 1;
-      const srDisplay = p.piece.instance > 1 ? (baseSr+'-'+p.piece.instance) : (''+baseSr);
-      const remark = (panelIdx >= 0 ? (panelRows[panelIdx].remark || panelRows[panelIdx].label || '') : '') || p.piece.label || '';
+      const matPanels = panelRows.filter(pr => pr.material === s.material);
+      const plMatch = matPanels[p.piece.colorIdx] || null;
+      const plGlobalIdx = plMatch ? panelRows.indexOf(plMatch) : -1;
+      const plBaseSr = plGlobalIdx >= 0 ? plGlobalIdx + 1 : p.piece.colorIdx + 1;
+      const srDisplay = p.piece.instance > 1 ? (plBaseSr+'-'+p.piece.instance) : (''+plBaseSr);
+      const remark = plMatch ? (plMatch.remark || plMatch.label || '') : (p.piece.label || '');
       const bg = ri%2===0 ? '#fff' : '#f9f4f9';
       return '<tr style="background:'+bg+'">'
         + '<td style="padding:3px 6px;font-weight:700;color:#3F0E40;font-family:monospace;white-space:nowrap;border-bottom:1px solid #eee;border-right:1px solid #ddd">#'+srDisplay+'</td>'
@@ -3164,11 +3164,11 @@ function buildSVG(sheet, scale) {
     const pf = PRINT_FILLS [ci % PRINT_FILLS.length];
     const ps = PRINT_STROKES[ci % PRINT_STROKES.length];
 
-    // Sr.No — match sticker: find panel row by label+material, use its index
-    const panelIdx = panelRows.findIndex(pr =>
-      (pr.remark||pr.label||'') === (p.piece.label||'') && pr.material === sheet.material
-    );
-    const baseSr = panelIdx >= 0 ? panelIdx + 1 : p.piece.colorIdx + 1;
+    // Sr.No — use colorIdx to find correct panel row within this material
+    const matPanels = panelRows.filter(pr => pr.material === sheet.material);
+    const svgPanelMatch = matPanels[p.piece.colorIdx] || null;
+    const svgGlobalIdx = svgPanelMatch ? panelRows.indexOf(svgPanelMatch) : -1;
+    const baseSr = svgGlobalIdx >= 0 ? svgGlobalIdx + 1 : p.piece.colorIdx + 1;
     const srDisplay = p.piece.instance > 1 ? `${baseSr}-${p.piece.instance}` : `${baseSr}`;
     const lbl = `#${srDisplay}`;
 
@@ -3431,23 +3431,24 @@ function doExportLabels(){
 
     sheet.placed.forEach(p=>{
       globalIdx++;
-      // Match by remark AND material to get correct row index
-      const panelIdx = panelRows.findIndex(pr =>
-        (pr.remark||pr.label||'') === (p.piece.label||'') &&
-        pr.material === sheet.material
-      );
-      const baseSr = panelIdx >= 0 ? panelIdx + 1 : p.piece.colorIdx + 1;
+      // colorIdx is assigned sequentially per unique panel row in the material group
+      // Use it directly to find the panel row within this material
+      const matPanels = panelRows.filter(pr => pr.material === sheet.material);
+      const panelMatch = matPanels[p.piece.colorIdx] || null;
+      // Global Sr.No = index in full panelRows array
+      const globalPanelIdx = panelMatch ? panelRows.indexOf(panelMatch) : -1;
+      const baseSr = globalPanelIdx >= 0 ? globalPanelIdx + 1 : p.piece.colorIdx + 1;
       const srDisplay = p.piece.instance > 1 ? `${baseSr}-${p.piece.instance}` : `${baseSr}`;
 
-      // Show original W×H from panel input, not placed pw×ph (which may be rotated)
-      const panelMatch = panelIdx >= 0 ? panelRows[panelIdx] : null;
+      // Show original W×H from panel input
       const dispW = panelMatch ? panelMatch.l : p.pw;
       const dispH = panelMatch ? panelMatch.w : p.ph;
+      const remark = panelMatch ? (panelMatch.remark || panelMatch.label || '') : (p.piece.label || '');
 
       stickers.push({
         srNo:     srDisplay,
         size:     `${dispW} × ${dispH}`,
-        remark:   p.piece.label || '',   // label IS the remark — set directly from piece
+        remark,
         material: sheet.material,
         sheet:    `Sheet ${matSheetIdx} of ${matSheets.length}`,
         customer,
