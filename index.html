@@ -2102,9 +2102,9 @@ function computeCutSequence(sheet){
 
 function buildCutSequenceSVG(sheet, scale, cutSeq, badgeR){
   // Returns SVG overlay elements with numbered cut lines
-  // badgeR: radius of the red circle badge (default 7)
+  // badgeR: radius of the red circle badge (default 10)
   const r = badgeR || 10;
-  const fs = Math.max(5, r - 1); // font size inside badge
+  const fs = Math.max(6, Math.round(r * 1.1)); // font size scales with badge
   const ML=8, MT=8, MR=8, MB=24;
   const s = Math.min(scale, 580/sheet.L);
   let o = '';
@@ -2117,7 +2117,7 @@ function buildCutSequenceSVG(sheet, scale, cutSeq, badgeR){
       const sx2 = ML + Math.round((cut.rx + cut.rw) * s);
       o += `<line x1="${sx1}" y1="${sy}" x2="${sx2}" y2="${sy}" stroke="#CC2200" stroke-width="1.5" stroke-dasharray="5,3" opacity=".9"/>`;
       o += `<circle cx="${sx1+r+1}" cy="${sy}" r="${r}" fill="#CC2200"/>`;
-      o += `<text x="${sx1+r+1}" y="${sy+fs*0.4}" text-anchor="middle" dominant-baseline="middle" fill="white" font-family="monospace" font-size="${fs}" font-weight="bold">${num}</text>`;
+      o += `<text x="${sx1+r+1}" y="${sy}" text-anchor="middle" dominant-baseline="central" fill="white" font-family="monospace" font-size="${fs}" font-weight="900">${num}</text>`;
       o += `<text x="${sx1+r*2+4}" y="${sy-2}" fill="#CC2200" font-family="monospace" font-size="7" opacity=".8">↔ ${Math.round(cut.pos)}</text>`;
     } else {
       const sx = ML + Math.round(cut.pos * s);
@@ -2125,7 +2125,7 @@ function buildCutSequenceSVG(sheet, scale, cutSeq, badgeR){
       const sy2 = MT + Math.round((cut.ry + cut.rh) * s);
       o += `<line x1="${sx}" y1="${sy1}" x2="${sx}" y2="${sy2}" stroke="#CC2200" stroke-width="1.5" stroke-dasharray="5,3" opacity=".9"/>`;
       o += `<circle cx="${sx}" cy="${sy1+r+1}" r="${r}" fill="#CC2200"/>`;
-      o += `<text x="${sx}" y="${sy1+r+1}" text-anchor="middle" dominant-baseline="middle" fill="white" font-family="monospace" font-size="${fs}" font-weight="bold">${num}</text>`;
+      o += `<text x="${sx}" y="${sy1+r+1}" text-anchor="middle" dominant-baseline="central" fill="white" font-family="monospace" font-size="${fs}" font-weight="900">${num}</text>`;
       o += `<text transform="rotate(-90,${sx+r+2},${sy1+r*2+4})" x="${sx+r+2}" y="${sy1+r*2+7}" fill="#CC2200" font-family="monospace" font-size="7" opacity=".8">↕ ${Math.round(cut.pos)}</text>`;
     }
   });
