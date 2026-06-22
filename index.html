@@ -2852,8 +2852,8 @@ function renderResults(sheets,unfitted,scale){
   <div class="algo-badge no-print">
     <div class="algo-badge-icon">⚡</div>
     <div class="algo-badge-text">
-      <div class="algo-badge-title">Guillotine Tree Algorithm v2 — Panel-Saw Guaranteed</div>
-      <div class="algo-badge-sub">Every cut is achievable on a panel saw. No impossible layouts.</div>
+      <div class="algo-badge-title">NesCut™ AI Engine — 32-Strategy Optimization</div>
+      <div class="algo-badge-sub">Multi-pass recursive optimizer · Panel-saw safe · Zero uncuttable layouts</div>
       <div class="algo-badge-stats">
         <span class="algo-stat">✓ ${sheets.length} sheets optimized</span>
         <span class="algo-stat">✓ ${totCuts} guillotine cuts</span>
@@ -2878,14 +2878,6 @@ function renderResults(sheets,unfitted,scale){
     Material Procurement
   </div>
   <div class="export-btns no-print">
-    <button class="btn-export btn-export-excel" onclick="requirePro('exportExcelFn', exportExcel)">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-      Cut List (Excel) ${hasFeature('exportExcel')?'':'⭐'}
-    </button>
-    <button class="btn-export btn-export-csv2" onclick="requirePro('exportCSVFn', exportCSV)">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-      Cut List (CSV) ${hasFeature('exportCSV')?'':'⭐'}
-    </button>
     <button class="btn-export" style="border-color:#7c3aed!important;color:#7c3aed!important;background:#f5f3ff!important" onclick="openExportOrder()">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
       Material Order
