@@ -790,12 +790,16 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
   /* EACH SHEET = EXACTLY ONE PAGE */
   .sheet-block{
     page-break-after:always;
-    page-break-inside:avoid;
+    page-break-inside:auto;
     border:none!important;border-radius:0!important;margin:0!important;padding:0 0 6pt!important;
     background:#fff!important;
+    overflow:visible!important;
   }
   .sheet-block:last-child{page-break-after:auto}
-  .print-custom-header{display:block!important;color:#000;font-family:Arial,sans-serif}
+  /* Prevent SVG and panel list from breaking across pages */
+  .sheet-svg-wrap{page-break-inside:avoid}
+  .sheet-panel-list{page-break-inside:avoid}
+  .print-custom-header{display:block!important;color:#000;font-family:Arial,sans-serif;page-break-after:avoid;margin-bottom:4pt}
   .sheet-header{
     padding:4pt 0!important;border-bottom:1pt solid #999!important;background:#fff!important;
     display:flex!important;align-items:center!important;justify-content:space-between!important;
@@ -813,8 +817,9 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
   .sstat-label{font-size:6pt!important;color:#666!important;text-transform:uppercase;margin-bottom:1pt}
   .sstat-val{font-size:7pt!important;font-weight:bold!important;color:#000!important;font-family:'Courier New',monospace!important}
   .sheet-svg-wrap{padding:4pt 0!important;background:#fff!important;overflow:visible!important}
-  .sheet-svg-wrap svg{width:100%!important;height:auto!important;max-height:82vh!important;display:block!important}
-  .cuts-wrap{padding:4pt 0!important}
+  .sheet-svg-wrap svg{width:100%!important;height:auto!important;max-height:65vh!important;display:block!important}
+  .cuts-wrap{padding:4pt 0!important;page-break-inside:avoid}
+  .cut-seq-wrap{page-break-inside:avoid}
   .cuts-title{font-size:6pt!important;color:#555!important;margin-bottom:3pt}
   .cuts-table{font-size:7pt!important}
   .cuts-table th{background:#f0f0f0!important;color:#444!important;padding:2pt 4pt!important;font-size:6pt!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
