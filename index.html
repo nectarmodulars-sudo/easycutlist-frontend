@@ -814,8 +814,9 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
   .sstat-label{font-size:6pt!important;color:#666!important;text-transform:uppercase;margin-bottom:1pt}
   .sstat-val{font-size:7pt!important;font-weight:bold!important;color:#000!important;font-family:'Courier New',monospace!important}
   .sheet-svg-wrap{padding:4pt 0!important;background:#fff!important;overflow:visible!important}
-  .sheet-svg-wrap{width:100%}
-  .sheet-svg-wrap svg{width:100%!important;height:auto!important;max-height:200mm!important;display:block!important}
+  .sheet-svg-wrap{flex:0 0 45%;max-width:45%}
+  .sheet-svg-wrap svg{width:100%!important;height:auto!important;display:block!important}
+  .sheet-panel-list{flex:1;min-width:0;page-break-inside:avoid}
   .cuts-wrap{padding:4pt 0!important;page-break-inside:avoid}
   .cut-seq-wrap{page-break-inside:avoid}
   .cuts-title{font-size:6pt!important;color:#555!important;margin-bottom:3pt}
@@ -2971,7 +2972,7 @@ function renderResults(sheets,unfitted,scale){
       : '';
 
     // Build panel list for this sheet
-    const panelListRows = s.placed.map((p,ri) => {
+      const panelListRows = s.placed.map((p,ri) => {
       const matPanels = panelRows.filter(pr => pr.material === s.material);
       const plMatch = matPanels[p.piece.colorIdx] || null;
       const plGlobalIdx = plMatch ? panelRows.indexOf(plMatch) : -1;
@@ -2979,10 +2980,11 @@ function renderResults(sheets,unfitted,scale){
       const srDisplay = p.piece.instance > 1 ? (plBaseSr+'-'+p.piece.instance) : (''+plBaseSr);
       const remark = plMatch ? (plMatch.remark || plMatch.label || '') : (p.piece.label || '');
       const bg = ri%2===0 ? '#fff' : '#f9f4f9';
+      const cellStyle = `padding:3px 5px;border-bottom:1px solid #eee;vertical-align:top`;
       return '<tr style="background:'+bg+'">'
-        + '<td style="padding:3px 6px;font-weight:700;color:#3F0E40;font-family:monospace;white-space:nowrap;border-bottom:1px solid #eee;border-right:1px solid #ddd">#'+srDisplay+'</td>'
-        + '<td style="padding:3px 6px;font-family:monospace;white-space:nowrap;border-bottom:1px solid #eee;border-right:1px solid #ddd">'+p.pw+' × '+p.ph+'</td>'
-        + '<td style="padding:3px 6px;color:#444;font-size:8pt;border-bottom:1px solid #eee;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+(remark?esc(remark):'')+'</td>'
+        + '<td style="'+cellStyle+';border-right:1px solid #ddd;font-weight:700;color:#3F0E40;font-family:monospace;white-space:nowrap">#'+srDisplay+'</td>'
+        + '<td style="'+cellStyle+';border-right:1px solid #ddd;font-family:monospace;white-space:nowrap;font-size:7.5pt">'+p.pw+' × '+p.ph+'</td>'
+        + '<td style="'+cellStyle+';word-break:break-word;white-space:normal;font-size:7.5pt;line-height:1.4">'+(remark?esc(remark):'')+'</td>'
         + '</tr>';
     }).join('');
 
@@ -3003,19 +3005,24 @@ function renderResults(sheets,unfitted,scale){
         <div class="sstat"><div class="sstat-label">Cut Len</div><div class="sstat-val">${cs.length.toLocaleString()} mm</div></div>
         <div class="sstat"><div class="sstat-label">Panels</div><div class="sstat-val">${s.placed.length}</div></div>
       </div>
-      <div>
-      <div class="sheet-svg-wrap">${buildSVG(s,scale)}</div>
-      </div>
-      <div class="sheet-panel-list no-screen" style="margin-top:8pt;border:1.5px solid #3F0E40;border-radius:4px;overflow:hidden">
+      <div style="display:flex;gap:10px;align-items:flex-start;margin-top:4px">
+        <div class="sheet-svg-wrap" style="flex:0 0 45%;max-width:45%">${buildSVG(s,scale)}</div>
+        <div class="sheet-panel-list no-screen" style="flex:1;min-width:0;border:1.5px solid #3F0E40;border-radius:4px;overflow:hidden">
           <div style="background:#3F0E40;color:#fff;font-size:8pt;font-weight:700;padding:4px 8px;letter-spacing:.5px;text-transform:uppercase">Panels — ${esc(s.material)}</div>
-          <table style="border-collapse:collapse;width:100%;font-size:8.5pt;color:#111">
+          <table style="border-collapse:collapse;width:100%;font-size:8pt;color:#111;table-layout:fixed">
+            <colgroup>
+              <col style="width:14%">
+              <col style="width:28%">
+              <col style="width:58%">
+            </colgroup>
             <thead><tr style="background:#f0e8f0">
-              <th style="padding:3px 6px;text-align:left;font-size:7.5pt;color:#3F0E40;font-weight:700;border-bottom:1px solid #ccc;border-right:1px solid #ddd;white-space:nowrap">#</th>
-              <th style="padding:3px 6px;text-align:left;font-size:7.5pt;color:#3F0E40;font-weight:700;border-bottom:1px solid #ccc;border-right:1px solid #ddd;white-space:nowrap">W × H mm</th>
-              <th style="padding:3px 6px;text-align:left;font-size:7.5pt;color:#3F0E40;font-weight:700;border-bottom:1px solid #ccc;white-space:nowrap">Remark</th>
+              <th style="padding:3px 5px;text-align:left;font-size:7pt;color:#3F0E40;font-weight:700;border-bottom:1px solid #ccc;border-right:1px solid #ddd;white-space:nowrap">#</th>
+              <th style="padding:3px 5px;text-align:left;font-size:7pt;color:#3F0E40;font-weight:700;border-bottom:1px solid #ccc;border-right:1px solid #ddd;white-space:nowrap">W × H mm</th>
+              <th style="padding:3px 5px;text-align:left;font-size:7pt;color:#3F0E40;font-weight:700;border-bottom:1px solid #ccc;">Remark</th>
             </tr></thead>
             <tbody>${panelListRows}</tbody>
           </table>
+        </div>
       </div>
       ${cutSeqHtml}
       <div class="cuts-wrap">
