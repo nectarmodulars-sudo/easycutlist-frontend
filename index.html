@@ -780,19 +780,19 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
 
 /* ═══ PRINT STYLES ═══ */
 @media print{
-  @page{margin:8mm 6mm 14mm 6mm;size:A4 portrait}
+  @page{margin:0.5in;size:A4 portrait}
   /* Suppress browser-added URL/title/date — works in Chrome/Edge when "Headers and footers" is off */
   header,.left-panel,.no-print,.results-header,.stats-bar,.mat-summary,.unfitted-box,.modal-overlay{display:none!important}
   .sheet-pg-num{display:block!important;font-family:Arial,sans-serif;font-size:7pt;color:#555;padding-top:4pt;border-top:1.5pt solid #ECB22E;margin-top:4pt;display:flex!important;align-items:center;justify-content:space-between}
   .no-screen{display:block!important}
   body{background:#fff!important;color:#000!important;font-family:Arial,sans-serif!important;font-size:9pt}
   .app{display:block!important}
-  .right-panel{max-height:none!important;overflow:visible!important;padding:0!important;background:#fff!important}
+  .right-panel{max-height:none!important;overflow:visible!important;padding:0!important;margin:0!important;background:#fff!important}
   /* EACH SHEET = EXACTLY ONE PAGE */
   .sheet-block{
     page-break-after:always;
     page-break-inside:auto;
-    border:none!important;border-radius:0!important;margin:0!important;padding:0 0 6pt!important;
+    border:none!important;border-radius:0!important;margin:0!important;padding:0!important;
     background:#fff!important;
     overflow:visible!important;
   }
@@ -819,7 +819,7 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
   .sstat-val{font-size:7pt!important;font-weight:bold!important;color:#000!important;font-family:'Courier New',monospace!important}
   .sheet-svg-wrap{padding:4pt 0!important;background:#fff!important;overflow:visible!important}
   .sheet-svg-wrap{flex:1;min-width:0}
-  .sheet-svg-wrap svg{width:100%!important;height:auto!important;max-height:420px!important;display:block!important}
+  .sheet-svg-wrap svg{width:100%!important;height:auto!important;display:block!important}
   .cuts-wrap{padding:4pt 0!important;page-break-inside:avoid}
   .cut-seq-wrap{page-break-inside:avoid}
   .cuts-title{font-size:6pt!important;color:#555!important;margin-bottom:3pt}
@@ -3147,7 +3147,7 @@ function buildSVG(sheet, scale) {
   const bW = Math.round(sheet.L * s), bH = Math.round(sheet.W * s);
   const svgW = bW + ML + MR, svgH = bH + MT + MB;
 
-  let o = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${svgW} ${svgH}" style="display:block;width:100%;height:auto;max-height:420px" preserveAspectRatio="xMidYMid meet">
+  let o = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${svgW} ${svgH}" style="display:block;width:100%;height:auto" preserveAspectRatio="xMidYMid meet">
   <defs><style>
     .sv-bg{fill:#EFEFEF}.sv-bdr{stroke:#AAAAAA;fill:none}.sv-gr{stroke:#DCDCDC}
     .sv-sz{fill:#555555;font-family:'Inconsolata','Courier New',monospace;font-size:11px;font-weight:600}
