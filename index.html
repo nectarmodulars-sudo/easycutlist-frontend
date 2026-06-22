@@ -3457,6 +3457,17 @@ function doExportLabels(){
   });
 
   if(!stickers.length){alert('No panels to export.');return;}
+
+  // Sort: material alphabetically, then Sr.No numerically
+  stickers.sort((a,b)=>{
+    if(a.material < b.material) return -1;
+    if(a.material > b.material) return 1;
+    // Parse Sr.No: "42-2" → base=42, inst=2; "42" → base=42, inst=0
+    const parse = s => { const p=s.split('-'); return [+p[0]||0, +p[1]||0]; };
+    const [ab,ai] = parse(a.srNo);
+    const [bb,bi] = parse(b.srNo);
+    return ab!==bb ? ab-bb : ai-bi;
+  });
   closeLabelExport();
 
   const sW = perPage===4 ? '48%' : '48%';
