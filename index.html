@@ -796,10 +796,11 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
     background:#fff!important;
   }
   .sheet-block:last-child{page-break-after:auto}
-  .print-custom-header{display:block!important;color:#000;font-family:Arial,sans-serif;page-break-after:avoid;margin-bottom:4pt}
+  .print-custom-header{display:block!important;color:#000;font-family:Arial,sans-serif;page-break-after:avoid;margin:0!important;padding:0!important}
   .sheet-header{
-    padding:4pt 0!important;border-bottom:1pt solid #999!important;background:#fff!important;
+    padding:2pt 0!important;border-bottom:1pt solid #999!important;background:#fff!important;
     display:flex!important;align-items:center!important;justify-content:space-between!important;
+    margin:0!important;
   }
   .sheet-header .sh-name{font-weight:bold;color:#000}
   .sheet-header .sh-size{color:#555;font-family:'Courier New',monospace}
@@ -808,24 +809,24 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
   .waste-good{background:#d4f5e6!important;color:#1a7a4a!important}
   .waste-warn{background:#fff0cc!important;color:#a05c00!important}
   .waste-bad{background:#ffe0e6!important;color:#c0002a!important}
-  .sheet-stats{border-bottom:1pt solid #ccc!important}
-  .sstat{padding:3pt 6pt!important;border-right:1pt solid #ccc!important}
+  .sheet-stats{border-bottom:1pt solid #ccc!important;margin:0!important}
+  .sstat{padding:2pt 5pt!important;border-right:1pt solid #ccc!important}
   .sstat:last-child{border-right:none!important}
   .sstat-label{font-size:6pt!important;color:#666!important;text-transform:uppercase;margin-bottom:1pt}
   .sstat-val{font-size:7pt!important;font-weight:bold!important;color:#000!important;font-family:'Courier New',monospace!important}
-  .sheet-svg-wrap{padding:4pt 0!important;background:#fff!important;overflow:visible!important}
+  .sheet-svg-wrap{padding:2pt 0 0 0!important;background:#fff!important;overflow:visible!important}
 
-  /* Side-by-side: diagram left 45%, panel table right 55% */
+  /* Side-by-side: diagram left 62%, panel table right 38% */
   .sheet-layout-wrap{
     display:flex!important;
-    gap:8pt!important;
+    gap:6pt!important;
     align-items:flex-start!important;
-    height:175mm!important;
+    height:178mm!important;
   }
   .sheet-svg-wrap{
-    flex:0 0 44%!important;
-    max-width:44%!important;
-    height:175mm!important;
+    flex:0 0 62%!important;
+    max-width:62%!important;
+    height:178mm!important;
     display:flex!important;
     align-items:center!important;
     justify-content:center!important;
@@ -834,14 +835,13 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
   .sheet-svg-wrap svg{
     width:100%!important;
     height:100%!important;
-    max-height:175mm!important;
+    max-height:178mm!important;
     display:block!important;
-    object-fit:contain!important;
   }
   .sheet-panel-list{
     flex:1!important;
     min-width:0!important;
-    height:175mm!important;
+    height:178mm!important;
     overflow:hidden!important;
   }
 
@@ -849,7 +849,6 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
   .sheet-layout-wrap.no-summary .sheet-svg-wrap{
     flex:0 0 100%!important;
     max-width:100%!important;
-    height:175mm!important;
   }
 
   .cuts-wrap{padding:4pt 0!important;page-break-inside:avoid}
@@ -3046,9 +3045,9 @@ function renderResults(sheets,unfitted,scale){
           <div style="background:#3F0E40;color:#fff;font-size:8pt;font-weight:700;padding:4px 8px;letter-spacing:.5px;text-transform:uppercase">Panels — ${esc(s.material)}</div>
           <table style="border-collapse:collapse;width:100%;font-size:8pt;color:#111;table-layout:fixed">
             <colgroup>
-              <col style="width:14%">
-              <col style="width:28%">
-              <col style="width:58%">
+              <col style="width:18%">
+              <col style="width:34%">
+              <col style="width:48%">
             </colgroup>
             <thead><tr style="background:#f0e8f0">
               <th style="padding:3px 5px;text-align:left;font-size:7pt;color:#3F0E40;font-weight:700;border-bottom:1px solid #ccc;border-right:1px solid #ddd;white-space:nowrap">#</th>
