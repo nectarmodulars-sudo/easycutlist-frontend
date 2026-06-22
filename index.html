@@ -814,9 +814,44 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
   .sstat-label{font-size:6pt!important;color:#666!important;text-transform:uppercase;margin-bottom:1pt}
   .sstat-val{font-size:7pt!important;font-weight:bold!important;color:#000!important;font-family:'Courier New',monospace!important}
   .sheet-svg-wrap{padding:4pt 0!important;background:#fff!important;overflow:visible!important}
-  .sheet-svg-wrap{flex:0 0 45%;max-width:45%}
-  .sheet-svg-wrap svg{width:100%!important;height:auto!important;display:block!important}
-  .sheet-panel-list{flex:1;min-width:0;page-break-inside:avoid}
+
+  /* Side-by-side: diagram left 45%, panel table right 55% */
+  .sheet-layout-wrap{
+    display:flex!important;
+    gap:8pt!important;
+    align-items:flex-start!important;
+    height:175mm!important;
+  }
+  .sheet-svg-wrap{
+    flex:0 0 44%!important;
+    max-width:44%!important;
+    height:175mm!important;
+    display:flex!important;
+    align-items:center!important;
+    justify-content:center!important;
+    overflow:hidden!important;
+  }
+  .sheet-svg-wrap svg{
+    width:100%!important;
+    height:100%!important;
+    max-height:175mm!important;
+    display:block!important;
+    object-fit:contain!important;
+  }
+  .sheet-panel-list{
+    flex:1!important;
+    min-width:0!important;
+    height:175mm!important;
+    overflow:hidden!important;
+  }
+
+  /* Full-width when panel summary hidden */
+  .sheet-layout-wrap.no-summary .sheet-svg-wrap{
+    flex:0 0 100%!important;
+    max-width:100%!important;
+    height:175mm!important;
+  }
+
   .cuts-wrap{padding:4pt 0!important;page-break-inside:avoid}
   .cut-seq-wrap{page-break-inside:avoid}
   .cuts-title{font-size:6pt!important;color:#555!important;margin-bottom:3pt}
@@ -3005,8 +3040,8 @@ function renderResults(sheets,unfitted,scale){
         <div class="sstat"><div class="sstat-label">Cut Len</div><div class="sstat-val">${cs.length.toLocaleString()} mm</div></div>
         <div class="sstat"><div class="sstat-label">Panels</div><div class="sstat-val">${s.placed.length}</div></div>
       </div>
-      <div style="display:flex;gap:10px;align-items:flex-start;margin-top:4px">
-        <div class="sheet-svg-wrap" style="flex:0 0 45%;max-width:45%">${buildSVG(s,scale)}</div>
+      <div class="sheet-layout-wrap">
+        <div class="sheet-svg-wrap">${buildSVG(s,scale)}</div>
         <div class="sheet-panel-list no-screen" style="flex:1;min-width:0;border:1.5px solid #3F0E40;border-radius:4px;overflow:hidden">
           <div style="background:#3F0E40;color:#fff;font-size:8pt;font-weight:700;padding:4px 8px;letter-spacing:.5px;text-transform:uppercase">Panels — ${esc(s.material)}</div>
           <table style="border-collapse:collapse;width:100%;font-size:8pt;color:#111;table-layout:fixed">
@@ -3115,6 +3150,11 @@ function doPrint(){
       css+=`.pc${i}t{font-size:${diagFont}px!important}.pc${i}s{font-size:${dimFont}px!important}`;
     }
   }
+  // Toggle no-summary class on layout wraps
+  document.querySelectorAll('.sheet-layout-wrap').forEach(el=>{
+    el.classList.toggle('no-summary', !showPanelSummary);
+  });
+
   sty.textContent=css;
   document.head.appendChild(sty);
 
