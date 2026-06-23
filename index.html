@@ -1882,15 +1882,16 @@ const PREMIUM_FEATURES = {
   cutSequence:   { name: 'Cutting Sequence Diagram', plan: 'pro' },
   exportExcelFn: { name: 'Excel Export',             plan: 'pro' },
   exportCSVFn:   { name: 'CSV Export',               plan: 'pro' },
-  priceBook:     { name: 'Material Price Book',      plan: 'free' }, // free
-  clients:       { name: 'Client Management',        plan: 'free' }, // free
-  projects:      { name: 'Save Projects',            plan: 'free' }, // free (local)
+  exportLabels:  { name: 'Export Panel Labels',      plan: 'pro' },
+  priceBook:     { name: 'Material Price Book',      plan: 'free' },
+  clients:       { name: 'Client Management',        plan: 'free' },
+  projects:      { name: 'Save Projects',            plan: 'free' },
 };
 
-// Map between code's internal keys and the admin flag keys
 const FLAG_KEY_MAP = {
   exportExcelFn:    'exportExcel',
   exportCSVFn:      'exportCSV',
+  exportLabels:     'exportLabels',
   cutSequence:      'cutSequenceTable',
 };
 
@@ -2921,9 +2922,9 @@ function renderResults(sheets,unfitted,scale){
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
       Material Order
     </button>
-    <button class="btn-export" style="border-color:#0891b2!important;color:#0891b2!important;background:#ecfeff!important" onclick="openLabelExport()">
+    <button class="btn-export" style="border-color:#0891b2!important;color:#0891b2!important;background:#ecfeff!important" onclick="requirePro('exportLabels', openLabelExport)">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-4 0v2"/></svg>
-      Export Labels
+      Export Labels ${hasFeature('exportLabels')?'':'⭐'}
     </button>
   </div>
 
@@ -3170,46 +3171,65 @@ function doPrint(){
 
   window._printBadgeSize = badgeSize;
 
-  // Apply CSS to current document so outerHTML captures correct styles
+  // Apply CSS to current document so outerHTML captures rendered content
   sty.textContent = css;
   document.head.appendChild(sty);
 
-  closePrint();
+  // Wait a tick so styles apply before capturing outerHTML
+  setTimeout(()=>{
+    closePrint();
 
-  // Open new window with just the sheets content + auto-print
-  const printWin = window.open('','_blank');
-  const sheets = document.querySelectorAll('.sheet-block');
-  let sheetsHtml = '';
-  sheets.forEach(s => { sheetsHtml += s.outerHTML; });
+    const printWin = window.open('','_blank');
+    const sheets = document.querySelectorAll('.sheet-block');
+    let sheetsHtml = '';
+    sheets.forEach(s => { sheetsHtml += s.outerHTML; });
 
-  // Collect all stylesheets
-  let styles = '';
-  document.querySelectorAll('style').forEach(s => { styles += s.outerHTML; });
+    const showSummary = showPanelSummary;
 
-  const dynStyle = document.getElementById('dyn-print');
-  const dynCss = dynStyle ? dynStyle.textContent : '';
+    const printHtml = '<!DOCTYPE html><html><head><meta charset="UTF-8">'
+      + '<title>EasyCutList Cut Plan</title>'
+      + '<style>'
+      + 'html,body{margin:0;padding:0;background:#fff;font-family:Arial,sans-serif}'
+      + '@page{size:A4 portrait;margin:10mm}'
+      + '.sheet-block{page-break-after:always;page-break-inside:avoid;margin:0;padding:0;background:#fff}'
+      + '.sheet-block:last-child{page-break-after:auto}'
+      + '.print-custom-header{display:block;font-family:Arial;color:#000;margin-bottom:4pt;padding-bottom:3pt;border-bottom:1pt solid #ccc}'
+      + '.sheet-header{display:flex;align-items:center;gap:8pt;padding:3pt 0;border-bottom:1pt solid #999;margin-bottom:3pt}'
+      + '.sh-name{font-size:11pt;font-weight:700;color:#000}'
+      + '.sh-size{font-size:8pt;color:#666;font-family:monospace}'
+      + '.sheet-material-banner{font-family:monospace;font-size:'+(matFont)+'pt;font-weight:700;color:#1264A3;background:#EBF4FB;padding:2pt 8pt;border-radius:2pt}'
+      + '.sheet-waste-badge{font-size:8pt;padding:2pt 6pt;border-radius:2pt}'
+      + '.waste-good{background:#d4edda;color:#155724}'
+      + '.waste-warn{background:#fff3cd;color:#856404}'
+      + '.waste-bad{background:#ffe0e0;color:#c0002a}'
+      + '.sheet-stats{'+(showStats?'display:flex':'display:none')+';border-bottom:1pt solid #ccc;margin-bottom:3pt}'
+      + '.sstat{padding:2pt 6pt;border-right:1pt solid #ccc;font-size:7pt;color:#555}'
+      + '.sstat-label{font-size:6pt;color:#999;text-transform:uppercase}'
+      + '.sstat-val{font-weight:700;font-size:8pt;color:#000}'
+      + '.sheet-layout-wrap{display:flex;gap:6pt;align-items:flex-start;height:178mm}'
+      + (showSummary
+          ? '.sheet-svg-wrap{flex:0 0 62%;max-width:62%;height:178mm;overflow:hidden}'
+          : '.sheet-svg-wrap{flex:0 0 100%;max-width:100%;height:178mm;overflow:hidden}')
+      + '.sheet-svg-wrap svg{width:100%;height:100%;display:block}'
+      + (showSummary
+          ? '.sheet-panel-list{flex:1;min-width:0;height:178mm;overflow:hidden;border:1pt solid #3F0E40;border-radius:3pt}'
+          : '.sheet-panel-list{display:none}')
+      + '.no-screen{display:block!important}'
+      + '.cut-seq-wrap{'+(showCutSeq?'display:block':'display:none')+'}'
+      + '.cuts-wrap{display:none}'
+      + '.sheet-pg-num{display:flex!important;align-items:center;justify-content:space-between;font-size:7pt;color:#555;padding-top:3pt;border-top:1.5pt solid #ECB22E;margin-top:3pt;font-family:Arial}'
+      + '.piece-dot{display:inline-block;width:8pt;height:8pt;border-radius:50%;margin-right:3pt;vertical-align:middle;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+      + 'table{border-collapse:collapse}'
+      + 'svg text{font-family:Arial,monospace}'
+      + '</style>'
+      + '</head><body>'
+      + sheetsHtml
+      + '<script>window.onload=function(){window.print();}<\/script>'
+      + '</body></html>';
 
-  const html = '<!DOCTYPE html><html><head><meta charset="UTF-8">'
-    + '<title>EasyCutList \u2014 Cut Plan</title>'
-    + styles
-    + '<style>'
-    + '@page { margin: 8mm; size: A4 portrait; }'
-    + 'body { margin: 0; padding: 0; background: #fff; }'
-    + 'header,.left-panel,.no-print,.results-header,.stats-bar,.mat-summary,'
-    + '.unfitted-box,.modal-overlay { display: none !important; }'
-    + '.sheet-pg-num { display: flex !important; }'
-    + '.no-screen { display: block !important; }'
-    + '.app { display: block !important; }'
-    + '.right-panel { padding: 0 !important; margin: 0 !important; background: #fff !important; max-height:none !important; overflow:visible !important; }'
-    + dynCss
-    + '</style>'
-    + '</head><body>'
-    + '<div class="right-panel">' + sheetsHtml + '</div>'
-    + '<script>window.onload=function(){window.print();}<\/script>'
-    + '</body></html>';
-
-  printWin.document.write(html);
-  printWin.document.close();
+    printWin.document.write(printHtml);
+    printWin.document.close();
+  }, 200);
 }
 
 // ══ SVG ══
