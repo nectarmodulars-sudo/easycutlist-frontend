@@ -816,39 +816,26 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
   .sstat-val{font-size:7pt!important;font-weight:bold!important;color:#000!important;font-family:'Courier New',monospace!important}
   .sheet-svg-wrap{padding:2pt 0 0 0!important;background:#fff!important;overflow:visible!important}
 
-  /* Side-by-side: diagram left 62%, panel table right 38% */
   .sheet-layout-wrap{
-    display:flex!important;
-    gap:6pt!important;
-    align-items:flex-start!important;
-    height:178mm!important;
+    display:block!important;
   }
   .sheet-svg-wrap{
-    flex:0 0 62%!important;
-    max-width:62%!important;
-    height:178mm!important;
-    display:flex!important;
-    align-items:center!important;
-    justify-content:center!important;
-    overflow:hidden!important;
+    width:100%!important;
+    display:block!important;
   }
   .sheet-svg-wrap svg{
     width:100%!important;
-    height:100%!important;
-    max-height:178mm!important;
+    height:auto!important;
+    max-height:160mm!important;
     display:block!important;
   }
   .sheet-panel-list{
-    flex:1!important;
-    min-width:0!important;
-    height:178mm!important;
-    overflow:hidden!important;
+    width:100%!important;
+    margin-top:4pt!important;
+    page-break-inside:avoid;
   }
-
-  /* Full-width when panel summary hidden */
-  .sheet-layout-wrap.no-summary .sheet-svg-wrap{
-    flex:0 0 100%!important;
-    max-width:100%!important;
+  .sheet-layout-wrap.no-summary .sheet-panel-list{
+    display:none!important;
   }
 
   .cuts-wrap{padding:4pt 0!important;page-break-inside:avoid}
@@ -3171,65 +3158,27 @@ function doPrint(){
 
   window._printBadgeSize = badgeSize;
 
-  // Apply CSS to current document so outerHTML captures rendered content
+  // Apply CSS to current document
   sty.textContent = css;
   document.head.appendChild(sty);
 
-  // Wait a tick so styles apply before capturing outerHTML
-  setTimeout(()=>{
-    closePrint();
+  // Build headers
+  document.querySelectorAll('.print-custom-header').forEach(el=>{
+    const hasHeader = showLogo||showCompany||showClient||showHdr;
+    if(!hasHeader){ el.style.cssText=''; el.innerHTML=''; return; }
+    const logoHtml = (showLogo&&profile.logo)
+      ? `<img src="${profile.logo}" style="max-height:30pt;max-width:80pt;object-fit:contain">` : '';
+    const centerParts=[];
+    if(showCompany&&profile.biz)  centerParts.push(`<div style="font-weight:900;font-size:11pt">${esc(profile.biz)}</div>`);
+    if(showClient&&clientText)    centerParts.push(`<div style="font-size:9pt;color:#555">Client: ${esc(clientText)}</div>`);
+    if(showHdr&&hdrText)          centerParts.push(`<div style="font-size:9pt">${esc(hdrText)}</div>`);
+    if(showCompany&&profile.phone) centerParts.push(`<div style="font-size:8pt;color:#888">${esc(profile.phone)}</div>`);
+    el.style.cssText='padding:3pt 0;border-bottom:1pt solid #ccc;font-family:Arial;color:#000;margin-bottom:4pt;display:flex;align-items:center;justify-content:space-between';
+    el.innerHTML=`<div>${logoHtml}</div><div style="flex:1;text-align:center">${centerParts.join('')}</div><div style="font-size:7pt;color:#aaa">${new Date().toLocaleDateString('en-IN')}</div>`;
+  });
 
-    const printWin = window.open('','_blank');
-    const sheets = document.querySelectorAll('.sheet-block');
-    let sheetsHtml = '';
-    sheets.forEach(s => { sheetsHtml += s.outerHTML; });
-
-    const showSummary = showPanelSummary;
-
-    const printHtml = '<!DOCTYPE html><html><head><meta charset="UTF-8">'
-      + '<title>EasyCutList Cut Plan</title>'
-      + '<style>'
-      + 'html,body{margin:0;padding:0;background:#fff;font-family:Arial,sans-serif}'
-      + '@page{size:A4 portrait;margin:10mm}'
-      + '.sheet-block{page-break-after:always;page-break-inside:avoid;margin:0;padding:0;background:#fff}'
-      + '.sheet-block:last-child{page-break-after:auto}'
-      + '.print-custom-header{display:block;font-family:Arial;color:#000;margin-bottom:4pt;padding-bottom:3pt;border-bottom:1pt solid #ccc}'
-      + '.sheet-header{display:flex;align-items:center;gap:8pt;padding:3pt 0;border-bottom:1pt solid #999;margin-bottom:3pt}'
-      + '.sh-name{font-size:11pt;font-weight:700;color:#000}'
-      + '.sh-size{font-size:8pt;color:#666;font-family:monospace}'
-      + '.sheet-material-banner{font-family:monospace;font-size:'+(matFont)+'pt;font-weight:700;color:#1264A3;background:#EBF4FB;padding:2pt 8pt;border-radius:2pt}'
-      + '.sheet-waste-badge{font-size:8pt;padding:2pt 6pt;border-radius:2pt}'
-      + '.waste-good{background:#d4edda;color:#155724}'
-      + '.waste-warn{background:#fff3cd;color:#856404}'
-      + '.waste-bad{background:#ffe0e0;color:#c0002a}'
-      + '.sheet-stats{'+(showStats?'display:flex':'display:none')+';border-bottom:1pt solid #ccc;margin-bottom:3pt}'
-      + '.sstat{padding:2pt 6pt;border-right:1pt solid #ccc;font-size:7pt;color:#555}'
-      + '.sstat-label{font-size:6pt;color:#999;text-transform:uppercase}'
-      + '.sstat-val{font-weight:700;font-size:8pt;color:#000}'
-      + '.sheet-layout-wrap{display:flex;gap:6pt;align-items:flex-start;height:178mm}'
-      + (showSummary
-          ? '.sheet-svg-wrap{flex:0 0 62%;max-width:62%;height:178mm;overflow:hidden}'
-          : '.sheet-svg-wrap{flex:0 0 100%;max-width:100%;height:178mm;overflow:hidden}')
-      + '.sheet-svg-wrap svg{width:100%;height:100%;display:block}'
-      + (showSummary
-          ? '.sheet-panel-list{flex:1;min-width:0;height:178mm;overflow:hidden;border:1pt solid #3F0E40;border-radius:3pt}'
-          : '.sheet-panel-list{display:none}')
-      + '.no-screen{display:block!important}'
-      + '.cut-seq-wrap{'+(showCutSeq?'display:block':'display:none')+'}'
-      + '.cuts-wrap{display:none}'
-      + '.sheet-pg-num{display:flex!important;align-items:center;justify-content:space-between;font-size:7pt;color:#555;padding-top:3pt;border-top:1.5pt solid #ECB22E;margin-top:3pt;font-family:Arial}'
-      + '.piece-dot{display:inline-block;width:8pt;height:8pt;border-radius:50%;margin-right:3pt;vertical-align:middle;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
-      + 'table{border-collapse:collapse}'
-      + 'svg text{font-family:Arial,monospace}'
-      + '</style>'
-      + '</head><body>'
-      + sheetsHtml
-      + '<script>window.onload=function(){window.print();}<\/script>'
-      + '</body></html>';
-
-    printWin.document.write(printHtml);
-    printWin.document.close();
-  }, 200);
+  closePrint();
+  setTimeout(()=>window.print(), 150);
 }
 
 // ══ SVG ══
