@@ -3315,7 +3315,13 @@ function doPrint(){
   const tablePct = 100 - svgPct - 2;
 
   setTimeout(()=>{
-    const printWin = window.open('','_blank');
+    // Create full-screen iframe instead of new tab
+    const iframe = document.createElement('iframe');
+    iframe.id = 'print-frame';
+    iframe.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;border:none;z-index:99999;background:#e8e8e8';
+    document.body.appendChild(iframe);
+    const printWin = iframe.contentWindow;
+	
     const sheets = document.querySelectorAll('.sheet-block');
     let sheetsHtml = '';
     sheets.forEach(s => { sheetsHtml += s.outerHTML; });
@@ -3358,7 +3364,7 @@ function doPrint(){
       + '.piece-dot{display:inline-block;width:7pt;height:7pt;border-radius:50%;margin-right:2pt;vertical-align:middle;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
       + (showDims ? '' : '.sv-sz,[class*="pc"][class$="s"]{display:none!important}')
       + '</style>'
-      + '</head><body onload="setTimeout(()=>window.print(),300)">'
+      + '</head><body >'
       + '<div class="toolbar"><span class="info">Print preview — ' + sheets.length + ' sheet' + (sheets.length>1?'s':'') + ' · Press Ctrl+P or click Print → Save as PDF</span></div>'
       + '<div class="pages">'
       + Array.from(sheets).map(s => '<div class="page">'+s.outerHTML+'</div>').join('')
@@ -3367,6 +3373,9 @@ function doPrint(){
 
     printWin.document.write(printHtml);
     printWin.document.close();
+	// Auto-print, then remove iframe
+    iframe.contentWindow.onafterprint = () => iframe.remove();
+    iframe.onload = () => setTimeout(() => iframe.contentWindow.print(), 300);
   }, 200);
 }
 

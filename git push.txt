@@ -1,0 +1,4 @@
+cd /mnt/project
+git add .
+git commit -m ""
+git push 
