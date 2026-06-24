@@ -1548,6 +1548,11 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
       <div class="print-font-row"><input type="number" id="po-diag-font" value="11" min="5" max="24" step="0.5"></div>
     </div>
     <div class="print-opt-row">
+      <div><div class="print-opt-label">Multi-coloured labels</div>
+        <div class="print-opt-sub">Off = black text (clearer). On = text matches panel colour.</div></div>
+      <label class="toggle"><input type="checkbox" id="po-colortext"><span class="tt"></span></label>
+    </div>
+    <div class="print-opt-row">
       <div><div class="print-opt-label">Cut sequence badge size</div>
         <div class="print-opt-sub">Red circle number on cut diagram</div></div>
       <div class="print-font-row"><input type="number" id="po-badge-size" value="10" min="7" max="18" step="1" title="Radius of the red numbered circle (px)"></div>
@@ -3222,6 +3227,7 @@ function doPrint(){
   const remarkFont  = +document.getElementById('po-remark-font').value||11;
   const diagFont    = +document.getElementById('po-diag-font').value||11;
   const badgeSize   = +document.getElementById('po-badge-size').value||7;
+  const colorText   = document.getElementById('po-colortext')?.checked === true; // off = black
   const showCutSeq  = document.getElementById('po-cutseq').checked;
   const showDims    = document.getElementById('po-dims')?.checked !== false;
   const showPanelList = document.getElementById('po-panellist')?.checked !== false;
@@ -3247,7 +3253,7 @@ function doPrint(){
   // Regenerate every sheet's SVG with the chosen font sizes.
   // Because buildSVG recomputes line spacing from these sizes, Sr.No and Remark
   // can never overlap regardless of the values chosen.
-  const printFonts = { srNo: srNoFont, remark: remarkFont, dim: diagFont };
+  const printFonts = { srNo: srNoFont, remark: remarkFont, dim: diagFont, blackText: !colorText };
   document.querySelectorAll('.sheet-block').forEach((block, idx) => {
     const wrap = block.querySelector('.sheet-svg-wrap');
     if (wrap && _lastSheets[idx]) {
@@ -3380,6 +3386,7 @@ function buildSVG(sheet, scale, customFonts={}) {
   const customSrNoFont = customFonts.srNo || null;
   const customRemarkFont = customFonts.remark || null;
   const customDimFont = customFonts.dim || null;
+  const blackText = customFonts.blackText === true;  // true = all label text black
 
   let o = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${svgW} ${svgH}" style="display:block;width:100%;height:auto" preserveAspectRatio="xMidYMid meet">
   <defs><style>
@@ -3438,17 +3445,22 @@ function buildSVG(sheet, scale, customFonts={}) {
     const widthTxt  = String(p.pw);
     const heightTxt = String(p.ph);
 
+    // Text fill: black when blackText is on, otherwise the panel's screen/print colour
+    const txtFill   = blackText ? '#000' : sc;
+    const dimFill   = blackText ? '#000' : `${sc}dd`;
+    const txtFillPr = blackText ? '#000' : ps;
+
     o += `<g>`;
     o += `<style>
       .pc${ci}r{fill:${sc}20;stroke:${sc};stroke-width:1.2}
-      .pc${ci}t{fill:${sc};font-family:'Inconsolata','Courier New',monospace;font-size:${fs}px;font-weight:700}
-      .pc${ci}rem{fill:${sc};font-family:'Inconsolata','Courier New',monospace;font-weight:700}
-      .pc${ci}s{fill:${sc}dd;font-family:'Inconsolata','Courier New',monospace;font-size:${fsDim}px;font-weight:600}
+      .pc${ci}t{fill:${txtFill};font-family:'Inconsolata','Courier New',monospace;font-size:${fs}px;font-weight:700}
+      .pc${ci}rem{fill:${txtFill};font-family:'Inconsolata','Courier New',monospace;font-weight:700}
+      .pc${ci}s{fill:${dimFill};font-family:'Inconsolata','Courier New',monospace;font-size:${fsDim}px;font-weight:600}
       @media print{
         .pc${ci}r{fill:${pf};stroke:${ps};stroke-width:1pt}
-        .pc${ci}t{fill:${ps};font-family:'Courier New',monospace;font-weight:700}
-        .pc${ci}rem{fill:${ps};font-family:'Courier New',monospace;font-weight:700}
-        .pc${ci}s{fill:${ps};font-family:'Courier New',monospace;opacity:1;font-weight:700}
+        .pc${ci}t{fill:${txtFillPr};font-family:'Courier New',monospace;font-weight:700}
+        .pc${ci}rem{fill:${txtFillPr};font-family:'Courier New',monospace;font-weight:700}
+        .pc${ci}s{fill:${txtFillPr};font-family:'Courier New',monospace;opacity:1;font-weight:700}
       }
     </style>`;
     o += `<rect x="${px}" y="${py}" width="${pw}" height="${ph}" rx="2" class="pc${ci}r"/>`;
