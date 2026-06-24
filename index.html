@@ -1,4 +1,62 @@
 <!DOCTYPE html>
+<!--
+═══════════════════════════════════════════════════════════════════════════
+  EASYCUTLIST — CODE MAP  (for fast navigation; line numbers drift, use Ctrl+F on the function name)
+═══════════════════════════════════════════════════════════════════════════
+
+  FILE LAYOUT
+    CSS .................... <style> block near top (tokens, layout, mobile @media, print @media)
+    HTML body .............. header → app (left-panel: Run/Save, Panels, Stock, Options) → modals
+    JavaScript ............. everything below the main <script> tag. ALL FUNCTIONS ARE GLOBAL (no modules).
+
+  QUICK JUMP — "I want to change X" → search for this function:
+    Panel diagram (Sr.No, remark, dims drawn on panels) ...... buildSVG
+    PDF export + font handling .............................. doPrint
+    PDF export dialog (modal UI) ............................ id="print-modal"
+    Sticker label export .................................... doExportLabels  (modal id="label-modal")
+    Run optimizer / call API ................................ calculate
+    Build results (sheets, summary, tables) ................. renderResults
+    Add / edit / remove panels .............................. addPanel / updatePanel / removePanel
+    CSV / Excel import ...................................... applyCSV
+    Cut sequence numbering .................................. computeCutSequence
+    Material order PDF / Excel .............................. doExportOrderPDF / doExportOrderExcel
+    Google login / auth ..................................... refreshAuthUI / signInGoogle
+    Razorpay payment ....................................... startPayment / verifyPayment
+    Save / load projects ................................... saveProject / loadProject
+
+  GLOBAL STATE (source of truth — search to find declarations):
+    panelRows, stockRows ... current input rows
+    _lastSheets ............ last optimizer result (used by all exports)
+    profile ................ user/business profile (localStorage)
+    COLORS / PRINT_FILLS / PRINT_STROKES ... per-panel color arrays (screen vs print)
+    API_URL ................ switches localhost ↔ api.easycutlist.com
+    PLAN ................... 'free' | 'pro'
+
+  TWO DIALOGS OFTEN CONFUSED:
+    print-modal  = PDF export (fonts, layout)      → doPrint
+    label-modal  = sticker labels                  → doExportLabels
+
+  INSIDE buildSVG (the area edited most):
+    loop over sheet.placed → remark lookup (panelRows matched by colorIdx) →
+    lbl = srNo + "\n" + remark → font size calc (fs, fsDim) →
+    per-color <style> classes .pcNt (label) / .pcNs (dims) →
+    panel <rect> → width dim (top) → height dim (right, rotated) →
+    LABEL BLOCK: Sr.No + remark stacking (landscape vs portrait) → cut lines
+
+  INSIDE doPrint:
+    read po-*-font inputs → build dynamic print CSS (injects .pcNt/.pcNs font-size !important) →
+    build per-sheet PDF headers → copy .sheet-block outerHTML into new print window → A4 page CSS
+
+  GOTCHAS:
+    • Functions are global — cross-calls depend on it. Don't wrap in modules/IIFEs.
+    • Screen buildSVG auto-sizes fonts by panel; doPrint overrides via !important CSS at print time.
+      Inline font-size on <text> beats non-!important CSS.
+    • Sr.No + remark stacking is fragile (tspan vs separate <text>, baseline, rotation).
+    • panelRows is the source of truth for remark/material lookups inside buildSVG (matched by colorIdx).
+
+  When reporting a bug, NAME THE FUNCTION (e.g. "buildSVG label block") instead of describing vaguely.
+═══════════════════════════════════════════════════════════════════════════
+-->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
