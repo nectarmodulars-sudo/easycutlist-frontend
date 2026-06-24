@@ -1533,8 +1533,19 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
       <div class="print-font-row"><input type="number" id="po-mat-font" value="18" min="8" max="36" step="1"></div>
     </div>
     <div class="print-opt-row">
-      <div><div class="print-opt-label">Diagram label font (pt)</div></div>
-      <div class="print-font-row"><input type="number" id="po-diag-font" value="16" min="5" max="24" step="0.5"></div>
+      <div><div class="print-opt-label">Sr.No font (pt)</div>
+        <div class="print-opt-sub">Panel number #1, #2 on diagram</div></div>
+      <div class="print-font-row"><input type="number" id="po-srno-font" value="13" min="5" max="30" step="0.5"></div>
+    </div>
+    <div class="print-opt-row">
+      <div><div class="print-opt-label">Remark font (pt)</div>
+        <div class="print-opt-sub">Remark text on diagram</div></div>
+      <div class="print-font-row"><input type="number" id="po-remark-font" value="11" min="5" max="30" step="0.5"></div>
+    </div>
+    <div class="print-opt-row">
+      <div><div class="print-opt-label">Dimension font (pt)</div>
+        <div class="print-opt-sub">W × H numbers on panels</div></div>
+      <div class="print-font-row"><input type="number" id="po-diag-font" value="11" min="5" max="24" step="0.5"></div>
     </div>
     <div class="print-opt-row">
       <div><div class="print-opt-label">Cut sequence badge size</div>
@@ -2879,7 +2890,6 @@ function calcCuts(sheet){const xC=new Set(),yC=new Set();for(const p of sheet.pl
 // ══ RENDER ══
 function renderResults(sheets,unfitted,scale){
   _lastSheets=sheets; _lastUnfitted=unfitted; // save for export
-  initPanelFontListeners(); // Initialize font sliders
   document.getElementById('empty-state').style.display='none';
   const el=document.getElementById('results');el.style.display='block';
   let totArea=0,usedArea=0,totPieces=0,totCuts=0,totCutLen=0;
@@ -3130,7 +3140,7 @@ function renderResults(sheets,unfitted,scale){
         <div class="sstat"><div class="sstat-label">Panels</div><div class="sstat-val">${s.placed.length}</div></div>
       </div>
       <div class="sheet-layout-wrap">
-        <div class="sheet-svg-wrap">${buildSVG(s,scale,getCustomPanelFonts())}</div>
+        <div class="sheet-svg-wrap">${buildSVG(s,scale)}</div>
         <div class="sheet-panel-list no-screen" style="flex:1;min-width:0;border:1.5px solid #3F0E40;border-radius:4px;overflow:hidden">
           <div style="background:#3F0E40;color:#fff;font-size:8pt;font-weight:700;padding:4px 8px;letter-spacing:.5px;text-transform:uppercase">Panels — ${esc(s.material)}</div>
           <table style="border-collapse:collapse;width:100%;font-size:8pt;color:#111;table-layout:fixed">
@@ -3208,7 +3218,9 @@ function doPrint(){
   const showHdr     = hasFeature('pdfCustomText')  && document.getElementById('po-header').checked;
   const hdrText     = document.getElementById('po-header-text').value.trim();
   const matFont     = +document.getElementById('po-mat-font').value||18;
-  const diagFont    = +document.getElementById('po-diag-font').value||16;
+  const srNoFont    = +document.getElementById('po-srno-font').value||13;
+  const remarkFont  = +document.getElementById('po-remark-font').value||11;
+  const diagFont    = +document.getElementById('po-diag-font').value||11;
   const badgeSize   = +document.getElementById('po-badge-size').value||7;
   const showCutSeq  = document.getElementById('po-cutseq').checked;
   const showDims    = document.getElementById('po-dims')?.checked !== false;
@@ -3227,17 +3239,21 @@ function doPrint(){
     .sh-size{font-size:${Math.round(matFont*0.5)}pt!important}
     .sheet-waste-badge{font-size:${Math.round(matFont*0.5)}pt!important}
   `;
-  // Dimensions visibility
+  // Dimensions visibility (font sizes are baked into the regenerated SVG below)
   if(!showDims){
     css+=`.sv-sz{display:none!important}`;
     for(let i=0;i<COLORS.length;i++) css+=`.pc${i}s{display:none!important}`;
-  } else {
-    css+=`.sv-sz{font-size:${diagFont}px!important}`;
-    const dimFont=Math.max(4,diagFont-1);
-    for(let i=0;i<COLORS.length;i++){
-      css+=`.pc${i}t{font-size:${diagFont}px!important}.pc${i}s{font-size:${dimFont}px!important}`;
-    }
   }
+  // Regenerate every sheet's SVG with the chosen font sizes.
+  // Because buildSVG recomputes line spacing from these sizes, Sr.No and Remark
+  // can never overlap regardless of the values chosen.
+  const printFonts = { srNo: srNoFont, remark: remarkFont, dim: diagFont };
+  document.querySelectorAll('.sheet-block').forEach((block, idx) => {
+    const wrap = block.querySelector('.sheet-svg-wrap');
+    if (wrap && _lastSheets[idx]) {
+      wrap.innerHTML = buildSVG(_lastSheets[idx], 999, printFonts); // 999 → buildSVG caps scale internally
+    }
+  });
   // Toggle no-summary class on layout wraps
   document.querySelectorAll('.sheet-layout-wrap').forEach(el=>{
     el.classList.toggle('no-summary', !showPanelSummary);
@@ -3353,26 +3369,6 @@ function doPrint(){
 // Rulers show only total sheet L × W.
 // Each placed piece shows its own L×H label inside the rectangle — no segment ticks.
 
-function getCustomPanelFonts() {
-  return {
-    srNo: +document.getElementById('panel-srno-font')?.value || null,
-    remark: +document.getElementById('panel-remark-font')?.value || null,
-    dim: +document.getElementById('panel-dim-font')?.value || null,
-  };
-}
-
-// Add event listeners for panel font sliders
-function initPanelFontListeners() {
-  const sliders = ['panel-srno-font', 'panel-remark-font', 'panel-dim-font', 'panel-badge-size', 'panel-badge-font'];
-  sliders.forEach(id => {
-    const input = document.getElementById(id);
-    const valEl = document.getElementById(id + '-val');
-    if (input && valEl) {
-      input.oninput = () => valEl.textContent = input.value + (id.includes('badge-size') ? 'px' : 'px');
-    }
-  });
-}
-
 function buildSVG(sheet, scale, customFonts={}) {
   const MAX_W = 580;
   const s  = Math.min(scale, MAX_W / sheet.L);
@@ -3446,10 +3442,12 @@ function buildSVG(sheet, scale, customFonts={}) {
     o += `<style>
       .pc${ci}r{fill:${sc}20;stroke:${sc};stroke-width:1.2}
       .pc${ci}t{fill:${sc};font-family:'Inconsolata','Courier New',monospace;font-size:${fs}px;font-weight:700}
+      .pc${ci}rem{fill:${sc};font-family:'Inconsolata','Courier New',monospace;font-weight:700}
       .pc${ci}s{fill:${sc}dd;font-family:'Inconsolata','Courier New',monospace;font-size:${fsDim}px;font-weight:600}
       @media print{
         .pc${ci}r{fill:${pf};stroke:${ps};stroke-width:1pt}
         .pc${ci}t{fill:${ps};font-family:'Courier New',monospace;font-weight:700}
+        .pc${ci}rem{fill:${ps};font-family:'Courier New',monospace;font-weight:700}
         .pc${ci}s{fill:${ps};font-family:'Courier New',monospace;opacity:1;font-weight:700}
       }
     </style>`;
@@ -3480,33 +3478,45 @@ function buildSVG(sheet, scale, customFonts={}) {
         const isLandscape = pw >= ph;
         const topUsed = widthFits ? dimPadTop + 2 : 0;
         const lblCx = cx;
-        
+
         // Split label into Sr.No and Remark
         const lines = lbl.split('\n');
         const remarkLine = lines.length > 1 ? lines[1] : '';  // Remark (top)
-        const srNoLine = lines[0];  // Sr.No (bottom)
-        
+        const srNoLine = lines[0];                            // Sr.No (bottom)
+
+        // Independent font sizes. Sr.No uses fs; remark uses its own override (falls back to fs).
+        const srFs  = fs;
+        const remFs = customRemarkFont || fs;
+        // Gap is derived from BOTH sizes so the two lines never overlap, whatever the fonts.
+        const gap = (srFs + remFs) * 0.7;
+
         if (isLandscape) {
-          // LANDSCAPE: Horizontal text, stacked with tspan
+          // LANDSCAPE: two separate <text> elements, stacked (remark top, Sr.No bottom)
           const centerY = py + topUsed + (ph - topUsed) / 2;
-          const tspanDy = fs * 1.2;  // Line height
-          const startY = remarkLine ? centerY - tspanDy/2 : centerY;
-          
-          o += `<text x="${lblCx}" y="${startY}" text-anchor="middle" dominant-baseline="hanging" class="pc${ci}t">`;
-          o += `${remarkLine}`;
-          if (remarkLine) o += `<tspan x="${lblCx}" dy="${tspanDy}">${srNoLine}</tspan>`;
-          o += `</text>`;
+          if (remarkLine) {
+            const remarkY = centerY - gap / 2;
+            const srNoY   = centerY + gap / 2;
+            o += `<text x="${lblCx}" y="${remarkY}" text-anchor="middle" dominant-baseline="central" font-size="${remFs}px" class="pc${ci}rem">${remarkLine}</text>`;
+            o += `<text x="${lblCx}" y="${srNoY}" text-anchor="middle" dominant-baseline="central" font-size="${srFs}px" class="pc${ci}t">${srNoLine}</text>`;
+          } else {
+            o += `<text x="${lblCx}" y="${centerY}" text-anchor="middle" dominant-baseline="central" font-size="${srFs}px" class="pc${ci}t">${srNoLine}</text>`;
+          }
         } else {
-          // PORTRAIT: Rotated text, stacked with tspan
-          const hInset = Math.max(12, Math.min(pw * 0.2, 20));
-          const lblX = cx - hInset * 0.4;
-          const tspanDy = fs * 1.2;
-          const startY = remarkLine ? cy - tspanDy/2 : cy;
-          
-          o += `<text transform="rotate(-90,${lblX},${startY})" x="${lblX}" y="${startY}" text-anchor="middle" dominant-baseline="hanging" class="pc${ci}t">`;
-          o += `${remarkLine}`;
-          if (remarkLine) o += `<tspan x="${lblX}" dy="${tspanDy}">${srNoLine}</tspan>`;
-          o += `</text>`;
+          // PORTRAIT: two separate rotated <text> elements, stacked.
+          // Text is rotated -90°, so to stack the two lines side by side we must
+          // offset them along X (the screen axis that becomes "vertical spacing"
+          // once the text is rotated). Offsetting in Y here would push the long
+          // strings along their own length and make them overlap.
+          const hInsetP = Math.max(12, Math.min(pw * 0.2, 20));
+          if (remarkLine) {
+            const remarkX = cx - gap / 2;
+            const srNoX   = cx + gap / 2;
+            o += `<text transform="rotate(-90,${remarkX},${cy})" x="${remarkX}" y="${cy}" text-anchor="middle" dominant-baseline="central" font-size="${remFs}px" class="pc${ci}rem">${remarkLine}</text>`;
+            o += `<text transform="rotate(-90,${srNoX},${cy})" x="${srNoX}" y="${cy}" text-anchor="middle" dominant-baseline="central" font-size="${srFs}px" class="pc${ci}t">${srNoLine}</text>`;
+          } else {
+            const lblX = cx - hInsetP * 0.4;
+            o += `<text transform="rotate(-90,${lblX},${cy})" x="${lblX}" y="${cy}" text-anchor="middle" dominant-baseline="central" font-size="${srFs}px" class="pc${ci}t">${srNoLine}</text>`;
+          }
         }
       }
     }
