@@ -1171,6 +1171,49 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
     </div>
 
     <div class="modal-divider"></div>
+    <div style="font-size:10px;font-weight:700;color:var(--sl-text3);letter-spacing:.8px;text-transform:uppercase;margin-bottom:8px">Panel layout fonts</div>
+
+    <div class="print-opt-row">
+      <div><div class="print-opt-label">Sr.No font size</div></div>
+      <div class="print-font-row">
+        <input type="range" id="panel-srno-font" min="6" max="16" value="10" style="width:100px">
+        <span id="panel-srno-font-val" style="font-size:11px;color:var(--sl-text2);min-width:30px">10px</span>
+      </div>
+    </div>
+
+    <div class="print-opt-row">
+      <div><div class="print-opt-label">Remark font size</div></div>
+      <div class="print-font-row">
+        <input type="range" id="panel-remark-font" min="6" max="16" value="10" style="width:100px">
+        <span id="panel-remark-font-val" style="font-size:11px;color:var(--sl-text2);min-width:30px">10px</span>
+      </div>
+    </div>
+
+    <div class="print-opt-row">
+      <div><div class="print-opt-label">Dimension font size</div></div>
+      <div class="print-font-row">
+        <input type="range" id="panel-dim-font" min="6" max="14" value="9" style="width:100px">
+        <span id="panel-dim-font-val" style="font-size:11px;color:var(--sl-text2);min-width:30px">9px</span>
+      </div>
+    </div>
+
+    <div class="print-opt-row">
+      <div><div class="print-opt-label">Badge size</div></div>
+      <div class="print-font-row">
+        <input type="range" id="panel-badge-size" min="20" max="40" value="32" style="width:100px">
+        <span id="panel-badge-size-val" style="font-size:11px;color:var(--sl-text2);min-width:30px">32px</span>
+      </div>
+    </div>
+
+    <div class="print-opt-row">
+      <div><div class="print-opt-label">Badge font size</div></div>
+      <div class="print-font-row">
+        <input type="range" id="panel-badge-font" min="8" max="18" value="14" style="width:100px">
+        <span id="panel-badge-font-val" style="font-size:11px;color:var(--sl-text2);min-width:30px">14px</span>
+      </div>
+    </div>
+
+    <div class="modal-divider"></div>
     <div style="font-size:10px;font-weight:700;color:var(--sl-text3);letter-spacing:.8px;text-transform:uppercase;margin-bottom:8px">Print fields</div>
 
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:12px">
@@ -2778,6 +2821,7 @@ function calcCuts(sheet){const xC=new Set(),yC=new Set();for(const p of sheet.pl
 // ══ RENDER ══
 function renderResults(sheets,unfitted,scale){
   _lastSheets=sheets; _lastUnfitted=unfitted; // save for export
+  initPanelFontListeners(); // Initialize font sliders
   document.getElementById('empty-state').style.display='none';
   const el=document.getElementById('results');el.style.display='block';
   let totArea=0,usedArea=0,totPieces=0,totCuts=0,totCutLen=0;
@@ -3028,7 +3072,7 @@ function renderResults(sheets,unfitted,scale){
         <div class="sstat"><div class="sstat-label">Panels</div><div class="sstat-val">${s.placed.length}</div></div>
       </div>
       <div class="sheet-layout-wrap">
-        <div class="sheet-svg-wrap">${buildSVG(s,scale)}</div>
+        <div class="sheet-svg-wrap">${buildSVG(s,scale,getCustomPanelFonts())}</div>
         <div class="sheet-panel-list no-screen" style="flex:1;min-width:0;border:1.5px solid #3F0E40;border-radius:4px;overflow:hidden">
           <div style="background:#3F0E40;color:#fff;font-size:8pt;font-weight:700;padding:4px 8px;letter-spacing:.5px;text-transform:uppercase">Panels — ${esc(s.material)}</div>
           <table style="border-collapse:collapse;width:100%;font-size:8pt;color:#111;table-layout:fixed">
@@ -3250,12 +3294,38 @@ function doPrint(){
 // ══ SVG ══
 // Rulers show only total sheet L × W.
 // Each placed piece shows its own L×H label inside the rectangle — no segment ticks.
-function buildSVG(sheet, scale) {
+
+function getCustomPanelFonts() {
+  return {
+    srNo: +document.getElementById('panel-srno-font')?.value || null,
+    remark: +document.getElementById('panel-remark-font')?.value || null,
+    dim: +document.getElementById('panel-dim-font')?.value || null,
+  };
+}
+
+// Add event listeners for panel font sliders
+function initPanelFontListeners() {
+  const sliders = ['panel-srno-font', 'panel-remark-font', 'panel-dim-font', 'panel-badge-size', 'panel-badge-font'];
+  sliders.forEach(id => {
+    const input = document.getElementById(id);
+    const valEl = document.getElementById(id + '-val');
+    if (input && valEl) {
+      input.oninput = () => valEl.textContent = input.value + (id.includes('badge-size') ? 'px' : 'px');
+    }
+  });
+}
+
+function buildSVG(sheet, scale, customFonts={}) {
   const MAX_W = 580;
   const s  = Math.min(scale, MAX_W / sheet.L);
-  const ML = 8, MT = 8, MR = 8, MB = 24; // tight margins; width label goes below
+  const ML = 8, MT = 8, MR = 8, MB = 24;
   const bW = Math.round(sheet.L * s), bH = Math.round(sheet.W * s);
   const svgW = bW + ML + MR, svgH = bH + MT + MB;
+  
+  // Extract custom fonts or use defaults
+  const customSrNoFont = customFonts.srNo || null;
+  const customRemarkFont = customFonts.remark || null;
+  const customDimFont = customFonts.dim || null;
 
   let o = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${svgW} ${svgH}" style="display:block;width:100%;height:auto" preserveAspectRatio="xMidYMid meet">
   <defs><style>
@@ -3306,10 +3376,10 @@ function buildSVG(sheet, scale) {
     );
     const lbl = remarkText ? `${srLbl}\n${remarkText}` : srLbl;
 
-    // Font sizes relative to the smaller dimension
+    // Font sizes relative to the smaller dimension, or use custom overrides
     const minDim = Math.min(pw, ph);
-    const fs     = Math.min(13, Math.max(6, minDim / 6));
-    const fsDim  = Math.max(6, fs * 0.88);
+    const fs     = customSrNoFont || Math.min(13, Math.max(6, minDim / 6));
+    const fsDim  = customDimFont || Math.max(6, fs * 0.88);
 
     const widthTxt  = String(p.pw);
     const heightTxt = String(p.ph);
