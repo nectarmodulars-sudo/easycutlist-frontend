@@ -3355,40 +3355,30 @@ function buildSVG(sheet, scale) {
         
         // Split label into Sr.No and Remark
         const lines = lbl.split('\n');
-        const srNoLine = lines[0];
-        const remarkLine = lines.length > 1 ? lines[1] : '';
-        
-        // Line spacing
-        const lineGap = fs + 4;
+        const remarkLine = lines.length > 1 ? lines[1] : '';  // Remark (top)
+        const srNoLine = lines[0];  // Sr.No (bottom)
         
         if (isLandscape) {
-          // LANDSCAPE: Remark above, Sr.No below
-          if (remarkLine) {
-            const centerY = py + topUsed + (ph - topUsed) / 2;
-            const line1Y = centerY - lineGap / 2;  // Remark (top)
-            const line2Y = centerY + lineGap / 2;  // Sr.No (bottom)
-            
-            o += `<text x="${lblCx}" y="${line1Y}" text-anchor="middle" dominant-baseline="middle" class="pc${ci}t">${remarkLine}</text>`;
-            o += `<text x="${lblCx}" y="${line2Y}" text-anchor="middle" dominant-baseline="middle" class="pc${ci}t">${srNoLine}</text>`;
-          } else {
-            const centerY = py + topUsed + (ph - topUsed) / 2;
-            o += `<text x="${lblCx}" y="${centerY}" text-anchor="middle" dominant-baseline="middle" class="pc${ci}t">${srNoLine}</text>`;
-          }
+          // LANDSCAPE: Horizontal text, stacked with tspan
+          const centerY = py + topUsed + (ph - topUsed) / 2;
+          const tspanDy = fs * 1.2;  // Line height
+          const startY = remarkLine ? centerY - tspanDy/2 : centerY;
+          
+          o += `<text x="${lblCx}" y="${startY}" text-anchor="middle" dominant-baseline="hanging" class="pc${ci}t">`;
+          o += `${remarkLine}`;
+          if (remarkLine) o += `<tspan x="${lblCx}" dy="${tspanDy}">${srNoLine}</tspan>`;
+          o += `</text>`;
         } else {
-          // PORTRAIT: Remark above, Sr.No below (when rotated)
+          // PORTRAIT: Rotated text, stacked with tspan
           const hInset = Math.max(12, Math.min(pw * 0.2, 20));
           const lblX = cx - hInset * 0.4;
+          const tspanDy = fs * 1.2;
+          const startY = remarkLine ? cy - tspanDy/2 : cy;
           
-          if (remarkLine) {
-            const centerY = cy;
-            const line1Y = centerY - lineGap / 2;  // Remark (top)
-            const line2Y = centerY + lineGap / 2;  // Sr.No (bottom)
-            
-            o += `<text transform="rotate(-90,${lblX},${line1Y})" x="${lblX}" y="${line1Y}" text-anchor="middle" dominant-baseline="middle" class="pc${ci}t">${remarkLine}</text>`;
-            o += `<text transform="rotate(-90,${lblX},${line2Y})" x="${lblX}" y="${line2Y}" text-anchor="middle" dominant-baseline="middle" class="pc${ci}t">${srNoLine}</text>`;
-          } else {
-            o += `<text transform="rotate(-90,${lblX},${cy})" x="${lblX}" y="${cy}" text-anchor="middle" dominant-baseline="middle" class="pc${ci}t">${srNoLine}</text>`;
-          }
+          o += `<text transform="rotate(-90,${lblX},${startY})" x="${lblX}" y="${startY}" text-anchor="middle" dominant-baseline="hanging" class="pc${ci}t">`;
+          o += `${remarkLine}`;
+          if (remarkLine) o += `<tspan x="${lblX}" dy="${tspanDy}">${srNoLine}</tspan>`;
+          o += `</text>`;
         }
       }
     }
