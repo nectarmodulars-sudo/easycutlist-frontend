@@ -3307,18 +3307,22 @@ function doPrint(){
   closePrint();
 
   // A4 at 96dpi: 210mm = ~794px, 297mm = ~1123px
-  const PAGE_H_MM = 243;
-  const SVG_W_WITH = 60;
-  const SVG_W_WITHOUT = 100;
-
-  const svgPct = showPanelSummary ? SVG_W_WITH : SVG_W_WITHOUT;
-  const tablePct = 100 - svgPct - 2;
+  // Printable area with 10mm margins: 190mm wide × 277mm tall
+  // Header ~20mm, stats ~8mm, footer ~6mm → available for content ~243mm
+  // With summary: SVG gets 60% of 190mm = 114mm wide
+  // Without summary: SVG gets 190mm wide
+  const PAGE_H_MM = 243; // available content height in mm
+  const SVG_W_WITH = 60;   // % of page width for SVG when summary shown
+  const SVG_W_WITHOUT = 100; // % when no summary
 
   setTimeout(()=>{
     const printWin = window.open('','_blank');
     const sheets = document.querySelectorAll('.sheet-block');
     let sheetsHtml = '';
     sheets.forEach(s => { sheetsHtml += s.outerHTML; });
+
+    const svgPct = showPanelSummary ? SVG_W_WITH : SVG_W_WITHOUT;
+    const tablePct = 100 - svgPct - 2; // 2% gap
 
     const printHtml = '<!DOCTYPE html><html><head><meta charset="UTF-8">'
       + '<title>EasyCutList Cut Plan</title>'
@@ -3346,6 +3350,7 @@ function doPrint(){
       + '.sstat-label{font-size:6pt;color:#999;text-transform:uppercase}'
       + '.sstat-val{font-weight:700;font-size:7pt}'
       + '.sheet-layout-wrap{display:flex;gap:'+( showPanelSummary?'2%':'0')+'}'
+      // SVG wrapper — key: use height to constrain tall sheets
       + '.sheet-svg-wrap{flex:0 0 '+svgPct+'%;max-width:'+svgPct+'%}'
       + '.sheet-svg-wrap svg{width:100%;height:auto;max-height:'+PAGE_H_MM+'mm;display:block}'
       + (showPanelSummary
@@ -3356,10 +3361,11 @@ function doPrint(){
       + '.cuts-wrap{display:none}'
       + '.sheet-pg-num{display:flex!important;align-items:center;justify-content:space-between;font-size:7pt;color:#555;padding-top:3pt;border-top:1.5pt solid #ECB22E;margin-top:3pt;font-family:Arial}'
       + '.piece-dot{display:inline-block;width:7pt;height:7pt;border-radius:50%;margin-right:2pt;vertical-align:middle;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
+      // dims toggle
       + (showDims ? '' : '.sv-sz,[class*="pc"][class$="s"]{display:none!important}')
       + '</style>'
-      + '</head><body onload="setTimeout(()=>window.print(),300)">'
-      + '<div class="toolbar"><span class="info">Print preview — ' + sheets.length + ' sheet' + (sheets.length>1?'s':'') + ' · Press Ctrl+P or click Print → Save as PDF</span></div>'
+      + '</head><body>'
+      + '<div class="toolbar"><button onclick="window.print()">\uD83D\uDDA8 Print / Save as PDF</button><span class="info">Preview — ' + sheets.length + ' sheet' + (sheets.length>1?'s':'') + ' · Click Print then choose Save as PDF</span></div>'
       + '<div class="pages">'
       + Array.from(sheets).map(s => '<div class="page">'+s.outerHTML+'</div>').join('')
       + '</div>'

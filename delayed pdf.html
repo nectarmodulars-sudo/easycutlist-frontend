@@ -911,6 +911,8 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- Razorpay Checkout -->
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
 </head>
 <body>
 <header>
@@ -3307,66 +3309,116 @@ function doPrint(){
   closePrint();
 
   // A4 at 96dpi: 210mm = ~794px, 297mm = ~1123px
+  // Printable area with 10mm margins: 190mm wide × 277mm tall
   const PAGE_H_MM = 243;
   const SVG_W_WITH = 60;
   const SVG_W_WITHOUT = 100;
 
+  // Show generating overlay
+  let overlay = document.getElementById('pdf-gen-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'pdf-gen-overlay';
+    overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;z-index:99999';
+    overlay.innerHTML = '<div style="background:#3b1f3f;color:#f3e9f5;padding:28px 40px;border-radius:12px;text-align:center;font-family:system-ui,sans-serif">'
+      + '<div style="font-size:16px;font-weight:700;margin-bottom:8px" id="pdf-gen-msg">Generating PDF…</div>'
+      + '<div style="font-size:12px;color:#c9a7d0" id="pdf-gen-sub">Rendering sheets</div></div>';
+    document.body.appendChild(overlay);
+  }
+  overlay.style.display = 'flex';
+
   const svgPct = showPanelSummary ? SVG_W_WITH : SVG_W_WITHOUT;
   const tablePct = 100 - svgPct - 2;
 
-  setTimeout(()=>{
-    const printWin = window.open('','_blank');
-    const sheets = document.querySelectorAll('.sheet-block');
-    let sheetsHtml = '';
-    sheets.forEach(s => { sheetsHtml += s.outerHTML; });
+  setTimeout(async () => {
+    try {
+      const sheets = document.querySelectorAll('.sheet-block');
+      // Build hidden render container
+      const container = document.createElement('div');
+      container.id = 'pdf-render-container';
+      container.style.cssText = 'position:fixed;left:-9999px;top:0;width:794px;background:#fff;z-index:-1;font-family:Arial,sans-serif';
 
-    const printHtml = '<!DOCTYPE html><html><head><meta charset="UTF-8">'
-      + '<title>EasyCutList Cut Plan</title>'
-      + '<style>'
-      + 'html,body{margin:0;padding:0;background:#e8e8e8;font-family:Arial,sans-serif}'
-      + '@page{size:A4 portrait;margin:10mm}'
-      + '.toolbar{position:sticky;top:0;background:#3F0E40;color:#fff;padding:10px 16px;display:flex;align-items:center;gap:12px;z-index:100;box-shadow:0 2px 8px rgba(0,0,0,.2)}'
-      + '.toolbar button{background:#ECB22E;color:#3F0E40;border:none;border-radius:6px;padding:8px 20px;font-weight:700;font-size:14px;cursor:pointer}'
-      + '.toolbar .info{font-size:13px;opacity:.85}'
-      + '.pages{padding:20px;display:flex;flex-direction:column;align-items:center;gap:20px}'
-      + '.page{background:#fff;width:210mm;min-height:297mm;box-sizing:border-box;padding:10mm;box-shadow:0 2px 12px rgba(0,0,0,.15)}'
-      + '@media print{body{background:#fff}.toolbar{display:none}.pages{padding:0;gap:0}.page{box-shadow:none;width:auto;min-height:auto;padding:0;page-break-after:always}.page:last-child{page-break-after:auto}}'
-      + '.sheet-block{margin:0;padding:0;background:#fff}'
-      + '.print-custom-header{display:block}'
-      + '.sheet-header{display:flex;align-items:center;gap:6pt;padding:2pt 0;border-bottom:1pt solid #999;margin-bottom:2pt}'
-      + '.sh-name{font-size:11pt;font-weight:700}'
-      + '.sh-size{font-size:8pt;color:#666;font-family:monospace}'
-      + '.sheet-material-banner{font-family:monospace;font-size:'+matFont+'pt;font-weight:700;color:#1264A3;background:#EBF4FB;padding:1pt 6pt;border-radius:2pt}'
-      + '.sheet-waste-badge{font-size:7pt;padding:1pt 5pt;border-radius:2pt}'
-      + '.waste-good{background:#d4edda;color:#155724}'
-      + '.waste-warn{background:#fff3cd;color:#856404}'
-      + '.waste-bad{background:#ffe0e0;color:#c0002a}'
-      + '.sheet-stats{'+(showStats?'display:flex':'display:none')+';border-bottom:1pt solid #ccc;margin-bottom:2pt}'
-      + '.sstat{padding:1pt 5pt;border-right:1pt solid #ccc}'
-      + '.sstat-label{font-size:6pt;color:#999;text-transform:uppercase}'
-      + '.sstat-val{font-weight:700;font-size:7pt}'
-      + '.sheet-layout-wrap{display:flex;gap:'+( showPanelSummary?'2%':'0')+'}'
-      + '.sheet-svg-wrap{flex:0 0 '+svgPct+'%;max-width:'+svgPct+'%}'
-      + '.sheet-svg-wrap svg{width:100%;height:auto;max-height:'+PAGE_H_MM+'mm;display:block}'
-      + (showPanelSummary
-        ? '.sheet-panel-list{flex:0 0 '+tablePct+'%;max-width:'+tablePct+'%;border:1pt solid #3F0E40;border-radius:2pt;overflow:hidden;font-size:7.5pt}'
-        : '.sheet-panel-list{display:none}')
-      + '.no-screen{display:block!important}'
-      + '.cut-seq-wrap{'+(showCutSeq?'display:block':'display:none')+'}'
-      + '.cuts-wrap{display:none}'
-      + '.sheet-pg-num{display:flex!important;align-items:center;justify-content:space-between;font-size:7pt;color:#555;padding-top:3pt;border-top:1.5pt solid #ECB22E;margin-top:3pt;font-family:Arial}'
-      + '.piece-dot{display:inline-block;width:7pt;height:7pt;border-radius:50%;margin-right:2pt;vertical-align:middle;-webkit-print-color-adjust:exact;print-color-adjust:exact}'
-      + (showDims ? '' : '.sv-sz,[class*="pc"][class$="s"]{display:none!important}')
-      + '</style>'
-      + '</head><body onload="setTimeout(()=>window.print(),300)">'
-      + '<div class="toolbar"><span class="info">Print preview — ' + sheets.length + ' sheet' + (sheets.length>1?'s':'') + ' · Press Ctrl+P or click Print → Save as PDF</span></div>'
-      + '<div class="pages">'
-      + Array.from(sheets).map(s => '<div class="page">'+s.outerHTML+'</div>').join('')
-      + '</div>'
-      + '</body></html>';
+      const pageCss = document.createElement('style');
+      pageCss.textContent = `
+        #pdf-render-container *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+        #pdf-render-container .sheet-block{margin:0;padding:0;background:#fff}
+        #pdf-render-container .print-custom-header{display:block}
+        #pdf-render-container .sheet-header{display:flex;align-items:center;gap:6pt;padding:2pt 0;border-bottom:1pt solid #999;margin-bottom:2pt}
+        #pdf-render-container .sh-name{font-size:11pt;font-weight:700}
+        #pdf-render-container .sh-size{font-size:8pt;color:#666;font-family:monospace}
+        #pdf-render-container .sheet-material-banner{font-family:monospace;font-size:${matFont}pt;font-weight:700;color:#1264A3;background:#EBF4FB;padding:1pt 6pt;border-radius:2pt}
+        #pdf-render-container .sheet-waste-badge{font-size:7pt;padding:1pt 5pt;border-radius:2pt}
+        #pdf-render-container .waste-good{background:#d4edda;color:#155724}
+        #pdf-render-container .waste-warn{background:#fff3cd;color:#856404}
+        #pdf-render-container .waste-bad{background:#ffe0e0;color:#c0002a}
+        #pdf-render-container .sheet-stats{${showStats?'display:flex':'display:none'};border-bottom:1pt solid #ccc;margin-bottom:2pt}
+        #pdf-render-container .sstat{padding:1pt 5pt;border-right:1pt solid #ccc}
+        #pdf-render-container .sstat-label{font-size:6pt;color:#999;text-transform:uppercase}
+        #pdf-render-container .sstat-val{font-weight:700;font-size:7pt}
+        #pdf-render-container .sheet-layout-wrap{display:flex;gap:${showPanelSummary?'2%':'0'}}
+        #pdf-render-container .sheet-svg-wrap{flex:0 0 ${svgPct}%;max-width:${svgPct}%}
+        #pdf-render-container .sheet-svg-wrap svg{width:100%;height:auto;max-height:${PAGE_H_MM}mm;display:block}
+        ${showPanelSummary
+          ? `#pdf-render-container .sheet-panel-list{flex:0 0 ${tablePct}%;max-width:${tablePct}%;border:1pt solid #3F0E40;border-radius:2pt;overflow:hidden;font-size:7.5pt}`
+          : '#pdf-render-container .sheet-panel-list{display:none}'}
+        #pdf-render-container .no-screen{display:block!important}
+        #pdf-render-container .cut-seq-wrap{${showCutSeq?'display:block':'display:none'}}
+        #pdf-render-container .cuts-wrap{display:none}
+        #pdf-render-container .sheet-pg-num{display:flex!important;align-items:center;justify-content:space-between;font-size:7pt;color:#555;padding-top:3pt;border-top:1.5pt solid #ECB22E;margin-top:3pt;font-family:Arial}
+        #pdf-render-container .piece-dot{display:inline-block;width:7pt;height:7pt;border-radius:50%;margin-right:2pt;vertical-align:middle}
+        ${showDims ? '' : '#pdf-render-container .sv-sz,#pdf-render-container [class*="pc"][class$="s"]{display:none!important}'}
+      `;
+      document.head.appendChild(pageCss);
 
-    printWin.document.write(printHtml);
-    printWin.document.close();
+      // Build one div per sheet (each becomes one PDF page)
+      const pageDivs = [];
+      sheets.forEach(s => {
+        const page = document.createElement('div');
+        page.style.cssText = 'width:794px;min-height:1123px;box-sizing:border-box;padding:38px;background:#fff;overflow:hidden';
+        page.innerHTML = s.outerHTML;
+        container.appendChild(page);
+        pageDivs.push(page);
+      });
+      document.body.appendChild(container);
+
+      // Wait for layout to settle (fonts, SVG rendering)
+      await new Promise(r => setTimeout(r, 300));
+
+      const { jsPDF } = window.jspdf || window;
+      if (!jsPDF) throw new Error('jsPDF library not loaded. Check your internet connection and try again.');
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const pdfW = 210, pdfH = 297;
+
+      for (let i = 0; i < pageDivs.length; i++) {
+        document.getElementById('pdf-gen-sub').textContent = `Rendering sheet ${i+1} of ${pageDivs.length}`;
+        const canvas = await html2canvas(pageDivs[i], {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: '#ffffff',
+          logging: false,
+          width: 794,
+          windowWidth: 794,
+        });
+        const imgData = canvas.toDataURL('image/jpeg', 0.92);
+        if (i > 0) pdf.addPage();
+        pdf.addImage(imgData, 'JPEG', 0, 0, pdfW, pdfH);
+      }
+
+      // Generate filename with date
+      const d = new Date();
+      const fname = `EasyCutList_${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}.pdf`;
+      pdf.save(fname);
+
+      // Cleanup
+      container.remove();
+      pageCss.remove();
+    } catch (err) {
+      console.error('PDF generation failed:', err);
+      alert('PDF generation failed: ' + err.message);
+    } finally {
+      const ov = document.getElementById('pdf-gen-overlay');
+      if (ov) ov.style.display = 'none';
+    }
   }, 200);
 }
 
