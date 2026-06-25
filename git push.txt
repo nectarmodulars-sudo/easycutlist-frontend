@@ -1,4 +1,4 @@
 cd /mnt/project
 git add .
-git commit -m ""
+git commit -m "single window print"
 git push 

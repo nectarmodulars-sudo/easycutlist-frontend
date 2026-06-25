@@ -1589,7 +1589,7 @@ const SUPABASE_ANON_KEY = 'sb_publishable_nRwWXeWmRPKs6WqjPBm57w_MjfCP4zw';
 
 const supa = (window.supabase && window.supabase.createClient)
   ? window.supabase.createClient(SUPABASE_URL_FE, SUPABASE_ANON_KEY, {
-      auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: true }
+      auth: { autoRefreshToken: true, persistSession: true, detectSessionInUrl: true, flowType: 'pkce' }
     })
   : null;
 
