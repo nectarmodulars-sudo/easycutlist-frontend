@@ -2,3 +2,10 @@ cd /mnt/project
 git add .
 git commit -m "single window print"
 git push 
+
+
+
+npx http-server -p 3000
+
+
+node server.js

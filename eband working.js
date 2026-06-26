@@ -67,10 +67,9 @@ const EBand = (function () {
     const col = BAND_COLOR;
     let o = '';
     const ins = Math.min(INSET, pw * 0.28, ph * 0.28);
-    // Top and right edges carry the W/H dimension text, so push their band lines
-    // deeper inside — the dimension then sits in the clear strip between edge and line.
-    const insTop   = Math.min(INSET + 9, ph * 0.30);
-    const insRight = Math.min(INSET + 9, pw * 0.30);
+
+    // Size of the gap left in the band line so the dimension text reads through.
+    const GAP = 26;
 
     function badge(mx, my, val) {
       const txt = String(val);
@@ -83,24 +82,47 @@ const EBand = (function () {
       o += `<text x="${mx}" y="${my}" text-anchor="middle" dominant-baseline="central" font-size="9" font-family="sans-serif" font-weight="700" fill="#fff">${txt}</text>`;
     }
 
+    // Horizontal line from a→b at height yy, with a gap centred at gapAt (skip gap if 0 width).
+    function hLine(a, bX, yy, gapAt) {
+      if (gapAt == null) { o += `<line x1="${a}" y1="${yy}" x2="${bX}" y2="${yy}" stroke="${col}" stroke-width="${LINE_W}" stroke-linecap="round"/>`; return; }
+      const g1 = gapAt - GAP/2, g2 = gapAt + GAP/2;
+      if (g1 > a)  o += `<line x1="${a}" y1="${yy}" x2="${g1}" y2="${yy}" stroke="${col}" stroke-width="${LINE_W}" stroke-linecap="round"/>`;
+      if (g2 < bX) o += `<line x1="${g2}" y1="${yy}" x2="${bX}" y2="${yy}" stroke="${col}" stroke-width="${LINE_W}" stroke-linecap="round"/>`;
+    }
+    // Vertical line from a→b at xx, with a gap centred at gapAt.
+    function vLine(a, bY, xx, gapAt) {
+      if (gapAt == null) { o += `<line x1="${xx}" y1="${a}" x2="${xx}" y2="${bY}" stroke="${col}" stroke-width="${LINE_W}" stroke-linecap="round"/>`; return; }
+      const g1 = gapAt - GAP/2, g2 = gapAt + GAP/2;
+      if (g1 > a)  o += `<line x1="${xx}" y1="${a}" x2="${xx}" y2="${g1}" stroke="${col}" stroke-width="${LINE_W}" stroke-linecap="round"/>`;
+      if (g2 < bY) o += `<line x1="${xx}" y1="${g2}" x2="${xx}" y2="${bY}" stroke="${col}" stroke-width="${LINE_W}" stroke-linecap="round"/>`;
+    }
+
+    const cxMid = x + pw/2;   // where the width dimension sits (top edge, centred)
+    const cyMid = y + ph/2;   // where the height dimension sits (right edge, centred)
+
+    // TOP band: horizontal line, gap at horizontal centre (width dim)
     if (b.t > 0) {
-      const yy = y + insTop;
-      o += `<line x1="${x+ins}" y1="${yy}" x2="${x+pw-ins}" y2="${yy}" stroke="${col}" stroke-width="${LINE_W}" stroke-linecap="round"/>`;
+      const yy = y + ins;
+      hLine(x + ins, x + pw - ins, yy, cxMid);
       if (pw > 40) badge(x + pw * 0.25, yy, b.t);
     }
+    // BOTTOM band: horizontal line, no dim there → no gap
     if (b.b > 0) {
       const yy = y + ph - ins;
-      o += `<line x1="${x+ins}" y1="${yy}" x2="${x+pw-ins}" y2="${yy}" stroke="${col}" stroke-width="${LINE_W}" stroke-linecap="round"/>`;
+      hLine(x + ins, x + pw - ins, yy, null);
       if (pw > 40) badge(x + pw * 0.25, yy, b.b);
     }
+    // LEFT band: vertical line, gap at vertical centre (height dim is on the right,
+    //   but the centre label runs vertically through the middle — gap keeps it clear)
     if (b.l > 0) {
       const xx = x + ins;
-      o += `<line x1="${xx}" y1="${y+insTop}" x2="${xx}" y2="${y+ph-ins}" stroke="${col}" stroke-width="${LINE_W}" stroke-linecap="round"/>`;
+      vLine(y + ins, y + ph - ins, xx, cyMid);
       if (ph > 40) badge(xx, y + ph * 0.25, b.l);
     }
+    // RIGHT band: vertical line, gap at vertical centre (height dim)
     if (b.r > 0) {
-      const xx = x + pw - insRight;
-      o += `<line x1="${xx}" y1="${y+insTop}" x2="${xx}" y2="${y+ph-ins}" stroke="${col}" stroke-width="${LINE_W}" stroke-linecap="round"/>`;
+      const xx = x + pw - ins;
+      vLine(y + ins, y + ph - ins, xx, cyMid);
       if (ph > 40) badge(xx, y + ph * 0.25, b.r);
     }
     return o;
@@ -115,7 +137,6 @@ const EBand = (function () {
     wrap.innerHTML = `
       <div style="background:var(--sl-bg2,#3b1f3f);color:var(--text,#f3e9f5);border:1px solid var(--sl-line,#5e3565);border-radius:10px;padding:20px;width:560px;max-width:100%;font-family:system-ui,sans-serif">
         <div style="font-size:16px;font-weight:700;margin:0 0 14px">Edge Banding Setup</div>
-        <div id="eb-upgrade-banner" style="display:none;background:#ECB22E;color:#3a2400;padding:8px 12px;border-radius:6px;font-size:12px;margin-bottom:10px">⭐ Free preview: edge band effect shown on Sheet 1 only. <b>Upgrade to Pro</b> for all sheets.</div>
         <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:14px">
           <input type="checkbox" id="eb-deduct" checked style="width:18px;height:18px;accent-color:#2e9e4e">
           Deduct edge band thickness from cut size before optimizing
@@ -167,8 +188,6 @@ const EBand = (function () {
     renderGrid();
     document.getElementById('eb-deduct').checked = deductEnabled;
     document.getElementById('eband-modal').style.display = 'flex';
-    const banner = document.getElementById('eb-upgrade-banner');
-    if (banner) banner.style.display = (typeof hasFeature==='function' && hasFeature('edgeBanding')) ? 'none' : 'block';
   }
   function close() { document.getElementById('eband-modal').style.display = 'none'; }
 
