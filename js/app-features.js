@@ -332,6 +332,7 @@ function switchSaveTab(tab){
 }
 
 function openSaveProject(){
+  if(!hasFeature('saveProjects')){ showUpgrade('Save Projects'); return; }
   document.getElementById('sp-client').value = _resultClientName || '';
   document.getElementById('sp-status').value='draft';
   document.getElementById('sp-notes').value='';
@@ -357,7 +358,6 @@ function saveProject(){
     stocks: JSON.parse(JSON.stringify(stockRows)),
     kerf:   +document.getElementById('kerf').value||3,
     matchMat: document.getElementById('mat-toggle').checked,
-    allowRot: document.getElementById('grain-toggle').checked,
   };
 
   const isNew = document.getElementById('sp-existing-fields').style.display==='none';
@@ -488,7 +488,6 @@ function loadCutList(projId, clId){
   idC = Math.max(...(panelRows.map(r=>r.id)||[0]),...(stockRows.map(r=>r.id)||[0]),idC)+1;
   document.getElementById('kerf').value = cl.kerf||3;
   document.getElementById('mat-toggle').checked = cl.matchMat!==false;
-  document.getElementById('grain-toggle').checked = cl.allowRot!==false;
   renderPanels(); renderStock();
   closeProjects();
   document.getElementById('results').style.display='none';
