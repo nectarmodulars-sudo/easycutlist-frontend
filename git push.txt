@@ -9,3 +9,10 @@ npx http-server -p 3000
 
 
 node server.js
+
+
+taskkill /IM node.exe /F
+
+
+supabase service role key:
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJla2xyandzdmd0cmxpa3NvZHd1Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4MTM0NDcyNiwiZXhwIjoyMDk2OTIwNzI2fQ.1Z3usjCAn4WRn2otwomL_kCTagAP2fQnWuX0WBFWUbc
