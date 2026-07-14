@@ -81,14 +81,38 @@ const ASMModule = (() => {
     renderSBS();
     renderReadyItems();
 
-    // Show user email if logged in
-    const emailEl = document.getElementById('asm-user-email');
-    if (emailEl && typeof CURRENT_USER !== 'undefined' && CURRENT_USER) {
-      emailEl.textContent = CURRENT_USER.email || '';
-    }
+    // Show user email + login/logout state
+    updateAsmAuthUI();
 
     // Check ASM plan status
     await checkASMPlan();
+  }
+
+  function updateAsmAuthUI() {
+    const emailEl = document.getElementById('asm-user-email');
+    const loginBtn = document.getElementById('asm-login-btn');
+    const logoutBtn = document.getElementById('asm-logout-btn');
+    const loggedIn = (typeof CURRENT_USER !== 'undefined' && CURRENT_USER);
+    if (emailEl) emailEl.textContent = loggedIn ? (CURRENT_USER.email || '') : '';
+    if (loginBtn) loginBtn.style.display = loggedIn ? 'none' : '';
+    if (logoutBtn) logoutBtn.style.display = loggedIn ? '' : 'none';
+  }
+
+  function asmLogin() {
+    // Reuse the main app's Google login. Try known globals.
+    if (typeof signInWithGoogle === 'function') return signInWithGoogle();
+    if (typeof handleGoogleLogin === 'function') return handleGoogleLogin();
+    if (typeof login === 'function') return login();
+    showToast('Login unavailable — open the main page to sign in', 'error');
+  }
+
+  function asmLogout() {
+    if (typeof signOut === 'function') { signOut(); }
+    else if (typeof logout === 'function') { logout(); }
+    else if (typeof handleLogout === 'function') { handleLogout(); }
+    else { showToast('Logout unavailable', 'error'); return; }
+    // reflect immediately
+    setTimeout(updateAsmAuthUI, 300);
   }
 
   function closeASM() {
@@ -114,6 +138,8 @@ const ASMModule = (() => {
         <div class="asm-topbar-actions">
           <span id="asm-user-email" style="font-size:11px;color:rgba(255,255,255,.5);margin-right:8px"></span>
           <span id="asm-plan-badge" style="font-size:10px;padding:2px 8px;border-radius:3px;font-weight:700;margin-right:4px"></span>
+          <button class="asm-top-btn" id="asm-login-btn" onclick="ASMModule.asmLogin()" style="display:none;background:rgba(66,133,244,.25);color:#8AB4F8">Login</button>
+          <button class="asm-top-btn" id="asm-logout-btn" onclick="ASMModule.asmLogout()" style="display:none">Logout</button>
           <button class="asm-top-btn" onclick="ASMModule.closeASM()">← Optimizer</button>
           <button class="asm-top-btn" onclick="ASMModule.showProjects()">My ASM Projects</button>
           <button class="asm-top-btn asm-save-btn" onclick="ASMModule.saveProject()">Save</button>
@@ -157,11 +183,11 @@ const ASMModule = (() => {
             <span>READY ITEMS SPACE (RIS)</span>
             <span style="display:flex;align-items:center;gap:6px">
               <select id="asm-ris-sort" onchange="ASMModule.setRisSort(this.value)" title="Sort" style="background:#2A2D31;border:1px solid #3A3D42;color:#E8E8E8;border-radius:6px;padding:3px 6px;font-size:11px;cursor:pointer">
-                <option value="none">Sort: Default</option>
-                <option value="room">Sort: Room</option>
-                <option value="item">Sort: Item</option>
+                <option value="none">Sort</option>
+                <option value="room">Room</option>
+                <option value="item">Item</option>
               </select>
-              <button onclick="ASMModule.showImportModal()" title="Import sizes from file" style="background:rgba(236,178,46,.2);color:#ECB22E;border:none;border-radius:6px;width:26px;height:26px;font-size:18px;line-height:1;cursor:pointer">+</button>
+              <button onclick="ASMModule.showImportModal()" title="Add / Import sizes from Excel" style="background:rgba(46,182,125,.2);color:#2EB67D;border:none;border-radius:6px;height:26px;padding:0 8px;font-size:12px;font-weight:700;line-height:1;cursor:pointer;display:flex;align-items:center;gap:4px">▦ +</button>
             </span>
           </div>
           <div id="asm-ris-list" class="asm-ris-list"></div>
@@ -238,6 +264,7 @@ const ASMModule = (() => {
     renderCatalogue();
   }
 
+  let thumbnails = {};   // itemId -> {base64} loaded lazily
   async function loadCatalogue(force) {
     if (catalogue.length > 0 && !force) return;
     if (!currentCatalogue) { await loadCatalogueList(); }
@@ -246,6 +273,8 @@ const ASMModule = (() => {
       const data = await res.json();
       if (data.success) {
         catalogue = data.items;
+        thumbnails = {};
+        loadThumbnailsInBackground(currentCatalogue); // don't await — non-blocking
       } else {
         showToast('Failed to load catalogue', 'error');
       }
@@ -253,6 +282,18 @@ const ASMModule = (() => {
       console.error('loadCatalogue error:', err);
       showToast('Cannot reach server. Is backend running?', 'error');
     }
+  }
+
+  async function loadThumbnailsInBackground(catKey) {
+    try {
+      const res = await fetch(`${API_BASE}/thumbnails?catalogue=${encodeURIComponent(catKey)}`, { headers: authH() });
+      const data = await res.json();
+      if (data.success && catKey === currentCatalogue) {
+        thumbnails = data.thumbnails || {};
+        // if a gallery is currently open, refresh its thumbs
+        if (typeof refreshGalleryThumbs === 'function') refreshGalleryThumbs();
+      }
+    } catch (e) { /* thumbnails are optional; ignore */ }
   }
 
   function renderCatalogue(filter = '') {
@@ -307,9 +348,12 @@ const ASMModule = (() => {
     html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px">';
     items.forEach(it => {
       const isLocked = asmPlan !== 'pro' && !it.is_free;
-      const thumb = it.mainImage && it.mainImage.base64
-        ? `<img src="${it.mainImage.base64}" style="width:100%;height:110px;object-fit:contain;background:#fff;border-radius:6px">`
-        : `<div style="width:100%;height:110px;display:flex;align-items:center;justify-content:center;background:#222529;border-radius:6px;color:#555;font-size:30px">📦</div>`;
+      const t = thumbnails[it.id];
+      const thumb = (t && t.base64)
+        ? `<img src="${t.base64}" style="width:100%;height:110px;object-fit:contain;background:#fff;border-radius:6px">`
+        : (it.hasImage
+            ? `<div class="asm-thumb-ph" data-item="${it.id}" style="width:100%;height:110px;display:flex;align-items:center;justify-content:center;background:#222529;border-radius:6px;color:#555;font-size:13px">loading…</div>`
+            : `<div style="width:100%;height:110px;display:flex;align-items:center;justify-content:center;background:#222529;border-radius:6px;color:#555;font-size:30px">📦</div>`);
       html += `<div onclick="ASMModule.addToSBS('${it.id}')" style="cursor:pointer;background:#1e2024;border:1px solid #2A2D31;border-radius:8px;padding:10px;transition:border-color .15s" onmouseover="this.style.borderColor='#ECB22E'" onmouseout="this.style.borderColor='#2A2D31'">
         ${thumb}
         <div style="margin-top:8px;font-size:13px;color:#E8E8E8;text-align:center">${isLocked ? '🔒 ' : ''}${it.name}</div>
@@ -320,6 +364,19 @@ const ASMModule = (() => {
   }
 
   function exitGallery() { renderSBS(); }
+
+  function refreshGalleryThumbs() {
+    document.querySelectorAll('.asm-thumb-ph').forEach(ph => {
+      const id = ph.getAttribute('data-item');
+      const t = thumbnails[id];
+      if (t && t.base64) {
+        const img = document.createElement('img');
+        img.src = t.base64;
+        img.style.cssText = 'width:100%;height:110px;object-fit:contain;background:#fff;border-radius:6px';
+        ph.replaceWith(img);
+      }
+    });
+  }
 
   async function addToSBS(itemId) {
     // Plan gating — free users can only use free-flagged items
@@ -2243,7 +2300,7 @@ const ASMModule = (() => {
     init, openASM, closeASM,
     showImportModal, downloadSample, doImport,
     filterCatalogue, addToSBS, removeFromSBS,
-    updateInput, setRoomName, editOutput, saveToReady, reviewCheck, setRisSort,
+    updateInput, setRoomName, editOutput, saveToReady, reviewCheck, setRisSort, asmLogin, asmLogout,
     reopenReady, removeReady, clearReady, exportReady, exportToPDF, _runExport, sbsFont, switchCatalogue, showCategoryGallery, exitGallery, addManualRow, editManualRow,
     saveProject, showProjects, loadProject, deleteProject,
     showPricing, startASMPayment,
