@@ -457,6 +457,13 @@ const ASMModule = (() => {
     }
 
     body.innerHTML = sbsItems.map(inst => renderSBSItem(inst)).join('');
+
+    // Manual items: material/remark come from formulas driven by the inputs,
+    // so populate them once the table exists (including for empty rows).
+    sbsItems.forEach(inst => {
+      const s = activeItemSchemas[inst.itemId];
+      if (s && s.manualEntry) refreshManualRows(inst.instanceId);
+    });
   }
 
   function renderManualItem(inst, schema) {
@@ -511,7 +518,18 @@ const ASMModule = (() => {
     if (!inst) return;
     if (!inst.manualRows) inst.manualRows = [];
     inst.manualRows.push({ w:'', h:'', qty:'', material:'', remark:'' });
-    renderSBS();
+    const tbody = document.getElementById('manual_tbody_' + instanceId);
+    if (!tbody) { renderSBS(); return; }   // fallback
+    const idx = inst.manualRows.length - 1;
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td style="text-align:center;color:#7A7D82">' + (idx + 1) + '</td>' +
+      '<td><input class="asm-cell asm-cell-num" type="number" value="" onchange="ASMModule.editManualRow(\'' + instanceId + '\',' + idx + ',\'w\',this.value)"></td>' +
+      '<td><input class="asm-cell asm-cell-num" type="number" value="" onchange="ASMModule.editManualRow(\'' + instanceId + '\',' + idx + ',\'h\',this.value)"></td>' +
+      '<td><input class="asm-cell asm-cell-num" type="number" value="" onchange="ASMModule.editManualRow(\'' + instanceId + '\',' + idx + ',\'qty\',this.value)"></td>' +
+      '<td><input class="asm-cell" value="" readonly style="color:#9A9DA2"></td>' +
+      '<td><input class="asm-cell asm-cell-remark" value="" readonly style="color:#9A9DA2"></td>';
+    tbody.appendChild(tr);
   }
 
   async function editManualRow(instanceId, idx, field, value) {
@@ -673,14 +691,58 @@ const ASMModule = (() => {
 
     inst.inputs[key] = value;
 
+    // Manual-entry items have no formula outputs — recalc would wipe the manual table.
+    const mSchema = activeItemSchemas[inst.itemId];
+    if (mSchema && mSchema.manualEntry) {
+      clearTimeout(recalcTimers[instanceId]);
+      recalcTimers[instanceId] = setTimeout(() => refreshManualRows(instanceId), 300);
+      return;
+    }
+
     // Debounce recalc per instance (live on keystroke, but not flooding)
     clearTimeout(recalcTimers[instanceId]);
     recalcTimers[instanceId] = setTimeout(() => recalc(instanceId), 150);
   }
 
+  // Re-evaluate material/remark for filled manual rows when inputs (GSEC/SINGLE etc.) change.
+  async function refreshManualRows(instanceId) {
+    const inst = sbsItems.find(i => i.instanceId === instanceId);
+    if (!inst || !inst.manualRows) return;
+    for (let idx = 0; idx < inst.manualRows.length; idx++) {
+      const row = inst.manualRows[idx];
+      try {
+        const res = await fetch(`${API_BASE}/manual-row`, {
+          method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, authH()),
+          body: JSON.stringify({ itemId: inst.itemId, inputs: inst.inputs, row, catalogue: inst.catalogueKey || currentCatalogue })
+        });
+        const data = await res.json();
+        if (data.success) { row.material = data.material; row.remark = data.remark; }
+      } catch (e) { /* ignore per-row failure */ }
+    }
+    paintManualRows(inst);
+  }
+
+  // Update only the material/remark cells in place — never re-render the whole item
+  // (re-rendering would lose focus and, historically, wipe the manual table).
+  function paintManualRows(inst) {
+    const tbody = document.getElementById('manual_tbody_' + inst.instanceId);
+    if (!tbody) return;
+    Array.prototype.forEach.call(tbody.rows, function(tr, idx) {
+      const row = inst.manualRows[idx];
+      if (!row) return;
+      const cells = tr.querySelectorAll('input');
+      if (cells[3]) cells[3].value = row.material || '';
+      if (cells[4]) cells[4].value = row.remark || '';
+    });
+  }
+
   async function recalc(instanceId) {
     const inst = sbsItems.find(i => i.instanceId === instanceId);
     if (!inst) return;
+
+    // Manual items have no formula outputs — calling /calculate would blank the table.
+    const rSchema2 = activeItemSchemas[inst.itemId];
+    if (rSchema2 && rSchema2.manualEntry) return;
 
     try {
       const res = await fetch(`${API_BASE}/calculate`, {
@@ -704,6 +766,11 @@ const ASMModule = (() => {
 
   // Update only the output table (don't re-render whole item — keeps focus in inputs)
   function updateSBSItemOutputs(inst) {
+    // Manual-entry items own their table (manualRows). This function would
+    // overwrite it with the formula-output rendering — never run it for them.
+    const uSchema = activeItemSchemas[inst.itemId];
+    if (uSchema && uSchema.manualEntry) return;
+
     const itemEl = document.getElementById(inst.instanceId);
     if (!itemEl) return;
 
