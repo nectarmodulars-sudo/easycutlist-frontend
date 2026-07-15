@@ -1219,10 +1219,32 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
     <div class="modal-divider"></div>
 
     <div class="print-opt-row">
-      <div><div class="print-opt-label">Layout</div></div>
-      <div style="display:flex;gap:10px">
-        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;color:var(--sl-text)"><input type="radio" name="lbl-layout" id="lbl-4" value="4" checked> 4 per A4 (large)</label>
-        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer;color:var(--sl-text)"><input type="radio" name="lbl-layout" id="lbl-8" value="8"> 8 per A4 (compact)</label>
+      <div><div class="print-opt-label">Label sheet</div>
+           <div style="font-size:10px;color:var(--sl-muted);margin-top:2px">Compatible with NovaJet MPL stickers</div></div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select id="lbl-format" style="background:var(--sl-bg2);border:1px solid var(--sl-border2);color:var(--sl-text);border-radius:4px;padding:5px 8px;font-size:12px;min-width:230px">
+          <option value="06L">06L — 99 × 93 mm (6 per sheet)</option>
+          <option value="08L">08L — 100 × 72 mm (8 per sheet)</option>
+          <option value="08LA" selected>08LA — 90 × 55 mm (8 per sheet)</option>
+          <option value="12L">12L — 100 × 44 mm (12 per sheet)</option>
+          <option value="21L">21L — 63.5 × 38 mm (21 per sheet)</option>
+          <option value="24L">24L — 64 × 34 mm (24 per sheet)</option>
+          <option value="30L">30L — 67 × 27.5 mm (30 per sheet)</option>
+          <option value="48L">48L — 48 × 24 mm (48 per sheet)</option>
+        </select>
+        <button class="btn btn-accent" onclick="doExportLabels()" style="white-space:nowrap">Generate PDF</button>
+      </div>
+    </div>
+
+    <div class="print-opt-row">
+      <div><div class="print-opt-label">Print alignment</div>
+           <div style="font-size:10px;color:var(--sl-muted);margin-top:2px">Nudge if labels print slightly off</div></div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <label style="font-size:11px;color:var(--sl-muted)">X
+          <input type="number" id="lbl-offx" value="0" step="0.5" style="width:58px;background:var(--sl-bg2);border:1px solid var(--sl-border2);color:var(--sl-text);border-radius:4px;padding:5px 8px;font-size:12px;margin-left:4px"> mm</label>
+        <label style="font-size:11px;color:var(--sl-muted)">Y
+          <input type="number" id="lbl-offy" value="0" step="0.5" style="width:58px;background:var(--sl-bg2);border:1px solid var(--sl-border2);color:var(--sl-text);border-radius:4px;padding:5px 8px;font-size:12px;margin-left:4px"> mm</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:11px;color:var(--sl-muted);cursor:pointer"><input type="checkbox" id="lbl-guides"> Show cut guides</label>
       </div>
     </div>
 
@@ -1235,44 +1257,36 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
     </div>
 
     <div class="modal-divider"></div>
-    <div style="font-size:10px;font-weight:700;color:var(--sl-text3);letter-spacing:.8px;text-transform:uppercase;margin-bottom:8px">Panel layout fonts</div>
+    <div style="font-size:10px;font-weight:700;color:var(--sl-text3);letter-spacing:.8px;text-transform:uppercase;margin-bottom:8px">Sticker text sizes</div>
 
     <div class="print-opt-row">
       <div><div class="print-opt-label">Sr.No font size</div></div>
       <div class="print-font-row">
-        <input type="range" id="panel-srno-font" min="6" max="16" value="10" style="width:100px">
-        <span id="panel-srno-font-val" style="font-size:11px;color:var(--sl-text2);min-width:30px">10px</span>
+        <input type="range" id="panel-srno-font" min="8" max="48" value="22" style="width:100px">
+        <span id="panel-srno-font-val" style="font-size:11px;color:var(--sl-text2);min-width:30px">22px</span>
       </div>
     </div>
 
     <div class="print-opt-row">
       <div><div class="print-opt-label">Remark font size</div></div>
       <div class="print-font-row">
-        <input type="range" id="panel-remark-font" min="6" max="16" value="10" style="width:100px">
-        <span id="panel-remark-font-val" style="font-size:11px;color:var(--sl-text2);min-width:30px">10px</span>
+        <input type="range" id="panel-remark-font" min="6" max="36" value="14" style="width:100px">
+        <span id="panel-remark-font-val" style="font-size:11px;color:var(--sl-text2);min-width:30px">14px</span>
       </div>
     </div>
 
     <div class="print-opt-row">
       <div><div class="print-opt-label">Dimension font size</div></div>
       <div class="print-font-row">
-        <input type="range" id="panel-dim-font" min="6" max="14" value="9" style="width:100px">
-        <span id="panel-dim-font-val" style="font-size:11px;color:var(--sl-text2);min-width:30px">9px</span>
+        <input type="range" id="panel-dim-font" min="6" max="40" value="18" style="width:100px">
+        <span id="panel-dim-font-val" style="font-size:11px;color:var(--sl-text2);min-width:30px">18px</span>
       </div>
     </div>
 
     <div class="print-opt-row">
-      <div><div class="print-opt-label">Badge size</div></div>
+      <div><div class="print-opt-label">Material font size</div></div>
       <div class="print-font-row">
-        <input type="range" id="panel-badge-size" min="20" max="40" value="32" style="width:100px">
-        <span id="panel-badge-size-val" style="font-size:11px;color:var(--sl-text2);min-width:30px">32px</span>
-      </div>
-    </div>
-
-    <div class="print-opt-row">
-      <div><div class="print-opt-label">Badge font size</div></div>
-      <div class="print-font-row">
-        <input type="range" id="panel-badge-font" min="8" max="18" value="14" style="width:100px">
+        <input type="range" id="panel-badge-font" min="6" max="32" value="14" style="width:100px">
         <span id="panel-badge-font-val" style="font-size:11px;color:var(--sl-text2);min-width:30px">14px</span>
       </div>
     </div>

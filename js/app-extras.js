@@ -93,13 +93,42 @@ function openLabelExport(){
   const slider=document.getElementById('lbl-fontsize');
   const valEl=document.getElementById('lbl-fontsize-val');
   slider.oninput=()=>valEl.textContent=slider.value+'px';
+  // Sticker text size sliders — live value display
+  ['panel-srno-font','panel-remark-font','panel-dim-font','panel-badge-font'].forEach(id=>{
+    const s=document.getElementById(id), v=document.getElementById(id+'-val');
+    if(s&&v){ v.textContent=s.value+'px'; s.oninput=()=>v.textContent=s.value+'px'; }
+  });
   document.getElementById('label-modal').style.display='flex';
 }
 function closeLabelExport(){document.getElementById('label-modal').style.display='none';}
 
+// ══ NovaJet MPL label sheet geometry (official TechNova spec, A4 210×297mm) ══
+// top/side = margin to first label edge; vPitch/hPitch = label + gap (centre-to-centre pitch)
+const NOVAJET_FORMATS = {
+  '06L':  { name:'06L',  w:99,   h:93,   top:4.0,  side:4.0,  vPitch:97.0, hPitch:103.0, across:2, down:3  },
+  '08L':  { name:'08L',  w:100,  h:72,   top:4.5,  side:3.5,  vPitch:72.0, hPitch:103.0, across:2, down:4  },
+  '08LA': { name:'08LA', w:90,   h:55,   top:16.0, side:7.0,  vPitch:70.0, hPitch:106.0, across:2, down:4  },
+  '12L':  { name:'12L',  w:100,  h:44,   top:9.0,  side:4.0,  vPitch:47.0, hPitch:102.0, across:2, down:6  },
+  '21L':  { name:'21L',  w:63.5, h:38,   top:15.5, side:7.0,  vPitch:38.0, hPitch:66.0,  across:3, down:7  },
+  '24L':  { name:'24L',  w:64,   h:34,   top:12.5, side:6.0,  vPitch:34.0, hPitch:67.0,  across:3, down:8  },
+  '30L':  { name:'30L',  w:67,   h:27.5, top:4.0,  side:4.0,  vPitch:29.0, hPitch:68.0,  across:3, down:10 },
+  '48L':  { name:'48L',  w:48,   h:24,   top:5.0,  side:4.5,  vPitch:24.0, hPitch:51.0,  across:4, down:12 }
+};
+
 function doExportLabels(){
-  const perPage  = +document.querySelector('input[name="lbl-layout"]:checked').value;
+  const fmtKey   = document.getElementById('lbl-format')?.value || '08LA';
+  const F        = NOVAJET_FORMATS[fmtKey] || NOVAJET_FORMATS['08LA'];
+  const perPage  = F.across * F.down;
+  const offX     = parseFloat(document.getElementById('lbl-offx')?.value) || 0;
+  const offY     = parseFloat(document.getElementById('lbl-offy')?.value) || 0;
+  const guides   = document.getElementById('lbl-guides')?.checked;
   const fs       = +document.getElementById('lbl-fontsize').value;
+  // Per-field sizes (fall back to sensible ratios of the base font)
+  const gv = (id, def) => { const el = document.getElementById(id); const v = el ? +el.value : NaN; return isNaN(v) ? def : v; };
+  const fsSr     = gv('panel-srno-font',   Math.round(fs*1.8));
+  const fsRemark = gv('panel-remark-font', Math.round(fs*1.1));
+  const fsDim    = gv('panel-dim-font',    Math.round(fs*1.5));
+  const fsMat    = gv('panel-badge-font',  Math.round(fs*1.1));
   const showSrNo    = document.getElementById('lbl-srno').checked;
   const showSize    = document.getElementById('lbl-size').checked;
   const showRemark  = document.getElementById('lbl-remark').checked;
@@ -159,60 +188,76 @@ function doExportLabels(){
   });
   closeLabelExport();
 
-  const sW = perPage===4 ? '48%' : '48%';
-  const sH = perPage===4 ? '46%' : '22%';
+  // Sliders set the exact px size — no auto-scaling, so what you set is what prints.
+  // (Text is clipped by the label box if too large; reduce sliders or uncheck fields.)
+  const f = n => Math.max(4, +(+n).toFixed(1));
+  const padMm = F.h >= 44 ? 3 : (F.h >= 30 ? 2 : 1.2);
 
   let pages='';
   for(let i=0;i<stickers.length;i+=perPage){
     const batch=stickers.slice(i,i+perPage);
-    while(batch.length<perPage) batch.push(null);
 
-    const stickerHtml=batch.map(s=>{
-      if(!s) return `<div style="width:${sW};height:${sH};border:1px dashed #ddd;border-radius:8px;margin:1%;box-sizing:border-box;display:inline-block;vertical-align:top"></div>`;
+    const cells = batch.map((s, idx) => {
+      const col = idx % F.across;
+      const row = Math.floor(idx / F.across);
+      const x = (F.side + col * F.hPitch + offX).toFixed(2);
+      const y = (F.top  + row * F.vPitch + offY).toFixed(2);
+      const box = `position:absolute;left:${x}mm;top:${y}mm;width:${F.w}mm;height:${F.h}mm;` +
+                  `box-sizing:border-box;padding:${padMm}mm;overflow:hidden;` +
+                  `display:flex;flex-direction:column;` +
+                  // Tall labels (06L/08L) otherwise leave a big empty middle — centre the block.
+                  (F.h >= 60 ? 'justify-content:center;' : '') +
+                  (guides ? 'outline:0.2mm dashed #bbb;' : '');
+      if(!s) return `<div style="${box}"></div>`;
 
       let html='';
-      // Row 1: Sr.No (large, left) + Material (prominent, right)
-      html+=`<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">`;
-      html+= showSrNo&&s.srNo ? `<div style="font-size:${fs*1.8}px;font-weight:900;color:#111;font-family:Arial">#${esc(s.srNo)}</div>` : `<div></div>`;
-      html+= showMat ? `<div style="font-size:${fs*1.1}px;font-weight:900;color:#111;font-family:Arial;text-align:right;max-width:55%">${esc(s.material)}</div>` : '';
+      // Row 1: Sr.No (large, left) + Material (right)
+      html+=`<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:2mm">`;
+      html+= showSrNo&&s.srNo ? `<div style="font-size:${f(fsSr)}px;font-weight:900;color:#000;font-family:Arial;line-height:1.1">#${esc(s.srNo)}</div>` : `<div></div>`;
+      html+= showMat ? `<div style="font-size:${f(fsMat)}px;font-weight:900;color:#000;font-family:Arial;text-align:right;max-width:55%;line-height:1.1;word-break:break-word">${esc(s.material)}</div>` : '';
       html+=`</div>`;
 
-      // Row 2: Size big (W × H)
-      if(showSize) html+=`<div style="font-size:${fs*1.5}px;font-weight:700;color:#111;font-family:monospace;margin-bottom:6px">${esc(s.size)} <span style="font-size:${fs*0.9}px;font-weight:400;color:#555">mm</span></div>`;
+      // Row 2: Size (W × H)
+      if(showSize) html+=`<div style="font-size:${f(fsDim)}px;font-weight:700;color:#000;font-family:monospace;line-height:1.2;margin-top:1mm">${esc(s.size)} <span style="font-size:${f(fsDim*0.6)}px;font-weight:400;color:#444">mm</span></div>`;
 
-      // Row 3: Remark — use piece label directly (it IS the remark)
-      if(showRemark&&s.remark) html+=`<div style="font-size:${fs*1.1}px;font-weight:700;color:#111;margin-bottom:4px;padding:3px 0">${esc(s.remark)}</div>`;
+      // Row 3: Remark
+      if(showRemark&&s.remark) html+=`<div style="font-size:${f(fsRemark)}px;font-weight:700;color:#000;line-height:1.2;margin-top:0.8mm;overflow:hidden">${esc(s.remark)}</div>`;
 
-      // Bottom row: Sheet + Customer — black bold
-      html+=`<div style="margin-top:auto;padding-top:5px;border-top:1px solid #bbb;display:flex;justify-content:space-between;align-items:flex-end">`;
-      html+= showSheet ? `<div style="font-size:${fs*0.9}px;color:#111;font-weight:700">${esc(s.sheet)}</div>` : `<div></div>`;
-      html+= showCust&&customer ? `<div style="font-size:${fs*0.9}px;color:#111;font-weight:700;text-align:right">${esc(customer)}</div>` : '';
-      html+=`</div>`;
+      // Bottom: Sheet + Customer
+      if(showSheet || (showCust&&customer)){
+        html+=`<div style="${F.h>=60?'margin-top:2mm;':'margin-top:auto;'}padding-top:0.8mm;border-top:0.2mm solid #999;display:flex;justify-content:space-between;align-items:flex-end;gap:2mm">`;
+        html+= showSheet ? `<div style="font-size:${f(fs*0.9)}px;color:#000;font-weight:700;line-height:1.1">${esc(s.sheet)}</div>` : `<div></div>`;
+        html+= showCust&&customer ? `<div style="font-size:${f(fs*0.9)}px;color:#000;font-weight:700;text-align:right;line-height:1.1;overflow:hidden">${esc(customer)}</div>` : '';
+        html+=`</div>`;
+      }
 
-      return `<div style="width:${sW};height:${sH};border:2px solid #222;border-radius:8px;margin:1%;box-sizing:border-box;padding:12px;display:inline-flex;flex-direction:column;vertical-align:top;page-break-inside:avoid">${html}</div>`;
+      return `<div style="${box}">${html}</div>`;
     }).join('');
 
-    pages+=`<div style="width:210mm;height:297mm;page-break-after:always;display:flex;flex-wrap:wrap;align-content:flex-start;padding:8mm;box-sizing:border-box">${stickerHtml}</div>`;
+    pages+=`<div class="sheet" style="position:relative;width:210mm;height:297mm;page-break-after:always;overflow:hidden">${cells}</div>`;
   }
 
   const win=window.open('','_blank');
   win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
-  <title>Panel Labels — EasyCutList</title>
+  <title>Panel Labels — ${F.name} — EasyCutList</title>
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
-    body{font-family:Arial,sans-serif;background:#fff}
-    @media print{@page{size:A4 portrait;margin:0}body{margin:0}}
-    .no-print{display:flex;gap:10px;padding:12px 16px;background:#f5f5f5;border-bottom:1px solid #ddd;align-items:center}
-    @media print{.no-print{display:none!important}}
-    .ecl-footer{position:fixed;bottom:0;left:0;right:0;text-align:center;font-size:8px;color:#aaa;padding:4px;border-top:1px solid #eee;font-family:Arial;background:#fff}
-    @media screen{.ecl-footer{display:none}}
+    body{font-family:Arial,sans-serif;background:#e9e9e9}
+    .sheet{background:#fff;margin:0 auto 10mm;box-shadow:0 0 6px rgba(0,0,0,.2)}
+    @media print{
+      @page{size:A4 portrait;margin:0}
+      html,body{margin:0!important;padding:0!important;background:#fff}
+      .sheet{margin:0!important;box-shadow:none!important}
+      .no-print{display:none!important}
+    }
+    .no-print{display:flex;gap:10px;padding:12px 16px;background:#f5f5f5;border-bottom:1px solid #ddd;align-items:center;flex-wrap:wrap}
   </style></head><body>
   <div class="no-print">
-    <strong style="font-size:14px">Panel Labels — ${stickers.length} stickers</strong>
+    <strong style="font-size:14px">Panel Labels — ${stickers.length} stickers · NovaJet ${F.name} (${F.w}×${F.h}mm)</strong>
     <button onclick="window.print()" style="background:#007A5A;color:#fff;border:none;border-radius:4px;padding:7px 18px;font-weight:700;cursor:pointer;font-size:13px">🖨 Print</button>
-    <span style="font-size:11px;color:#666">Print dialog: margins=None, uncheck Headers &amp; Footers</span>
+    <span style="font-size:11px;color:#c00;font-weight:700">Important: set Margins = None and Scale = 100% (turn OFF "Fit to page"), uncheck Headers &amp; Footers.</span>
+    <span style="font-size:11px;color:#666">Tip: print on plain paper first and hold it against a label sheet to check alignment.</span>
   </div>
-  <div class="ecl-footer" style="display:flex;align-items:center;justify-content:center;gap:8px"><img src="data:image/png;base64,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" style="width:18px;height:18px;border-radius:3px"> <strong style="color:#3F0E40">EasyCutList</strong> &nbsp;·&nbsp; easycutlist.com &nbsp;·&nbsp; Generated: ${new Date().toLocaleDateString('en-IN')}</div>
   ${pages}</body></html>`);
   win.document.close();
 }
