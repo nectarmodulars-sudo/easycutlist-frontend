@@ -1,3 +1,27 @@
+// ══ UNITS (shared setting with ASM via localStorage 'ecl_unit') ══
+// All stored panel/stock dimensions stay in mm. Convert only at entry + display.
+function optUnit(){ return (window.UNITS ? UNITS.get() : 'mm'); }
+function d2mm(v){ return window.UNITS ? UNITS.toMM(v) : (+v||0); }        // display -> mm
+function mm2d(v){ return window.UNITS ? UNITS.fromMMNum(v) : v; }         // mm -> display number
+function populateOptUnits(){
+  const sel=document.getElementById('opt-units-select');
+  if(sel && window.UNITS) sel.innerHTML=UNITS.optionsHTML(UNITS.get());
+}
+function setOptUnit(u){
+  if(window.UNITS) UNITS.set(u);
+  renderPanels(); renderStock();
+  // re-render results if present
+  if(typeof _lastSheets!=='undefined' && _lastSheets && _lastSheets.length && typeof renderResults==='function'){
+    const scale=+document.getElementById('scale')?.value||1;
+    renderResults(_lastSheets,_lastUnfitted||[],scale);
+  }
+}
+// keep dropdown in sync if ASM changes the unit
+if(typeof window!=='undefined'){
+  window.addEventListener('ecl-unit-change',()=>{ populateOptUnits(); if(typeof renderPanels==='function'){renderPanels();renderStock();} });
+  document.addEventListener('DOMContentLoaded',populateOptUnits);
+}
+
 // ══ CLEAR ══
 function clearPanels(){if(panelRows.length&&!confirm('Clear all panels?'))return;panelRows=[];renderPanels()}
 function clearStock(){if(stockRows.length&&!confirm('Clear all stock sheets?'))return;stockRows=[];renderStock()}
@@ -18,7 +42,11 @@ function removePanel(id){
 }
 function updatePanel(id,f,v){
   const r=panelRows.find(r=>r.id===id);
-  if(r) r[f]=(f==='l'||f==='w'||f==='qty')?+v:v;
+  if(r){
+    if(f==='l'||f==='w') r[f]=d2mm(v);        // display -> mm
+    else if(f==='qty') r[f]=+v;
+    else r[f]=v;
+  }
   if(f==='material') autoPopulateStock();
 }
 
@@ -55,8 +83,8 @@ function toggleRot(id){const r=panelRows.find(r=>r.id===id);if(r){r.canRotate=!r
 function renderPanels(){
   document.getElementById('panels-tbody').innerHTML=panelRows.map((r,i)=>`<tr>
     <td style="text-align:center;color:rgba(255,255,255,.4);font-family:var(--mono);font-size:10px;user-select:none">${i+1}</td>
-    <td><input type="number" value="${r.l}" min="1" oninput="updatePanel(${r.id},'l',this.value)"></td>
-    <td><input type="number" value="${r.w}" min="1" oninput="updatePanel(${r.id},'w',this.value)"></td>
+    <td><input type="number" value="${mm2d(r.l)}" min="1" oninput="updatePanel(${r.id},'l',this.value)"></td>
+    <td><input type="number" value="${mm2d(r.w)}" min="1" oninput="updatePanel(${r.id},'w',this.value)"></td>
     <td><input type="number" value="${r.qty}" min="1" max="999" oninput="updatePanel(${r.id},'qty',this.value)"></td>
     <td>${matSel(r.material,`updatePanel(${r.id},'material',this.value)`,'matlist_p'+r.id)}</td>
     <td><input type="text" value="${esc(r.remark||'')}" placeholder="Remark" oninput="updatePanel(${r.id},'remark',this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();addPanel();const rows=document.querySelectorAll('#panels-tbody tr');const lastRow=rows[rows.length-1];if(lastRow)lastRow.querySelectorAll('input[type=number]')[0]?.focus()}"></td>
@@ -73,13 +101,13 @@ function addStock(label='',l=1210,w=2430,qty=1,material='Plywood',price=0,grainL
   renderStock();
 }
 function removeStock(id){stockRows=stockRows.filter(r=>r.id!==id);renderStock()}
-function updateStock(id,f,v){const r=stockRows.find(r=>r.id===id);if(r)r[f]=(f==='l'||f==='w'||f==='qty'||f==='price')?+v:(f==='grainLocked'?v:v)}
+function updateStock(id,f,v){const r=stockRows.find(r=>r.id===id);if(r){if(f==='l'||f==='w')r[f]=d2mm(v);else if(f==='qty'||f==='price')r[f]=+v;else r[f]=v;}}
 function toggleGrain(id){const r=stockRows.find(r=>r.id===id);if(r){r.grainLocked=!r.grainLocked;renderStock()}}
 function renderStock(){
   document.getElementById('stock-tbody').innerHTML=stockRows.map(r=>`<tr>
     <td><input type="text" value="${esc(r.label)}" oninput="updateStock(${r.id},'label',this.value)"></td>
-    <td><input type="number" value="${r.l}" min="1" oninput="updateStock(${r.id},'l',this.value)"></td>
-    <td><input type="number" value="${r.w}" min="1" oninput="updateStock(${r.id},'w',this.value)"></td>
+    <td><input type="number" value="${mm2d(r.l)}" min="1" oninput="updateStock(${r.id},'l',this.value)"></td>
+    <td><input type="number" value="${mm2d(r.w)}" min="1" oninput="updateStock(${r.id},'w',this.value)"></td>
     <td><input type="number" value="${r.qty}" min="1" max="99" oninput="updateStock(${r.id},'qty',this.value)"></td>
     <td>${matSel(r.material,`updateStock(${r.id},'material',this.value)`,'matlist_s'+r.id)}</td>
     <td><input type="number" value="${r.price||0}" min="0" step="50" placeholder="0" oninput="updateStock(${r.id},'price',this.value)" title="Price per sheet"></td>
@@ -177,7 +205,7 @@ function applyCSV(){
       // Stock: W,H,QTY,Material,Label,Price
       W=col0n;H=col1n;qty=Math.max(1,parseInt(cols[2])||1);mat=(cols[3]||'Plywood').trim()||'Plywood';
       const lbl=(cols[4]||'').trim(),price=parseFloat(cols[5])||0;
-      if(W>0&&H>0){addStock(lbl,W,H,qty,mat,price);imported++;}else errors++;
+      if(W>0&&H>0){addStock(lbl,d2mm(W),d2mm(H),qty,mat,price);imported++;}else errors++;
       continue;
     }
 
@@ -186,17 +214,17 @@ function applyCSV(){
       const rowNum=i+1;
       if(!W||!H||W<=0||H<=0){hardErrors.push(`Row ${rowNum} — Size is 0 or missing`);errors++;continue;}
       if(isNaN(W)||isNaN(H)){hardErrors.push(`Row ${rowNum} — Non-numeric size`);errors++;continue;}
-      // Warn: looks like inches
-      if(W<100&&H<100) warnings.push(`Row ${rowNum} — Size ${W}×${H} looks like inches, not mm`);
-      // Warn: too small
-      if(W<50||H<50) warnings.push(`Row ${rowNum} — Very small panel (${W}×${H}mm) — typo?`);
+      // Warn: looks like inches (only meaningful in mm mode)
+      if(optUnit()==='mm' && W<100&&H<100) warnings.push(`Row ${rowNum} — Size ${W}×${H} looks like inches, not mm`);
+      // Warn: too small (mm mode only — small numbers are normal in inch/cm)
+      if(optUnit()==='mm' && (W<50||H<50)) warnings.push(`Row ${rowNum} — Very small panel (${W}×${H}mm) — typo?`);
       // Warn: very high qty
       if(qty>50) warnings.push(`Row ${rowNum} — Qty ${qty} is unusually high`);
     }
 
     if(W>0&&H>0){
       const finalSr=srNo||(++autoSr);
-      addPanel(remark,W,H,qty,mat,true,finalSr);
+      addPanel(remark,d2mm(W),d2mm(H),qty,mat,true,finalSr);
       imported++;
     } else errors++;
   }

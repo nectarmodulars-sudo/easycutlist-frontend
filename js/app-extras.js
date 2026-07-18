@@ -1,6 +1,11 @@
 // ══ RESULT CLIENT NAME (customer name box in results) ══
 let _resultClientName = '';
 
+// Unit display helpers (dimensions stored in mm; convert for display only).
+function _xu(){ return (window.UNITS?UNITS.get():'mm'); }
+function _xd(mm){ return (window.UNITS?UNITS.fromMMNum(mm):Math.round(mm)); }
+function _xsuf(){ return ({mm:'mm',cm:'cm',m:'m',in:'in',generic:''})[_xu()]||''; }
+
 function onResultClientInput(val){
   _resultClientName = val.trim();
   const dropdown = document.getElementById('result-client-dropdown');
@@ -158,9 +163,9 @@ function doExportLabels(){
       const baseSr = globalPanelIdx >= 0 ? globalPanelIdx + 1 : p.piece.colorIdx + 1;
       const srDisplay = p.piece.instance > 1 ? `${baseSr}-${p.piece.instance}` : `${baseSr}`;
 
-      // Show original W×H from panel input
-      const dispW = panelMatch ? panelMatch.l : p.pw;
-      const dispH = panelMatch ? panelMatch.w : p.ph;
+      // Show original W×H from panel input, converted to the selected unit.
+      const dispW = _xd(panelMatch ? panelMatch.l : p.pw);
+      const dispH = _xd(panelMatch ? panelMatch.w : p.ph);
       const remark = panelMatch ? (panelMatch.remark || panelMatch.label || '') : (p.piece.label || '');
 
       stickers.push({
@@ -218,7 +223,7 @@ function doExportLabels(){
       html+=`</div>`;
 
       // Row 2: Size (W × H)
-      if(showSize) html+=`<div style="font-size:${f(fsDim)}px;font-weight:700;color:#000;font-family:monospace;line-height:1.2;margin-top:1mm">${esc(s.size)} <span style="font-size:${f(fsDim*0.6)}px;font-weight:400;color:#444">mm</span></div>`;
+      if(showSize) html+=`<div style="font-size:${f(fsDim)}px;font-weight:700;color:#000;font-family:monospace;line-height:1.2;margin-top:1mm">${esc(s.size)} <span style="font-size:${f(fsDim*0.6)}px;font-weight:400;color:#444">${_xsuf()}</span></div>`;
 
       // Row 3: Remark
       if(showRemark&&s.remark) html+=`<div style="font-size:${f(fsRemark)}px;font-weight:700;color:#000;line-height:1.2;margin-top:0.8mm;overflow:hidden">${esc(s.remark)}</div>`;
@@ -296,7 +301,7 @@ function renderOrderPreview(){
   if(!el) return;
   const matMap = {};
   for(const s of _lastSheets){
-    if(!matMap[s.material]) matMap[s.material] = { sheets:0, size:`${s.L}×${s.W}` };
+    if(!matMap[s.material]) matMap[s.material] = { sheets:0, size:`${_xd(s.L)} × ${_xd(s.W)}` };
     matMap[s.material].sheets++;
   }
   const MAT_COLORS=['#1264A3','#007A5A','#E8912D','#E01E5A','#611F69','#0F7173','#895129','#1F6B75'];
@@ -305,7 +310,7 @@ function renderOrderPreview(){
     <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--sl-border)">
       <div style="width:10px;height:10px;border-radius:2px;flex-shrink:0;background:${MAT_COLORS[i%MAT_COLORS.length]}"></div>
       <div style="flex:1;font-weight:700;color:var(--sl-text)">${esc(mat)}</div>
-      <div style="font-family:var(--mono);font-size:11px;color:var(--sl-text2)">${d.size} mm</div>
+      <div style="font-family:var(--mono);font-size:11px;color:var(--sl-text2)">${d.size} ${_xsuf()}</div>
       <div style="font-family:var(--mono);font-weight:900;font-size:14px;color:var(--sl-blue)">${d.sheets} sheet${d.sheets!==1?'s':''}</div>
     </div>`).join('')
   + (() => {
@@ -335,7 +340,7 @@ function renderOrderPreview(){
 function calcInnerLaminate(sheets){
   const matMap={};
   for(const s of sheets){
-    if(!matMap[s.material]) matMap[s.material]={sheets:0,size:`${s.L}×${s.W}`};
+    if(!matMap[s.material]) matMap[s.material]={sheets:0,size:`${_xd(s.L)} × ${_xd(s.W)}`};
     matMap[s.material].sheets++;
   }
   return Object.entries(matMap).map(([mat,d])=>{
@@ -350,7 +355,7 @@ function doExportOrderPDF(){
   const bizName    = document.getElementById('eo-biz')?.value.trim() || profile.biz || '';
   const matMap = {};
   for(const s of _lastSheets){
-    if(!matMap[s.material]) matMap[s.material] = { sheets:0, size:`${s.L}×${s.W}` };
+    if(!matMap[s.material]) matMap[s.material] = { sheets:0, size:`${_xd(s.L)} × ${_xd(s.W)}` };
     matMap[s.material].sheets++;
   }
   const date = new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
@@ -364,7 +369,7 @@ function doExportOrderPDF(){
           <strong>${esc(mat)}</strong>
         </div>
       </td>
-      <td style="padding:10px 14px;border-bottom:1px solid #eee;font-family:monospace;color:#555">${d.size} mm</td>
+      <td style="padding:10px 14px;border-bottom:1px solid #eee;font-family:monospace;color:#555">${d.size} ${_xsuf()}</td>
       <td style="padding:10px 14px;border-bottom:1px solid #eee;font-weight:900;font-size:18px;color:#1264A3;font-family:monospace">${d.sheets}</td>
     </tr>`).join('');
 
@@ -453,7 +458,7 @@ function doExportOrderExcel(){
   const date = new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
   const matMap = {};
   for(const s of _lastSheets){
-    if(!matMap[s.material]) matMap[s.material] = { sheets:0, size:`${s.L}×${s.W}` };
+    if(!matMap[s.material]) matMap[s.material] = { sheets:0, size:`${_xd(s.L)} × ${_xd(s.W)}` };
     matMap[s.material].sheets++;
   }
   const ebData = calcEdgeBanding(_lastSheets);
@@ -475,7 +480,7 @@ function doExportOrderExcel(){
   <p style="font-family:Arial;color:#888;font-size:11px"></p>
   <table border="1" style="font-family:Arial;border-collapse:collapse">
     <tr><th>Material</th><th>Sheet Size</th><th>Qty (Sheets)</th></tr>
-    ${Object.entries(matMap).map(([mat,d])=>`<tr><td>${esc(mat)}</td><td>${d.size} mm</td><td style="font-weight:900;font-size:16px;color:#1264A3">${d.sheets}</td></tr>`).join('')}
+    ${Object.entries(matMap).map(([mat,d])=>`<tr><td>${esc(mat)}</td><td>${d.size} ${_xsuf()}</td><td style="font-weight:900;font-size:16px;color:#1264A3">${d.sheets}</td></tr>`).join('')}
     <tr class="total"><td colspan="2" style="text-align:right;font-weight:900">TOTAL SHEETS:</td><td style="font-weight:900;font-size:18px;color:#1264A3">${_lastSheets.length}</td></tr>
     ${ilTotal2>0?`<tr style="background:#fdf3e7"><td colspan="2" style="font-weight:700;color:#7c4a00">Inner Laminate</td><td style="font-weight:900;color:#7c4a00">${ilTotal2}</td></tr>`:''}
   </table>

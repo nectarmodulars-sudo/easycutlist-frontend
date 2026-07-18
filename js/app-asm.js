@@ -162,12 +162,17 @@ const ASMModule = (() => {
 
         <!-- MIDDLE: Size Building Space -->
         <div class="asm-col asm-sbs">
-          <div class="asm-col-head" style="display:flex;align-items:center;justify-content:space-between">
+          <div class="asm-col-head" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
             <span>SIZE BUILDING SPACE (SBS)</span>
-            <span style="display:flex;align-items:center;gap:6px;font-size:11px;color:#7A7D82">font
-              <button onclick="ASMModule.sbsFont(-1)" style="width:22px;height:22px;background:#2A2D31;border:1px solid #3A3D42;border-radius:4px;color:#fff;cursor:pointer">−</button>
-              <span id="asm-sbs-font-val" style="min-width:20px;text-align:center;color:#ECB22E;font-weight:700">14</span>
-              <button onclick="ASMModule.sbsFont(1)" style="width:22px;height:22px;background:#2A2D31;border:1px solid #3A3D42;border-radius:4px;color:#fff;cursor:pointer">+</button>
+            <span style="display:flex;align-items:center;gap:10px;font-size:11px;color:#7A7D82">
+              <span style="display:flex;align-items:center;gap:5px">units
+                <select id="asm-units-select" onchange="ASMModule.setUnit(this.value)" title="Display units — all calculations stay in mm" style="background:#2A2D31;border:1px solid #3A3D42;color:#E8E8E8;border-radius:6px;padding:3px 6px;font-size:11px;cursor:pointer;max-width:150px"></select>
+              </span>
+              <span style="display:flex;align-items:center;gap:6px">font
+                <button onclick="ASMModule.sbsFont(-1)" style="width:22px;height:22px;background:#2A2D31;border:1px solid #3A3D42;border-radius:4px;color:#fff;cursor:pointer">−</button>
+                <span id="asm-sbs-font-val" style="min-width:20px;text-align:center;color:#ECB22E;font-weight:700">14</span>
+                <button onclick="ASMModule.sbsFont(1)" style="width:22px;height:22px;background:#2A2D31;border:1px solid #3A3D42;border-radius:4px;color:#fff;cursor:pointer">+</button>
+              </span>
             </span>
           </div>
           <div id="asm-cat-banner" style="padding:14px 16px;border-bottom:1px solid #2A2D31;display:none;align-items:center;gap:14px;flex-wrap:wrap">
@@ -443,7 +448,20 @@ const ASMModule = (() => {
     if (v) v.textContent = _sbsFont;
   }
 
+  function setUnit(mode) {
+    UNITS.set(mode);
+    // Re-render everything so inputs/outputs show in the new unit.
+    renderSBS();
+    if (typeof renderReadyItems === 'function') renderReadyItems();
+  }
+
+  function populateUnitSelect() {
+    const sel = document.getElementById('asm-units-select');
+    if (sel) sel.innerHTML = UNITS.optionsHTML(UNITS.get());
+  }
+
   function renderSBS() {
+    populateUnitSelect();
     const body = document.getElementById('asm-sbs-body');
     if (!body) return;
 
@@ -471,8 +489,10 @@ const ASMModule = (() => {
     const inputsHtml = schema.inputs.map(inp => {
       const val = inst.inputs[inp.key];
       let control;
-      if (inp.type === 'number') control = `<input type="number" value="${val}" oninput="ASMModule.updateInput('${inst.instanceId}','${inp.key}',this.value,'number')">`;
-      else control = `<input type="text" value="${val == null ? '' : val}" oninput="ASMModule.updateInput('${inst.instanceId}','${inp.key}',this.value,'text')">`;
+      if (inp.type === 'number') {
+        const dispVal = (val != null && UNITS.isDimension(inp)) ? UNITS.fromMMNum(val) : val;
+        control = `<input type="number" value="${dispVal}" oninput="ASMModule.updateInput('${inst.instanceId}','${inp.key}',this.value,'number')">`;
+      } else control = `<input type="text" value="${val == null ? '' : val}" oninput="ASMModule.updateInput('${inst.instanceId}','${inp.key}',this.value,'text')">`;
       return `<div class="asm-input-row"><label>${inp.label}</label>${control}</div>`;
     }).join('');
 
@@ -482,8 +502,8 @@ const ASMModule = (() => {
     const rowsHtml = inst.manualRows.map((row, idx) => `
       <tr>
         <td style="text-align:center;color:#7A7D82">${idx+1}</td>
-        <td><input class="asm-cell asm-cell-num" type="number" value="${row.w}" onchange="ASMModule.editManualRow('${inst.instanceId}',${idx},'w',this.value)"></td>
-        <td><input class="asm-cell asm-cell-num" type="number" value="${row.h}" onchange="ASMModule.editManualRow('${inst.instanceId}',${idx},'h',this.value)"></td>
+        <td><input class="asm-cell asm-cell-num" type="number" value="${row.w === '' ? '' : UNITS.fromMMNum(row.w)}" onchange="ASMModule.editManualRow('${inst.instanceId}',${idx},'w',this.value)"></td>
+        <td><input class="asm-cell asm-cell-num" type="number" value="${row.h === '' ? '' : UNITS.fromMMNum(row.h)}" onchange="ASMModule.editManualRow('${inst.instanceId}',${idx},'h',this.value)"></td>
         <td><input class="asm-cell asm-cell-num" type="number" value="${row.qty}" onchange="ASMModule.editManualRow('${inst.instanceId}',${idx},'qty',this.value)"></td>
         <td><input class="asm-cell" value="${row.material||''}" readonly style="color:#9A9DA2"></td>
         <td><input class="asm-cell asm-cell-remark" value="${row.remark||''}" readonly style="color:#9A9DA2"></td>
@@ -535,13 +555,17 @@ const ASMModule = (() => {
   async function editManualRow(instanceId, idx, field, value) {
     const inst = sbsItems.find(i => i.instanceId === instanceId);
     if (!inst || !inst.manualRows[idx]) return;
+    // w/h are dimensions -> store mm. qty stays a count. Empty stays empty.
+    if ((field === 'w' || field === 'h') && value !== '' && value != null) {
+      value = UNITS.toMM(value);
+    }
     inst.manualRows[idx][field] = value;
     const row = inst.manualRows[idx];
     if (row.w && row.h) {
       try {
         const res = await fetch(`${API_BASE}/manual-row`, {
           method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, authH()),
-          body: JSON.stringify({ itemId: inst.itemId, inputs: inst.inputs, row, catalogue: inst.catalogueKey || currentCatalogue })
+          body: JSON.stringify({ itemId: inst.itemId, inputs: inst.inputs, row, catalogue: inst.catalogueKey || currentCatalogue, unit: UNITS.get() })
         });
         const data = await res.json();
         if (data.success) {
@@ -568,7 +592,8 @@ const ASMModule = (() => {
       let control = '';
 
       if (inp.type === 'number') {
-        control = `<input type="number" value="${val}"
+        const dispVal = (val != null && UNITS.isDimension(inp)) ? UNITS.fromMMNum(val) : val;
+        control = `<input type="number" value="${dispVal}"
           min="${inp.min ?? ''}" max="${inp.max ?? ''}"
           oninput="ASMModule.updateInput('${inst.instanceId}','${inp.key}',this.value,'number')">`;
       } else if (inp.type === 'select') {
@@ -603,7 +628,7 @@ const ASMModule = (() => {
           let headerRow = '';
           if (o.subItem !== lastSub && o.subItem) {
             const d = subDims[o.subItem];
-            const dimLine = d ? `${d.w||'-'} × ${d.h||'-'}${d.d? ' × '+d.d : ''}${d.qty? ' · Qty '+d.qty : ''}` : '';
+            const dimLine = d ? `${d.w!=null?UNITS.fromMM(d.w):'-'} × ${d.h!=null?UNITS.fromMM(d.h):'-'}${d.d!=null? ' × '+UNITS.fromMM(d.d) : ''}${d.qty? ' · Qty '+d.qty : ''}` : '';
             headerRow = `<tr><td colspan="6" style="background:#2A2D31;padding:8px 10px;border-top:2px solid #ECB22E">
               <span style="color:#ECB22E;font-weight:700;font-size:13px">${o.subItem}</span>
               ${dimLine ? `<span style="color:#9A9DA2;font-size:11px;margin-left:10px">${dimLine}</span>` : ''}
@@ -613,8 +638,8 @@ const ASMModule = (() => {
           return headerRow + `
           <tr class="${o.conditional ? 'asm-out-conditional' : ''}">
             <td class="asm-out-name"><input class="asm-cell" value="${o.component}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'component',this.value)"></td>
-            <td class="asm-out-num"><input class="asm-cell asm-cell-num" type="number" value="${o.w}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'w',this.value)"></td>
-            <td class="asm-out-num"><input class="asm-cell asm-cell-num" type="number" value="${o.h}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'h',this.value)"></td>
+            <td class="asm-out-num"><input class="asm-cell asm-cell-num" type="number" value="${UNITS.fromMMNum(o.w)}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'w',this.value)"></td>
+            <td class="asm-out-num"><input class="asm-cell asm-cell-num" type="number" value="${UNITS.fromMMNum(o.h)}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'h',this.value)"></td>
             <td class="asm-out-num"><input class="asm-cell asm-cell-num" type="number" value="${o.qty}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'qty',this.value)"></td>
             <td><input class="asm-cell" value="${o.color || ''}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'color',this.value)"></td>
             <td class="asm-out-remark"><input class="asm-cell asm-cell-remark" value="${o.remark || ''}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'remark',this.value)"></td>
@@ -686,7 +711,14 @@ const ASMModule = (() => {
     const inst = sbsItems.find(i => i.instanceId === instanceId);
     if (!inst) return;
 
-    if (type === 'number') value = parseFloat(value) || 0;
+    if (type === 'number') {
+      value = parseFloat(value) || 0;
+      // Display units -> mm (canonical). Use schema unit when available so the
+      // setter matches the render logic exactly; else denylist by key.
+      const schema = activeItemSchemas[inst.itemId];
+      const inpDef = schema && schema.inputs ? schema.inputs.find(i => i.key === key) : null;
+      if (UNITS.isDimension(inpDef || key)) value = UNITS.toMM(value);
+    }
     if (type === 'boolean') value = !!value;
 
     inst.inputs[key] = value;
@@ -713,7 +745,7 @@ const ASMModule = (() => {
       try {
         const res = await fetch(`${API_BASE}/manual-row`, {
           method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, authH()),
-          body: JSON.stringify({ itemId: inst.itemId, inputs: inst.inputs, row, catalogue: inst.catalogueKey || currentCatalogue })
+          body: JSON.stringify({ itemId: inst.itemId, inputs: inst.inputs, row, catalogue: inst.catalogueKey || currentCatalogue, unit: UNITS.get() })
         });
         const data = await res.json();
         if (data.success) { row.material = data.material; row.remark = data.remark; }
@@ -748,7 +780,7 @@ const ASMModule = (() => {
       const res = await fetch(`${API_BASE}/calculate`, {
         method: 'POST',
         headers: Object.assign({ 'Content-Type': 'application/json' }, authH()),
-        body: JSON.stringify({ itemId: inst.itemId, inputs: inst.inputs, catalogue: inst.catalogueKey || currentCatalogue })
+        body: JSON.stringify({ itemId: inst.itemId, inputs: inst.inputs, catalogue: inst.catalogueKey || currentCatalogue, unit: UNITS.get() })
       });
       const data = await res.json();
 
@@ -787,15 +819,15 @@ const ASMModule = (() => {
             let hr = '';
             if (o.subItem !== lastSub2 && o.subItem) {
               const d = subDims2[o.subItem];
-              const dl = d ? `${d.w||'-'} × ${d.h||'-'}${d.d? ' × '+d.d : ''}${d.qty? ' · Qty '+d.qty : ''}` : '';
+              const dl = d ? `${d.w!=null?UNITS.fromMM(d.w):'-'} × ${d.h!=null?UNITS.fromMM(d.h):'-'}${d.d!=null? ' × '+UNITS.fromMM(d.d) : ''}${d.qty? ' · Qty '+d.qty : ''}` : '';
               hr = `<tr><td colspan="6" style="background:#2A2D31;padding:8px 10px;border-top:2px solid #ECB22E"><span style="color:#ECB22E;font-weight:700;font-size:13px">${o.subItem}</span>${dl?`<span style="color:#9A9DA2;font-size:11px;margin-left:10px">${dl}</span>`:''}</td></tr>`;
             }
             lastSub2 = o.subItem;
             return hr + `
             <tr class="${o.conditional ? 'asm-out-conditional' : ''}">
               <td class="asm-out-name"><input class="asm-cell" value="${o.component}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'component',this.value)"></td>
-              <td class="asm-out-num"><input class="asm-cell asm-cell-num" type="number" value="${o.w}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'w',this.value)"></td>
-              <td class="asm-out-num"><input class="asm-cell asm-cell-num" type="number" value="${o.h}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'h',this.value)"></td>
+              <td class="asm-out-num"><input class="asm-cell asm-cell-num" type="number" value="${UNITS.fromMMNum(o.w)}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'w',this.value)"></td>
+              <td class="asm-out-num"><input class="asm-cell asm-cell-num" type="number" value="${UNITS.fromMMNum(o.h)}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'h',this.value)"></td>
               <td class="asm-out-num"><input class="asm-cell asm-cell-num" type="number" value="${o.qty}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'qty',this.value)"></td>
               <td><input class="asm-cell" value="${o.color || ''}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'color',this.value)"></td>
               <td class="asm-out-remark"><input class="asm-cell asm-cell-remark" value="${o.remark || ''}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'remark',this.value)"></td>
@@ -868,6 +900,7 @@ const ASMModule = (() => {
     if (field === 'w' || field === 'h' || field === 'qty') {
       value = parseFloat(value) || 0;
       if (field === 'qty') value = Math.round(value);
+      else value = UNITS.toMM(value); // w/h: display units -> mm
     }
 
     inst.outputs[idx][field] = value;
@@ -1920,17 +1953,25 @@ const ASMModule = (() => {
 
     readyItems.forEach((it, idx) => {
       const inp = it.inputs;
-      const w = inp.width || inp.w || inp.W || '?';
-      const h = inp.ht || inp.h || inp.H || inp.height || '?';
-      const d = inp.depth || inp.d || inp.D || '?';
-      const dims = w + ' x ' + h + ' x ' + d + ' mm';
+      const _w = inp.width || inp.w || inp.W;
+      const _h = inp.ht || inp.h || inp.H || inp.height;
+      const _d = inp.depth || inp.d || inp.D;
+      const w = _w != null ? UNITS.fromMM(_w) : '?';
+      const h = _h != null ? UNITS.fromMM(_h) : '?';
+      const d = _d != null ? UNITS.fromMM(_d) : '?';
+      const _uLbl = (UNITS.MODES[UNITS.get()] || {}).label || '';
+      const dims = w + ' x ' + h + ' x ' + d + ' (' + _uLbl + ')';
       const totalPanels = it.outputs.reduce((a, o) => a + (o.qty || 0), 0);
       grandTotalPanels += totalPanels;
 
       // Input summary as clean table
       const inputRows = Object.entries(it.inputs)
         .filter(([k, v]) => v !== '' && v !== null && v !== undefined)
-        .map(([k, v]) => '<td style="padding:2px 8px;border:1px solid #ddd;font-weight:600;background:#f9f9f9;font-size:9px">' + k + '</td><td style="padding:2px 8px;border:1px solid #ddd;font-size:9px">' + v + '</td>')
+        .map(([k, v]) => {
+          let dv = v;
+          if (typeof v === 'number' && !UNITS.isCountKey(k)) dv = UNITS.fromMM(v);
+          return '<td style="padding:2px 8px;border:1px solid #ddd;font-weight:600;background:#f9f9f9;font-size:9px">' + k + '</td><td style="padding:2px 8px;border:1px solid #ddd;font-size:9px">' + dv + '</td>';
+        })
       
       // Show inputs in rows of 4 pairs each
       let inputTable = '<table style="width:100%;border-collapse:collapse;margin:2px 0"><tr>';
@@ -1944,7 +1985,8 @@ const ASMModule = (() => {
       const roomPrefix = it.roomName ? (String(it.roomName).trim() + ' — ') : '';
       html += '<div class="item-title">' + (idx + 1) + '. ' + roomPrefix + it.itemName + '  |  ' + dims + '  |  Qty: ' + (inp.qty || inp.Qty || 1) + '</div>';
       if (opt.outer) html += '<div class="item-inputs">' + inputTable + '</div>';
-      html += '<table><thead><tr><th>Sr</th><th>Component</th><th>W</th><th>H</th><th>Qty</th><th>Color</th><th>Remark</th><th>Box No</th></tr></thead><tbody>';
+      const _uAbbr = { generic:'', mm:' (mm)', cm:' (cm)', m:' (m)', in:' (in)', in_frac:' (in)', ft_in:' (ft-in)', ft_in_frac:' (ft-in)' }[UNITS.get()] || '';
+      html += '<table><thead><tr><th>Sr</th><th>Component</th><th>W' + _uAbbr + '</th><th>H' + _uAbbr + '</th><th>Qty</th><th>Color</th><th>Remark</th><th>Box No</th></tr></thead><tbody>';
 
       it.outputs.forEach((o) => {
         globalSrNo++;
@@ -1961,8 +2003,8 @@ const ASMModule = (() => {
         html += '<tr>';
         html += '<td>' + globalSrNo + '</td>';
         html += '<td>' + (o.component || '-') + '</td>';
-        html += '<td class="num">' + (o.w || 0) + '</td>';
-        html += '<td class="num">' + (o.h || 0) + '</td>';
+        html += '<td class="num">' + UNITS.fromMM(o.w || 0) + '</td>';
+        html += '<td class="num">' + UNITS.fromMM(o.h || 0) + '</td>';
         html += '<td class="num">' + (o.qty || 0) + '</td>';
         html += '<td>' + color + '</td>';
         html += '<td>' + remark + '</td>';
@@ -2368,7 +2410,7 @@ const ASMModule = (() => {
     showImportModal, downloadSample, doImport,
     filterCatalogue, addToSBS, removeFromSBS,
     updateInput, setRoomName, editOutput, saveToReady, reviewCheck, setRisSort, asmLogin, asmLogout,
-    reopenReady, removeReady, clearReady, exportReady, exportToPDF, _runExport, sbsFont, switchCatalogue, showCategoryGallery, exitGallery, addManualRow, editManualRow,
+    reopenReady, removeReady, clearReady, exportReady, exportToPDF, _runExport, sbsFont, setUnit, switchCatalogue, showCategoryGallery, exitGallery, addManualRow, editManualRow,
     saveProject, showProjects, loadProject, deleteProject,
     showPricing, startASMPayment,
     openImageModal, closeImageModal, modalNav

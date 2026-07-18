@@ -1,4 +1,9 @@
 // ══ RENDER ══
+// Unit display helpers (dimensions stored in mm; convert for display only).
+function _ru(){ return (window.UNITS?UNITS.get():'mm'); }
+function _ud(mm){ return (window.UNITS?UNITS.fromMMNum(mm):Math.round(mm)); }         // number in display unit
+function _uSuffix(){ return {mm:'mm',cm:'cm',m:'m',in:'in',generic:''}[_ru()]||''; }
+function _dim(w,h){ return _ud(w)+' × '+_ud(h); }                                       // "1200 × 600"
 function renderResults(sheets,unfitted,scale){
   _lastSheets=sheets; _lastUnfitted=unfitted; // save for export
   document.getElementById('empty-state').style.display='none';
@@ -13,7 +18,7 @@ function renderResults(sheets,unfitted,scale){
   const matMap={};
   for(const s of sheets){
     const m=s.material;
-    if(!matMap[m])matMap[m]={sheets:0,pieces:0,usedArea:0,totalArea:0,size:`${s.L}×${s.W}`,ebMm:0};
+    if(!matMap[m])matMap[m]={sheets:0,pieces:0,usedArea:0,totalArea:0,size:`${_dim(s.L,s.W)}`,ebMm:0};
     matMap[m].sheets++;
     matMap[m].totalArea+=s.L*s.W;
     for(const p of s.placed){
@@ -180,7 +185,7 @@ function renderResults(sheets,unfitted,scale){
     <div class="mat-rows" ${isPro()?'':`style="filter:blur(5px);pointer-events:none;user-select:none"`}>${matRowsHtml}</div>
   </div>
   ${!isPro()?'<div class="no-print" style="text-align:center;margin:-8px 0 12px;font-size:12px">⭐ <a href="#" onclick="showUpgrade(\'Material Summary\');return false" style="color:#ECB22E;text-decoration:none;font-weight:700">Upgrade to Pro</a> to view details</div>':''}`;
-  if(unfitted.length)html+=`<div class="unfitted-box"><div class="unfitted-title">⚠ ${unfitted.length} piece(s) could not be placed</div>${unfitted.map(p=>`<div class="unfitted-item">${esc(p.label)} — ${p.l}×${p.w}mm · ${esc(p.material)}</div>`).join('')}</div>`;
+  if(unfitted.length)html+=`<div class="unfitted-box"><div class="unfitted-title">⚠ ${unfitted.length} piece(s) could not be placed</div>${unfitted.map(p=>`<div class="unfitted-item">${esc(p.label)} — ${_dim(p.l,p.w)} ${_uSuffix()} · ${esc(p.material)}</div>`).join('')}</div>`;
 
   let si=0;
   for(const s of sheets){
@@ -200,7 +205,10 @@ function renderResults(sheets,unfitted,scale){
       const crGlobalIdx = crMatch ? panelRows.indexOf(crMatch) : -1;
       const crBaseSr = crGlobalIdx >= 0 ? crGlobalIdx + 1 : p.piece.colorIdx + 1;
       const crSrDisplay = p.piece.instance > 1 ? `${crBaseSr}-${p.piece.instance}` : `${crBaseSr}`;
-      return `<tr><td><span class="piece-dot" style="background:${PRINT_STROKES[p.piece.colorIdx%PRINT_STROKES.length]};-webkit-print-color-adjust:exact;print-color-adjust:exact"></span><strong>#${crSrDisplay}</strong></td><td>${p.pw} × ${p.ph}</td><td>${esc(s.material)}</td><td>${esc(crRemark)}</td></tr>`;
+      // Show entered dims (from original row), oriented to placement, not round-tripped geometry.
+      let cw=p.pw, ch=p.ph;
+      if(crMatch){ const rot=Math.abs(p.pw-crMatch.w)<Math.abs(p.pw-crMatch.l); cw=rot?crMatch.w:crMatch.l; ch=rot?crMatch.l:crMatch.w; }
+      return `<tr><td><span class="piece-dot" style="background:${PRINT_STROKES[p.piece.colorIdx%PRINT_STROKES.length]};-webkit-print-color-adjust:exact;print-color-adjust:exact"></span><strong>#${crSrDisplay}</strong></td><td>${_dim(cw,ch)}</td><td>${esc(s.material)}</td><td>${esc(crRemark)}</td></tr>`;
     }).join('');
 
     // Cut sequence section — numbers on diagram FREE, detailed table PRO only
@@ -234,9 +242,11 @@ function renderResults(sheets,unfitted,scale){
       const remark = plMatch ? (plMatch.remark || plMatch.label || '') : (p.piece.label || '');
       const bg = ri%2===0 ? '#fff' : '#f9f4f9';
       const cellStyle = `padding:3px 5px;border-bottom:1px solid #eee;vertical-align:top`;
+      let plw=p.pw, plh=p.ph;
+      if(plMatch){ const rot=Math.abs(p.pw-plMatch.w)<Math.abs(p.pw-plMatch.l); plw=rot?plMatch.w:plMatch.l; plh=rot?plMatch.l:plMatch.w; }
       return '<tr style="background:'+bg+'">'
         + '<td style="'+cellStyle+';border-right:1px solid #ddd;font-weight:700;color:#3F0E40;font-family:monospace;white-space:nowrap">#'+srDisplay+'</td>'
-        + '<td style="'+cellStyle+';border-right:1px solid #ddd;font-family:monospace;white-space:nowrap;font-size:7.5pt">'+p.pw+' × '+p.ph+'</td>'
+        + '<td style="'+cellStyle+';border-right:1px solid #ddd;font-family:monospace;white-space:nowrap;font-size:7.5pt">'+_dim(plw,plh)+'</td>'
         + '<td style="'+cellStyle+';word-break:break-word;white-space:normal;font-size:7.5pt;line-height:1.4">'+(remark?esc(remark):'')+'</td>'
         + '</tr>';
     }).join('');
@@ -246,7 +256,7 @@ function renderResults(sheets,unfitted,scale){
       <div class="sheet-header">
         <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
           <span class="sh-name" style="font-weight:700;font-size:14px">Sheet ${si}</span>
-          <span class="sh-size" style="font-family:var(--mono);font-size:11px;color:var(--sl-text2)">${s.L} × ${s.W} mm</span>
+          <span class="sh-size" style="font-family:var(--mono);font-size:11px;color:var(--sl-text2)">${_dim(s.L,s.W)} ${_uSuffix()}</span>
           <span class="sheet-material-banner">${esc(s.material)}</span>
           <span class="sheet-waste-badge ${wclass}">${wp}% waste</span>
         </div>
@@ -282,7 +292,7 @@ function renderResults(sheets,unfitted,scale){
         <div class="cuts-title">Cut List</div>
         <table class="cuts-table"><thead><tr><th>Sr.No</th><th>Size (mm)</th><th>Material</th><th>Remark</th></tr></thead><tbody>${cutRows}</tbody></table>
       </div>
-      <div class="sheet-pg-num" style="display:flex;align-items:center;justify-content:space-between;font-family:Arial,sans-serif;font-size:7pt;color:#555;padding-top:4pt;border-top:1.5pt solid #ECB22E;margin-top:4pt"><span style="display:flex;align-items:center;gap:4pt"><img src="data:image/png;base64,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" style="width:14pt;height:14pt;border-radius:3pt"> <strong style="color:#3F0E40">EasyCutList</strong> &nbsp;·&nbsp; easycutlist.com</span><span>Sheet ${si} of ${sheets.length} &nbsp;·&nbsp; ${esc(s.material)} &nbsp;·&nbsp; ${s.L}×${s.W} mm</span></div>
+      <div class="sheet-pg-num" style="display:flex;align-items:center;justify-content:space-between;font-family:Arial,sans-serif;font-size:7pt;color:#555;padding-top:4pt;border-top:1.5pt solid #ECB22E;margin-top:4pt"><span style="display:flex;align-items:center;gap:4pt"><img src="data:image/png;base64,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" style="width:14pt;height:14pt;border-radius:3pt"> <strong style="color:#3F0E40">EasyCutList</strong> &nbsp;·&nbsp; easycutlist.com</span><span>Sheet ${si} of ${sheets.length} &nbsp;·&nbsp; ${esc(s.material)} &nbsp;·&nbsp; ${_dim(s.L,s.W)} ${_uSuffix()}</span></div>
     </div>`;
   }
   el.innerHTML=html;

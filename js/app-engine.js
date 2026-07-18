@@ -63,8 +63,8 @@ async function calculate() {
         return {
           id:        p.id,
           label:     p.remark || p.label || '',  // remark is the new label field
-          w:         cut.l,
-          h:         cut.w,
+          w:         Math.round(cut.l),
+          h:         Math.round(cut.w),
           qty:       p.qty,
           material:  p.material,
           canRotate: true,
@@ -73,8 +73,8 @@ async function calculate() {
       }),
       stocks: stockRows.map(s => ({
         label:    s.label || '',
-        w:        s.l,
-        h:        s.w,
+        w:        Math.round(s.l),
+        h:        Math.round(s.w),
         qty:      s.qty,
         material: s.material,
         grainLocked: s.grainLocked || false,

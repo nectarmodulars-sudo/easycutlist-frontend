@@ -212,6 +212,10 @@ function doPrint(){
 // Each placed piece shows its own L×H label inside the rectangle — no segment ticks.
 
 function buildSVG(sheet, scale, customFonts={}) {
+  // Unit display: geometry stays mm, only label TEXT converts.
+  const _pu = (window.UNITS?UNITS.get():'mm');
+  const _pd = (mm)=> (window.UNITS?UNITS.fromMMNum(mm):Math.round(mm));
+  const _psuf = ({mm:'mm',cm:'cm',m:'m',in:'in',generic:''})[_pu]||'';
   const MAX_W = 580;
   const s  = Math.min(scale, MAX_W / sheet.L);
   const ML = 8, MT = 8, MR = 8, MB = 24;
@@ -278,8 +282,18 @@ function buildSVG(sheet, scale, customFonts={}) {
     const fs     = customSrNoFont || Math.min(13, Math.max(6, minDim / 6));
     const fsDim  = customDimFont || Math.max(6, fs * 0.88);
 
-    const widthTxt  = String(p.pw);
-    const heightTxt = String(p.ph);
+    // Show the ENTERED panel dimensions (from the original row), not the
+    // packer's round-tripped geometry — avoids drift like 14" -> 356mm -> 14.02".
+    // Orient to match placement: if the packer rotated the piece, swap w/h.
+    let origW = p.pw, origH = p.ph; // fallback: packer geometry (mm)
+    if (svgPanelMatch) {
+      const ol = svgPanelMatch.l, ow = svgPanelMatch.w; // stored mm (entered)
+      const rotated = Math.abs(p.pw - ow) < Math.abs(p.pw - ol);
+      origW = rotated ? ow : ol;
+      origH = rotated ? ol : ow;
+    }
+    const widthTxt  = String(_pd(origW));
+    const heightTxt = String(_pd(origH));
 
     // Text fill: black when blackText is on, otherwise the panel's screen/print colour
     const txtFill   = blackText ? '#000' : sc;
@@ -452,8 +466,8 @@ function buildSVG(sheet, scale, customFonts={}) {
   o += `<rect x="${ML}" y="${MT}" width="${bW}" height="${bH}" class="sv-bdr" stroke-width="1.5"/>`;
 
   // Simple total dimension labels — just one number per axis, centred below/right
-  o += `<text x="${ML + bW/2}" y="${MT + bH + 15}" text-anchor="middle" class="sv-sz">${sheet.L} mm</text>`;
-  o += `<text transform="rotate(-90,${ML+bW+MR-2},${MT+bH/2})" x="${ML+bW+MR-2}" y="${MT+bH/2}" text-anchor="middle" class="sv-sz">${sheet.W} mm</text>`;
+  o += `<text x="${ML + bW/2}" y="${MT + bH + 15}" text-anchor="middle" class="sv-sz">${_pd(sheet.L)} ${_psuf}</text>`;
+  o += `<text transform="rotate(-90,${ML+bW+MR-2},${MT+bH/2})" x="${ML+bW+MR-2}" y="${MT+bH/2}" text-anchor="middle" class="sv-sz">${_pd(sheet.W)} ${_psuf}</text>`;
 
   o += `</svg>`;
   return o;
