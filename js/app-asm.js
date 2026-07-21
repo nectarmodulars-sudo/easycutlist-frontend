@@ -99,7 +99,8 @@ const ASMModule = (() => {
   }
 
   function asmLogin() {
-    // Reuse the main app's Google login. Try known globals.
+    // Reuse the main app's Google login.
+    if (typeof signInGoogle === 'function') return signInGoogle();
     if (typeof signInWithGoogle === 'function') return signInWithGoogle();
     if (typeof handleGoogleLogin === 'function') return handleGoogleLogin();
     if (typeof login === 'function') return login();
@@ -131,16 +132,19 @@ const ASMModule = (() => {
     el.innerHTML = `
       <div class="asm-topbar">
         <div class="asm-title">
+          <button class="asm-drawer-btn asm-drawer-cs" onclick="ASMModule.toggleDrawer('cs')" aria-label="Catalogue">☰</button>
           <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABwAAAAcCAIAAAD9b0jDAAAD1UlEQVR42o1Vz2sdVRg95947P/KDvhTTSjCSFlNLhBbtsquCrkQ3iiiImyIIuhFcKbhxIV2IO7sQseBWBKH+Da5KF6UQxJ9Nk0pTheQlTWbezHzHxbyZN/OShcMsZu7c79zvO9/5zvDy4AqOXAQA6Lh1/Y9tbrwoSQLU7FOzVZ0b6iOoh6h2LUAAAZLjsDodEhgvHVMDxnn0cp2UEer1GqgJlCeqipX1UabgCe+lcVHs4ob6SU0WjsoLjnIOTpjzqnM+ltyywnDo40RJLLO2SAIKHVrkiCzn6VPl+1f/vfhcFrljG1QHozTcWU+vf/vEw+2QJjJNqAjtbhJlycGJ6vq1rZW1DI/9pBFsodoVAVw+l184n139cHlv34cgjXHh6i6BcA77B+71V4Yra1n2KCpyliXhML494AjWr6pKV4x4uO2fPp+98eru4wM6TjoZevpyeubMSIVzDlGMssRfGzGP6FPC8lIRxTKjCrd6duRcj6fQp40QKDiv3X330adLd9bTNBnXpbrNDnnuLqxlX362NZeKAkCyJ5LQ5b7tRJixWz/Pr/+W3PzuXpqYGQRCAuEd8hFfu7py6/bciy8Na3GrkZU6oGMtsCNCE+MIt+/OkJAQRQBQjEBHQFHUjhzR5CmIYFs+p0dYCEG7Q3f9xkkz0mH7UQBw+lQpg3PYHfrgNVUhm5fQh2qPV1Hg1GL5440NEm6h+uTjpyB9fu2B7XgAL799ZlRw7Bzqh6sHSk7OZf3ZDHRwxqoCABis7syxg4u6bQrd8e5bDgGaSIPZOMoqmE1z1Z7Q0MHQgevtFBC8kkSAkJhzAORSxZlAed9Vrbr4agxl6kgACNTO0N27H0eR/H51mBHgw8242vOlcXfPe9dlalqnmuaIKA/cpRcOVs+O3npvOU0ksCwB4M13zpDIc6yezS89f1geuDBr6vCndkwbYajxblUVTg7s6y+2NjajmhZ2dkhcWS6SGY0yqCuZRpqh03GY4c/7MWPIWOQIQeeezY+4qUBUuStymJEx/rgXVTaxMAJu4qbi3Kz98NNg89ckXSyiWN4BBVACJVG2D0RB7xVFSheLB78n398czM2a1TZQp3x5cIUTl8JhxqUniw/e/efiWh5c56d15CqNd39JvvpmcfPvaCY1M06S7YKOTWjEYsSFhcr7CV8iWHtKo5yqws6OjyIkicy6Hs7Q0acImiGOlMbKM07aKjUC6elvft4kNqPRaL2dqPbHV/fPBOenpkutttsQGTt/YrWDGto0NGWrmqJzgqgjHsxmCOsI1/oe+wHHVNCxJDV2qinfkAT8B++6/aS1MZ2hAAAAAElFTkSuQmCC" width="28" height="28" style="border-radius:6px">
           <span>Easy<span style="color:#ECB22E">CutList</span> AUTO SIZE MODULE (ASM)</span>
           <span id="asm-project-name" style="margin-left:14px;padding-left:14px;border-left:1px solid rgba(255,255,255,.2);font-size:13px;font-weight:500;color:rgba(255,255,255,.75)">Untitled</span>
         </div>
         <div class="asm-topbar-actions">
+          <button class="asm-drawer-btn asm-drawer-ris" onclick="ASMModule.toggleDrawer('ris')" aria-label="Ready items">▤ <span id="asm-ris-badge">0</span></button>
           <span id="asm-user-email" style="font-size:11px;color:rgba(255,255,255,.5);margin-right:8px"></span>
           <span id="asm-plan-badge" style="font-size:10px;padding:2px 8px;border-radius:3px;font-weight:700;margin-right:4px"></span>
           <button class="asm-top-btn" id="asm-login-btn" onclick="ASMModule.asmLogin()" style="display:none;background:rgba(66,133,244,.25);color:#8AB4F8">Login</button>
           <button class="asm-top-btn" id="asm-logout-btn" onclick="ASMModule.asmLogout()" style="display:none">Logout</button>
           <button class="asm-top-btn" onclick="ASMModule.closeASM()">← Optimizer</button>
+          <button class="asm-top-btn asm-newproj-btn" onclick="ASMModule.newProject()">+ New Project</button>
           <button class="asm-top-btn" onclick="ASMModule.showProjects()">My ASM Projects</button>
           <button class="asm-top-btn asm-save-btn" onclick="ASMModule.saveProject()">Save</button>
           <button class="asm-top-btn" id="asm-upgrade-btn" onclick="ASMModule.showPricing()" style="background:rgba(236,178,46,.3);color:#ECB22E">UPGRADE</button>
@@ -148,6 +152,7 @@ const ASMModule = (() => {
         </div>
       </div>
 
+      <div class="asm-scrim" id="asm-scrim" onclick="ASMModule.closeDrawers()"></div>
       <div class="asm-body">
         <!-- LEFT: Catalogue -->
         <div class="asm-col asm-catalogue">
@@ -199,8 +204,11 @@ const ASMModule = (() => {
           <div class="asm-ris-foot">
             <button class="asm-btn" data-review-check style="background:#ECB22E;color:#111;font-weight:700;transition:background .15s" onmouseover="this.style.background='#F5C443'" onmouseout="this.style.background='#ECB22E'" onclick="ASMModule.reviewCheck()">Review Check</button>
             <button class="asm-btn asm-btn-ghost" onclick="ASMModule.clearReady()">Clear</button>
-            <button class="asm-btn asm-btn-secondary" onclick="ASMModule.exportToPDF()">Export to PDF</button>
-            <button class="asm-btn asm-btn-primary" onclick="ASMModule.exportReady()">Export to Optimizer</button>
+            <div style="display:flex;gap:8px">
+              <button class="asm-btn asm-btn-secondary" style="flex:1" onclick="ASMModule.exportToPDF()">Export to PDF</button>
+              <button class="asm-btn asm-btn-primary" style="flex:1" onclick="ASMModule.exportReady()">Export to Optimizer</button>
+            </div>
+            <button class="asm-btn" style="background:#2EB67D;color:#fff;font-weight:700" onclick="ASMModule.makeQuotation()">Make Quotation</button>
           </div>
         </div>
       </div>
@@ -486,7 +494,7 @@ const ASMModule = (() => {
 
   function renderManualItem(inst, schema) {
     if (!inst.manualRows) inst.manualRows = Array.from({ length: 15 }, () => ({ w:'', h:'', qty:'', material:'', remark:'' }));
-    const inputsHtml = schema.inputs.map(inp => {
+    const inputsHtml = schema.inputs.filter(inp => { const _l=String(inp.label||'').trim().toLowerCase(); return _l && _l !== 'mm'; }).map(inp => {
       const val = inst.inputs[inp.key];
       let control;
       if (inp.type === 'number') {
@@ -587,7 +595,7 @@ const ASMModule = (() => {
     if (schema.manualEntry) return renderManualItem(inst, schema);
 
     // Build input fields
-    const inputsHtml = schema.inputs.map(inp => {
+    const inputsHtml = schema.inputs.filter(inp => { const _l=String(inp.label||'').trim().toLowerCase(); return _l && _l !== 'mm'; }).map(inp => {
       const val = inst.inputs[inp.key];
       let control = '';
 
@@ -1066,6 +1074,7 @@ const ASMModule = (() => {
   }
 
   function renderReadyItems() {
+    updateRisBadge();
     const list = document.getElementById('asm-ris-list');
     if (!list) return;
 
@@ -2405,8 +2414,52 @@ const ASMModule = (() => {
   }
 
   // ── Public API ──
+  function newProject() {
+    const hasWork = (sbsItems && sbsItems.length) || (readyItems && readyItems.length);
+    if (hasWork && !confirm('Start a new project? Unsaved items will be cleared.')) return;
+    sbsItems = [];
+    readyItems = [];
+    currentProjectId = null;
+    currentProjectName = '';
+    if (typeof currentClientName !== 'undefined') currentClientName = '';
+    syncProjectName();
+    renderSBS();
+    renderReadyItems();
+    closeDrawers();
+    showToast('New project started', 'success');
+  }
+
+  function toggleDrawer(which) {
+    const cs = document.querySelector('.asm-catalogue');
+    const ris = document.querySelector('.asm-ris');
+    const scrim = document.getElementById('asm-scrim');
+    const target = which === 'cs' ? cs : ris;
+    const other = which === 'cs' ? ris : cs;
+    if (!target) return;
+    const opening = !target.classList.contains('drawer-open');
+    if (other) other.classList.remove('drawer-open');
+    target.classList.toggle('drawer-open', opening);
+    if (scrim) scrim.classList.toggle('show', opening);
+  }
+  function closeDrawers() {
+    document.querySelectorAll('.asm-catalogue,.asm-ris').forEach(d => d.classList.remove('drawer-open'));
+    const scrim = document.getElementById('asm-scrim');
+    if (scrim) scrim.classList.remove('show');
+  }
+  function updateRisBadge() {
+    const b = document.getElementById('asm-ris-badge');
+    if (b) b.textContent = (readyItems && readyItems.length) || 0;
+  }
+
+  function makeQuotation() {
+    if (typeof window !== 'undefined' && window.ASMQuote) {
+      if (!readyItems || !readyItems.length) { showToast('No items in Ready Items — build and save first', 'error'); return; }
+      window.ASMQuote.open(readyItems);
+    } else { showToast('Quotation module not loaded', 'error'); }
+  }
+
   return {
-    init, openASM, closeASM,
+    init, openASM, closeASM, makeQuotation, newProject, toggleDrawer, closeDrawers,
     showImportModal, downloadSample, doImport,
     filterCatalogue, addToSBS, removeFromSBS,
     updateInput, setRoomName, editOutput, saveToReady, reviewCheck, setRisSort, asmLogin, asmLogout,
@@ -2718,10 +2771,56 @@ td .asm-cell-num { font-weight: 600; color: #ECB22E; }
 .asm-toast-info { background: #36C5F0; color: #1A1D21; }
 
 /* responsive */
+.asm-drawer-btn { display: none; }
+.asm-scrim { display: none; }
+
 @media (max-width: 900px) {
-  .asm-body { grid-template-columns: 1fr; grid-template-rows: auto 1fr auto; }
-  .asm-catalogue { max-height: 180px; }
-  .asm-ris { max-height: 200px; }
-  .asm-sbs-item-inputs { grid-template-columns: 1fr; }
+  .asm-drawer-btn {
+    display: inline-flex; align-items: center; gap: 5px; cursor: pointer;
+    background: rgba(255,255,255,.12); border: none; color: #fff;
+    height: 32px; padding: 0 10px; border-radius: 6px; font-size: 15px;
+    margin-right: 8px;
+  }
+  .asm-drawer-ris { background: rgba(236,178,46,.2); color: #ECB22E; font-size: 13px; }
+  #asm-ris-badge { font-weight: 700; }
+
+  /* Title: keep short, no wrap, don't collide with buttons */
+  .asm-title { min-width: 0; overflow: hidden; }
+  .asm-title > span:first-of-type {
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-size: 14px; max-width: 130px;
+  }
+  #asm-project-name { display: none; } /* project name hidden on mobile to save room */
+
+  /* Hide desktop-only topbar buttons on mobile; keep Save, New Project, Login/Logout */
+  .asm-topbar-actions .asm-top-btn:not(.asm-save-btn):not(#asm-upgrade-btn):not(.asm-newproj-btn):not(#asm-login-btn):not(#asm-logout-btn) { display: none; }
+  .asm-topbar-actions .asm-top-btn { padding: 5px 8px; font-size: 11px; }
+  .asm-topbar-actions #asm-user-email, .asm-topbar-actions #asm-plan-badge { display: none; }
+
+  /* SBS full-width; CS + RIS become slide-over drawers */
+  .asm-body { display: block; position: relative; overflow: hidden; }
+  .asm-col.asm-catalogue, .asm-col.asm-ris {
+    position: absolute; top: 0; bottom: 0; z-index: 60;
+    width: 84%; max-width: 330px; max-height: none;
+    transition: transform .25s ease;
+    background: #1A1D21;
+  }
+  .asm-catalogue { left: 0; transform: translateX(-100%); border-right: 1px solid rgba(255,255,255,.1); }
+  .asm-ris { right: 0; transform: translateX(100%); border-left: 1px solid rgba(255,255,255,.1); }
+  .asm-catalogue.drawer-open, .asm-ris.drawer-open { transform: translateX(0); }
+  .asm-sbs { width: 100%; height: 100%; }
+
+  .asm-scrim {
+    display: block; position: absolute; inset: 0; z-index: 50;
+    background: rgba(0,0,0,.5); opacity: 0; pointer-events: none;
+    transition: opacity .25s;
+  }
+  .asm-scrim.show { opacity: 1; pointer-events: auto; }
+
+  .asm-sbs-item-inputs { grid-template-columns: 1fr 1fr; }
+
+  /* Modals full-width on mobile, tables scroll horizontally */
+  #quote-overlay .q-modal { width: 96vw; }
+  .q-body, .asm-modal-body { overflow-x: auto; }
 }
 `;
