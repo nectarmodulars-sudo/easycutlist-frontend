@@ -513,8 +513,9 @@ const ASMModule = (() => {
         <td><input class="asm-cell asm-cell-num" type="number" value="${row.w === '' ? '' : UNITS.fromMMNum(row.w)}" onchange="ASMModule.editManualRow('${inst.instanceId}',${idx},'w',this.value)"></td>
         <td><input class="asm-cell asm-cell-num" type="number" value="${row.h === '' ? '' : UNITS.fromMMNum(row.h)}" onchange="ASMModule.editManualRow('${inst.instanceId}',${idx},'h',this.value)"></td>
         <td><input class="asm-cell asm-cell-num" type="number" value="${row.qty}" onchange="ASMModule.editManualRow('${inst.instanceId}',${idx},'qty',this.value)"></td>
-        <td><input class="asm-cell" value="${row.material||''}" readonly style="color:#9A9DA2"></td>
-        <td><input class="asm-cell asm-cell-remark" value="${row.remark||''}" readonly style="color:#9A9DA2"></td>
+        <td><input class="asm-cell" value="${row.material||''}" onchange="ASMModule.editManualRow('${inst.instanceId}',${idx},'material',this.value)"></td>
+        <td><input class="asm-cell asm-cell-remark" value="${row.remark||''}" onchange="ASMModule.editManualRow('${inst.instanceId}',${idx},'remark',this.value)"></td>
+        <td style="text-align:center"><button class="asm-row-del" title="Delete row" onclick="ASMModule.deleteManualRow('${inst.instanceId}',${idx})">✕</button></td>
       </tr>`).join('');
 
     return `
@@ -529,10 +530,11 @@ const ASMModule = (() => {
         <div class="asm-sbs-item-inputs">${inputsHtml}</div>
         <div class="asm-sbs-item-outputs">
           <table class="asm-out-table" id="manual_tbody_wrap_${inst.instanceId}">
-            <thead><tr><th>Sr</th><th>W</th><th>H</th><th>Qty</th><th>Material</th><th>Remark</th></tr></thead>
+            <thead><tr><th>Sr</th><th>W</th><th>H</th><th>Qty</th><th>Material</th><th>Remark</th><th></th></tr></thead>
             <tbody id="manual_tbody_${inst.instanceId}">${rowsHtml}</tbody>
           </table>
-          <button onclick="ASMModule.addManualRow('${inst.instanceId}')" style="margin:10px 0;background:#2A2D31;border:1px solid #3A3D42;color:#ECB22E;border-radius:6px;padding:6px 14px;font-size:12px;cursor:pointer">+ Add Row</button>
+          <button onclick="ASMModule.addManualRow('${inst.instanceId}')" style="margin:10px 8px 10px 0;background:#2A2D31;border:1px solid #3A3D42;color:#ECB22E;border-radius:6px;padding:6px 14px;font-size:12px;cursor:pointer">+ Add Row</button>
+          <button onclick="ASMModule.addManualRowsPrompt('${inst.instanceId}')" style="margin:10px 0;background:#2A2D31;border:1px solid #3A3D42;color:#ECB22E;border-radius:6px;padding:6px 14px;font-size:12px;cursor:pointer">+ Add Multiple Rows</button>
         </div>
         <div class="asm-sbs-item-actions">
           <button class="asm-btn asm-btn-ghost" onclick="ASMModule.removeFromSBS('${inst.instanceId}')">Cancel</button>
@@ -555,20 +557,29 @@ const ASMModule = (() => {
       '<td><input class="asm-cell asm-cell-num" type="number" value="" onchange="ASMModule.editManualRow(\'' + instanceId + '\',' + idx + ',\'w\',this.value)"></td>' +
       '<td><input class="asm-cell asm-cell-num" type="number" value="" onchange="ASMModule.editManualRow(\'' + instanceId + '\',' + idx + ',\'h\',this.value)"></td>' +
       '<td><input class="asm-cell asm-cell-num" type="number" value="" onchange="ASMModule.editManualRow(\'' + instanceId + '\',' + idx + ',\'qty\',this.value)"></td>' +
-      '<td><input class="asm-cell" value="" readonly style="color:#9A9DA2"></td>' +
-      '<td><input class="asm-cell asm-cell-remark" value="" readonly style="color:#9A9DA2"></td>';
+      '<td><input class="asm-cell" value="" onchange="ASMModule.editManualRow(\'' + instanceId + '\',' + idx + ',\'material\',this.value)"></td>' +
+      '<td><input class="asm-cell asm-cell-remark" value="" onchange="ASMModule.editManualRow(\'' + instanceId + '\',' + idx + ',\'remark\',this.value)"></td>' +
+      '<td style="text-align:center"><button class="asm-row-del" title="Delete row" onclick="ASMModule.deleteManualRow(\'' + instanceId + '\',' + idx + ')">✕</button></td>';
     tbody.appendChild(tr);
   }
 
   async function editManualRow(instanceId, idx, field, value) {
     const inst = sbsItems.find(i => i.instanceId === instanceId);
     if (!inst || !inst.manualRows[idx]) return;
+    const row = inst.manualRows[idx];
     // w/h are dimensions -> store mm. qty stays a count. Empty stays empty.
     if ((field === 'w' || field === 'h') && value !== '' && value != null) {
       value = UNITS.toMM(value);
     }
-    inst.manualRows[idx][field] = value;
-    const row = inst.manualRows[idx];
+    row[field] = value;
+    // Mark material/remark as user-overridden so the server round-trip won't wipe them.
+    if (field === 'material' || field === 'remark') {
+      if (!row._editedFields) row._editedFields = {};
+      row._editedFields[field] = (value !== '' && value != null);
+      return; // no server call needed for a manual material/remark edit
+    }
+    // For w/h/qty edits, ask server for suggested material/remark — but never
+    // overwrite a field the user has already typed into.
     if (row.w && row.h) {
       try {
         const res = await fetch(`${API_BASE}/manual-row`, {
@@ -577,16 +588,47 @@ const ASMModule = (() => {
         });
         const data = await res.json();
         if (data.success) {
-          row.material = data.material; row.remark = data.remark;
-          // update only this row's material/remark cells
+          const ef = row._editedFields || {};
+          if (!ef.material) row.material = data.material;
+          if (!ef.remark)   row.remark   = data.remark;
           const tbody = document.getElementById('manual_tbody_' + instanceId);
           if (tbody && tbody.rows[idx]) {
-            tbody.rows[idx].cells[4].querySelector('input').value = data.material;
-            tbody.rows[idx].cells[5].querySelector('input').value = data.remark;
+            const ins = tbody.rows[idx].querySelectorAll('input');
+            // ins: [w,h,qty,material,remark]
+            if (!ef.material && ins[3]) ins[3].value = row.material || '';
+            if (!ef.remark && ins[4])   ins[4].value = row.remark || '';
           }
         }
       } catch (e) {}
     }
+  }
+
+  function deleteManualRow(instanceId, idx) {
+    const inst = sbsItems.find(i => i.instanceId === instanceId);
+    if (!inst || !inst.manualRows) return;
+    inst.manualRows.splice(idx, 1);
+    if (!inst.manualRows.length) inst.manualRows.push({ w:'', h:'', qty:'', material:'', remark:'' });
+    renderSBS();
+  }
+
+  // Delete a formula-item output row. NOTE: this removes the row from the
+  // current output set only. If the user later changes an INPUT dimension,
+  // a full recalc regenerates all rows and the deletion is undone by design.
+  function deleteOutputRow(instanceId, idx) {
+    const inst = sbsItems.find(i => i.instanceId === instanceId);
+    if (!inst || !inst.outputs || !inst.outputs[idx]) return;
+    inst.outputs.splice(idx, 1);
+    updateSBSItemOutputs(inst);
+  }
+
+  function addManualRowsPrompt(instanceId) {
+    const n = parseInt(prompt('How many rows to add?', '5'), 10);
+    if (!n || n < 1) return;
+    const inst = sbsItems.find(i => i.instanceId === instanceId);
+    if (!inst) return;
+    if (!inst.manualRows) inst.manualRows = [];
+    for (let i = 0; i < n; i++) inst.manualRows.push({ w:'', h:'', qty:'', material:'', remark:'' });
+    renderSBS();
   }
 
   function renderSBSItem(inst) {
@@ -689,7 +731,7 @@ const ASMModule = (() => {
           <table class="asm-out-table">
             <thead>
               <tr>
-                <th>Component</th><th>W</th><th>H</th><th>Qty</th><th>Color</th><th>Remark</th>
+                <th>Component</th><th>W</th><th>H</th><th>Qty</th><th>Color</th><th>Remark</th><th></th>
               </tr>
             </thead>
             <tbody>${outputsHtml}</tbody>
@@ -756,7 +798,11 @@ const ASMModule = (() => {
           body: JSON.stringify({ itemId: inst.itemId, inputs: inst.inputs, row, catalogue: inst.catalogueKey || currentCatalogue, unit: UNITS.get() })
         });
         const data = await res.json();
-        if (data.success) { row.material = data.material; row.remark = data.remark; }
+        if (data.success) {
+          const ef = row._editedFields || {};
+          if (!ef.material) row.material = data.material;
+          if (!ef.remark)   row.remark   = data.remark;
+        }
       } catch (e) { /* ignore per-row failure */ }
     }
     paintManualRows(inst);
@@ -822,13 +868,13 @@ const ASMModule = (() => {
       (inst.subItems || []).forEach(si => { subDims2[si.name] = si; });
       let lastSub2 = undefined;
       tbody.innerHTML = inst.outputs.length === 0
-        ? `<tr><td colspan="6" class="asm-out-empty">Fill inputs to calculate…</td></tr>`
+        ? `<tr><td colspan="7" class="asm-out-empty">Fill inputs to calculate…</td></tr>`
         : inst.outputs.map((o, idx) => {
             let hr = '';
             if (o.subItem !== lastSub2 && o.subItem) {
               const d = subDims2[o.subItem];
               const dl = d ? `${d.w!=null?UNITS.fromMM(d.w):'-'} × ${d.h!=null?UNITS.fromMM(d.h):'-'}${d.d!=null? ' × '+UNITS.fromMM(d.d) : ''}${d.qty? ' · Qty '+d.qty : ''}` : '';
-              hr = `<tr><td colspan="6" style="background:#2A2D31;padding:8px 10px;border-top:2px solid #ECB22E"><span style="color:#ECB22E;font-weight:700;font-size:13px">${o.subItem}</span>${dl?`<span style="color:#9A9DA2;font-size:11px;margin-left:10px">${dl}</span>`:''}</td></tr>`;
+              hr = `<tr><td colspan="7" style="background:#2A2D31;padding:8px 10px;border-top:2px solid #ECB22E"><span style="color:#ECB22E;font-weight:700;font-size:13px">${o.subItem}</span>${dl?`<span style="color:#9A9DA2;font-size:11px;margin-left:10px">${dl}</span>`:''}</td></tr>`;
             }
             lastSub2 = o.subItem;
             return hr + `
@@ -839,6 +885,7 @@ const ASMModule = (() => {
               <td class="asm-out-num"><input class="asm-cell asm-cell-num" type="number" value="${o.qty}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'qty',this.value)"></td>
               <td><input class="asm-cell" value="${o.color || ''}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'color',this.value)"></td>
               <td class="asm-out-remark"><input class="asm-cell asm-cell-remark" value="${o.remark || ''}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'remark',this.value)"></td>
+              <td style="text-align:center"><button class="asm-row-del" title="Delete row" onclick="ASMModule.deleteOutputRow('${inst.instanceId}',${idx})">✕</button></td>
             </tr>`;
           }).join('');
     }
@@ -890,15 +937,55 @@ const ASMModule = (() => {
       });
       const data = await res.json();
       if (data.success && data.updates) {
+        const changed = [];
         data.updates.forEach(u => {
           if (u.value === '' || u.value == null) return;
           // don't overwrite the just-edited cell
           if (inst.outputs[u.idx].cellRefs && inst.outputs[u.idx].cellRefs[fmap[u.field]] === editedCell) return;
-          inst.outputs[u.idx][u.field] = u.value;
+          // don't overwrite a cell the user has manually overridden
+          const tgt = inst.outputs[u.idx];
+          if (tgt._editedFields && tgt._editedFields[u.field]) return;
+          tgt[u.field] = u.value;
+          changed.push({ idx: u.idx, field: u.field, value: u.value });
         });
-        updateSBSItemOutputs(inst);
+        // Patch only the changed cells in place — never rebuild the tbody,
+        // which would destroy the input the user just Tabbed into (see §5.5).
+        patchOutputCells(inst, changed);
       }
     } catch (e) { console.error('recalc failed', e); }
+  }
+
+  // Update only specific output cells' displayed values, leaving the DOM
+  // (and focus) intact. field is one of w/h/qty/component/color/remark.
+  function patchOutputCells(inst, changed) {
+    if (!changed || !changed.length) return;
+    const itemEl = document.getElementById(inst.instanceId);
+    if (!itemEl) return;
+    const tbody = itemEl.querySelector('.asm-out-table tbody');
+    if (!tbody) return;
+    // Map display row index → data output index. The tbody may contain
+    // sub-item header rows (colspan) interleaved with data rows, so walk
+    // data rows in order and match against outputs sequentially.
+    const dataRows = Array.prototype.filter.call(tbody.rows, tr => !tr.querySelector('td[colspan]'));
+    changed.forEach(ch => {
+      const tr = dataRows[ch.idx];
+      if (!tr) return;
+      const inputs = tr.querySelectorAll('input');
+      // column order: [component, w, h, qty, color, remark]
+      const colMap = { component: 0, w: 1, h: 2, qty: 3, color: 4, remark: 5 };
+      const ci = colMap[ch.field];
+      if (ci == null || !inputs[ci]) return;
+      const active = document.activeElement;
+      if (inputs[ci] === active) return; // never stomp the focused field
+      let disp = ch.value;
+      if (ch.field === 'w' || ch.field === 'h') disp = UNITS.fromMMNum(ch.value);
+      inputs[ci].value = disp;
+    });
+    const summary = itemEl.querySelector('.asm-sbs-item-summary');
+    if (summary) {
+      summary.textContent =
+        `${inst.outputs.length} components · ${inst.outputs.reduce((a, o) => a + (o.qty || 0), 0)} total panels`;
+    }
   }
 
   function editOutput(instanceId, idx, field, value) {
@@ -913,6 +1000,8 @@ const ASMModule = (() => {
 
     inst.outputs[idx][field] = value;
     inst.outputs[idx]._edited = true;
+    if (!inst.outputs[idx]._editedFields) inst.outputs[idx]._editedFields = {};
+    inst.outputs[idx]._editedFields[field] = true;
 
     // Propagate to dependent cells (only for w/h/qty numeric edits)
     if ((field === 'w' || field === 'h' || field === 'qty') && inst.outputs[idx].cellRefs) {
@@ -1235,11 +1324,12 @@ const ASMModule = (() => {
     readyItems.forEach(it => {
       it.outputs.forEach(o => {
         if (o.w > 0 && o.h > 0 && o.qty > 0) {
-          // addPanel(remark, l, w, qty, material, canRotate, srNo)
+          // addPanel(remark, l, w, qty, material, canRotate, srNo, component)
           // l = width (larger dim), w = height (smaller dim)
           const remark = o.remark || '';
           const material = o.material || o.color || 'DW';
-          window.addPanel(remark, o.w, o.h, o.qty, material, true, null);
+          const component = o.component || '';
+          window.addPanel(remark, o.w, o.h, o.qty, material, true, null, component);
           totalPanels++;
         }
       });
@@ -2462,8 +2552,8 @@ const ASMModule = (() => {
     init, openASM, closeASM, makeQuotation, newProject, toggleDrawer, closeDrawers,
     showImportModal, downloadSample, doImport,
     filterCatalogue, addToSBS, removeFromSBS,
-    updateInput, setRoomName, editOutput, saveToReady, reviewCheck, setRisSort, asmLogin, asmLogout,
-    reopenReady, removeReady, clearReady, exportReady, exportToPDF, _runExport, sbsFont, setUnit, switchCatalogue, showCategoryGallery, exitGallery, addManualRow, editManualRow,
+    updateInput, setRoomName, editOutput, deleteOutputRow, saveToReady, reviewCheck, setRisSort, asmLogin, asmLogout,
+    reopenReady, removeReady, clearReady, exportReady, exportToPDF, _runExport, sbsFont, setUnit, switchCatalogue, showCategoryGallery, exitGallery, addManualRow, addManualRowsPrompt, deleteManualRow, editManualRow,
     saveProject, showProjects, loadProject, deleteProject,
     showPricing, startASMPayment,
     openImageModal, closeImageModal, modalNav
@@ -2702,6 +2792,12 @@ const ASM_CSS = `
 .asm-out-remark { color: #8A8D92; font-size: 11px; }
 
 /* editable output cells */
+.asm-row-del {
+  background: transparent; border: 1px solid #3A3D42; color: #E01E5A;
+  width: 24px; height: 24px; border-radius: 5px; cursor: pointer;
+  font-size: 12px; line-height: 1; padding: 0;
+}
+.asm-row-del:hover { background: rgba(224,30,90,.15); border-color: #E01E5A; }
 .asm-cell {
   background: #222529; border: 1px solid #3A3D42; color: inherit; font: inherit;
   padding: 4px 6px; width: 100%; border-radius: 4px; box-sizing: border-box;

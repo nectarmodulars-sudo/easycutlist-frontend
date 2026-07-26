@@ -135,6 +135,7 @@ function doExportLabels(){
   const fsDim    = gv('panel-dim-font',    Math.round(fs*1.5));
   const fsMat    = gv('panel-badge-font',  Math.round(fs*1.1));
   const showSrNo    = document.getElementById('lbl-srno').checked;
+  const showComponent = document.getElementById('lbl-component')?.checked !== false;
   const showSize    = document.getElementById('lbl-size').checked;
   const showRemark  = document.getElementById('lbl-remark').checked;
   const showMat     = document.getElementById('lbl-material').checked;
@@ -167,9 +168,11 @@ function doExportLabels(){
       const dispW = _xd(panelMatch ? panelMatch.l : p.pw);
       const dispH = _xd(panelMatch ? panelMatch.w : p.ph);
       const remark = panelMatch ? (panelMatch.remark || panelMatch.label || '') : (p.piece.label || '');
+      const component = panelMatch ? (panelMatch.component || '') : '';
 
       stickers.push({
         srNo:     srDisplay,
+        component,
         size:     `${dispW} × ${dispH}`,
         remark,
         material: sheet.material,
@@ -224,6 +227,9 @@ function doExportLabels(){
 
       // Row 2: Size (W × H)
       if(showSize) html+=`<div style="font-size:${f(fsDim)}px;font-weight:700;color:#000;font-family:monospace;line-height:1.2;margin-top:1mm">${esc(s.size)} <span style="font-size:${f(fsDim*0.6)}px;font-weight:400;color:#444">${_xsuf()}</span></div>`;
+
+      // Row 2b: Component
+      if(showComponent&&s.component) html+=`<div style="font-size:${f(fsRemark)}px;font-weight:900;color:#000;line-height:1.2;margin-top:0.8mm;overflow:hidden">${esc(s.component)}</div>`;
 
       // Row 3: Remark
       if(showRemark&&s.remark) html+=`<div style="font-size:${f(fsRemark)}px;font-weight:700;color:#000;line-height:1.2;margin-top:0.8mm;overflow:hidden">${esc(s.remark)}</div>`;
