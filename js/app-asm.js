@@ -96,6 +96,9 @@ const ASMModule = (() => {
     if (emailEl) emailEl.textContent = loggedIn ? (CURRENT_USER.email || '') : '';
     if (loginBtn) loginBtn.style.display = loggedIn ? 'none' : '';
     if (logoutBtn) logoutBtn.style.display = loggedIn ? '' : 'none';
+    const bell = document.getElementById('asm-bell-btn');
+    if (bell) bell.style.display = loggedIn ? '' : 'none';
+    if (loggedIn) startNotifications(); else stopNotifications();
   }
 
   function asmLogin() {
@@ -143,6 +146,7 @@ const ASMModule = (() => {
           <span id="asm-plan-badge" style="font-size:10px;padding:2px 8px;border-radius:3px;font-weight:700;margin-right:4px"></span>
           <button class="asm-top-btn" id="asm-login-btn" onclick="ASMModule.asmLogin()" style="display:none;background:rgba(66,133,244,.25);color:#8AB4F8">Login</button>
           <button class="asm-top-btn" id="asm-logout-btn" onclick="ASMModule.asmLogout()" style="display:none">Logout</button>
+          <button class="asm-top-btn" id="asm-bell-btn" onclick="ASMModule.toggleNotifications()" title="Notifications" style="position:relative;display:none">🔔<span id="asm-bell-badge" style="position:absolute;top:-4px;right:-4px;background:#E01E5A;color:#fff;font-size:9px;font-weight:800;min-width:15px;height:15px;border-radius:8px;display:none;align-items:center;justify-content:center;padding:0 3px">0</span></button>
           <button class="asm-top-btn" onclick="ASMModule.closeASM()">← Optimizer</button>
           <button class="asm-top-btn asm-newproj-btn" onclick="ASMModule.newProject()">+ New Project</button>
           <button class="asm-top-btn" onclick="ASMModule.showProjects()">My ASM Projects</button>
@@ -204,6 +208,7 @@ const ASMModule = (() => {
           <div class="asm-ris-foot">
             <button class="asm-btn" data-review-check style="background:#ECB22E;color:#111;font-weight:700;transition:background .15s" onmouseover="this.style.background='#F5C443'" onmouseout="this.style.background='#ECB22E'" onclick="ASMModule.reviewCheck()">Review Check</button>
             <button class="asm-btn asm-btn-ghost" onclick="ASMModule.clearReady()">Clear</button>
+            <button class="asm-btn asm-btn-ghost" onclick="ASMModule.openShare()" title="Share saved projects with another Pro user">🔗 Share</button>
             <div style="display:flex;gap:8px">
               <button class="asm-btn asm-btn-secondary" style="flex:1" onclick="ASMModule.exportToPDF()">Export to PDF</button>
               <button class="asm-btn asm-btn-primary" style="flex:1" onclick="ASMModule.exportReady()">Export to Optimizer</button>
@@ -1397,6 +1402,159 @@ const ASMModule = (() => {
 
   function apiBase() { return API_BASE.replace('/asm', ''); }
 
+  // ══ NOTIFICATIONS ══
+  let _notifTimer = null;
+  let _notifs = [];
+
+  function startNotifications() {
+    const bell = document.getElementById('asm-bell-btn');
+    if (bell) bell.style.display = getAuthToken() ? '' : 'none';
+    fetchNotifications();
+    if (_notifTimer) clearInterval(_notifTimer);
+    _notifTimer = setInterval(fetchNotifications, 60000);
+  }
+  function stopNotifications() {
+    if (_notifTimer) { clearInterval(_notifTimer); _notifTimer = null; }
+  }
+
+  async function fetchNotifications() {
+    const token = getAuthToken();
+    if (!token) return;
+    try {
+      const res = await fetch(apiBase() + '/asm/notifications', { headers: { 'Authorization': 'Bearer ' + token } });
+      const data = await res.json();
+      if (!data.success) return;
+      _notifs = data.notifications || [];
+      const badge = document.getElementById('asm-bell-badge');
+      if (badge) {
+        if (data.unread > 0) { badge.textContent = data.unread > 99 ? '99+' : data.unread; badge.style.display = 'flex'; }
+        else badge.style.display = 'none';
+      }
+    } catch (e) {}
+  }
+
+  function toggleNotifications() {
+    let panel = document.getElementById('asm-notif-panel');
+    if (panel) { panel.remove(); return; }
+    panel = document.createElement('div');
+    panel.id = 'asm-notif-panel';
+    panel.style.cssText = 'position:absolute;top:56px;right:16px;width:340px;max-height:420px;overflow-y:auto;background:#1A1D21;border:1px solid #3A3D42;border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.5);z-index:10005';
+    let html = '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid #2A2D31"><span style="font-weight:700;color:#ECB22E;font-size:13px">Notifications</span>';
+    html += _notifs.length ? '<button id="asm-notif-readall" style="background:none;border:none;color:#7A7D82;font-size:11px;cursor:pointer">Mark all read</button>' : '';
+    html += '</div>';
+    if (!_notifs.length) {
+      html += '<div style="padding:24px 14px;color:#7A7D82;font-size:12px;text-align:center">No notifications yet.</div>';
+    } else {
+      _notifs.forEach(function (n) {
+        const dt = new Date(n.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+        html += '<div class="asm-notif-row" data-id="' + n.id + '" data-project="' + (n.project_id || '') + '" style="padding:11px 14px;border-bottom:1px solid #26282C;cursor:' + (n.project_id ? 'pointer' : 'default') + ';' + (n.read ? '' : 'background:rgba(236,178,46,.06)') + '">'
+          + '<div style="font-size:12.5px;color:#fff;font-weight:' + (n.read ? '400' : '700') + ';line-height:1.4">' + escapeHtml(n.body || n.title || '') + '</div>'
+          + '<div style="font-size:10px;color:#7A7D82;margin-top:3px">' + dt + '</div></div>';
+      });
+    }
+    panel.innerHTML = html;
+    document.body.appendChild(panel);
+
+    const readAll = document.getElementById('asm-notif-readall');
+    if (readAll) readAll.onclick = async function () {
+      await markNotifRead(null, true); panel.remove(); fetchNotifications();
+    };
+    panel.querySelectorAll('.asm-notif-row').forEach(function (row) {
+      row.onclick = async function () {
+        const id = row.getAttribute('data-id');
+        const pid = row.getAttribute('data-project');
+        await markNotifRead(id, false);
+        panel.remove();
+        fetchNotifications();
+        if (pid) { showProjects(); }
+      };
+    });
+    // Close on outside click
+    setTimeout(function () {
+      document.addEventListener('click', function closeP(e) {
+        const p = document.getElementById('asm-notif-panel');
+        if (p && !p.contains(e.target) && e.target.id !== 'asm-bell-btn') { p.remove(); document.removeEventListener('click', closeP); }
+      });
+    }, 0);
+  }
+
+  async function markNotifRead(id, all) {
+    const token = getAuthToken();
+    if (!token) return;
+    try {
+      await fetch(apiBase() + '/asm/notifications/read', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify(all ? { all: true } : { id })
+      });
+    } catch (e) {}
+  }
+
+  function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+
+  // ══ SHARE ══
+  async function openShare() {
+    const token = getAuthToken();
+    if (!token) { showToast('Please login first', 'error'); return; }
+    // Load the user's saved projects to choose from.
+    let projects = [];
+    try {
+      const res = await fetch(apiBase() + '/asm/projects', { headers: { 'Authorization': 'Bearer ' + token } });
+      const data = await res.json();
+      if (data.success) projects = data.projects || [];
+    } catch (e) { showToast('Could not load your projects', 'error'); return; }
+    if (!projects.length) { showToast('Save a project first, then share it', 'error'); return; }
+
+    let modal = document.getElementById('asm-share-modal');
+    if (modal) modal.remove();
+    modal = document.createElement('div');
+    modal.id = 'asm-share-modal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:10006;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;padding:16px';
+    let html = '<div style="background:#1A1D21;border:1px solid #3A3D42;border-radius:12px;width:100%;max-width:440px;max-height:88vh;overflow-y:auto;padding:20px">';
+    html += '<h3 style="margin:0 0 4px;color:#ECB22E;font-size:16px">Share Cutlist</h3>';
+    html += '<p style="margin:0 0 14px;color:#9A9DA2;font-size:12px">Sends a copy to another Pro user. They can edit and export their own copy.</p>';
+    html += '<label style="display:block;font-size:11px;color:#9A9DA2;margin-bottom:4px">Recipient email (Pro user)</label>';
+    html += '<input id="asm-share-email" type="email" placeholder="name@example.com" style="width:100%;box-sizing:border-box;background:#222529;border:1px solid #3A3D42;color:#fff;border-radius:6px;padding:9px;font-size:13px;margin-bottom:14px">';
+    html += '<div style="font-size:11px;color:#9A9DA2;margin-bottom:6px">Select projects to share</div>';
+    html += '<div style="max-height:230px;overflow-y:auto;border:1px solid #2A2D31;border-radius:8px">';
+    projects.forEach(function (p) {
+      html += '<label style="display:flex;align-items:center;gap:9px;padding:9px 11px;border-bottom:1px solid #26282C;cursor:pointer;font-size:12.5px;color:#fff">'
+        + '<input type="checkbox" class="asm-share-chk" value="' + p.id + '" style="width:16px;height:16px;accent-color:#ECB22E">'
+        + '<span>' + escapeHtml(p.name || 'Untitled') + (p.clientName ? ' <span style="color:#7A7D82">· ' + escapeHtml(p.clientName) + '</span>' : '') + '</span></label>';
+    });
+    html += '</div>';
+    html += '<div id="asm-share-status" style="font-size:12px;margin:12px 0 0;min-height:16px"></div>';
+    html += '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">';
+    html += '<button class="asm-btn asm-btn-ghost" id="asm-share-cancel">Cancel</button>';
+    html += '<button class="asm-btn asm-btn-primary" id="asm-share-send">Share</button>';
+    html += '</div></div>';
+    modal.innerHTML = html;
+    modal.addEventListener('click', function (e) { if (e.target === modal) modal.remove(); });
+    document.body.appendChild(modal);
+
+    document.getElementById('asm-share-cancel').onclick = function () { modal.remove(); };
+    document.getElementById('asm-share-send').onclick = function () { doShare(modal); };
+  }
+
+  async function doShare(modal) {
+    const email = (document.getElementById('asm-share-email').value || '').trim();
+    const ids = Array.prototype.map.call(document.querySelectorAll('.asm-share-chk:checked'), function (c) { return c.value; });
+    const st = document.getElementById('asm-share-status');
+    if (!email) { st.textContent = 'Enter a recipient email'; st.style.color = '#E01E5A'; return; }
+    if (!ids.length) { st.textContent = 'Select at least one project'; st.style.color = '#E01E5A'; return; }
+    st.textContent = 'Sharing…'; st.style.color = '#7A7D82';
+    const token = getAuthToken();
+    try {
+      const res = await fetch(apiBase() + '/asm/share', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ recipientEmail: email, projectIds: ids })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) { st.textContent = data.error || 'Share failed'; st.style.color = '#E01E5A'; return; }
+      st.textContent = '✓ ' + (data.message || 'Shared'); st.style.color = '#2EB67D';
+      setTimeout(function () { modal.remove(); }, 1200);
+    } catch (e) { st.textContent = e.message; st.style.color = '#E01E5A'; }
+  }
+
   async function saveProject() {
     if (readyItems.length === 0 && sbsItems.length === 0) { showToast('Nothing to save', 'error'); return; }
     const token = getAuthToken();
@@ -2556,6 +2714,7 @@ const ASMModule = (() => {
     reopenReady, removeReady, clearReady, exportReady, exportToPDF, _runExport, sbsFont, setUnit, switchCatalogue, showCategoryGallery, exitGallery, addManualRow, addManualRowsPrompt, deleteManualRow, editManualRow,
     saveProject, showProjects, loadProject, deleteProject,
     showPricing, startASMPayment,
+    toggleNotifications, openShare,
     openImageModal, closeImageModal, modalNav
   };
 })();
