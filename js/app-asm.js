@@ -3093,6 +3093,9 @@ td .asm-cell-num { font-weight: 600; color: #ECB22E; }
 
   .asm-sbs-item-inputs { grid-template-columns: 1fr 1fr; }
 
+  /* Catalogue name banner not needed on mobile — reclaim the vertical space */
+  #asm-cat-banner { display: none !important; }
+
   /* ── Formula output as compact cards (mobile only) — R3, explicit grid ── */
   .asm-out-cards, .asm-out-cards tbody { display: block; width: 100%; }
   .asm-out-cards thead { display: none; }
