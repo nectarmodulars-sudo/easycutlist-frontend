@@ -692,12 +692,12 @@ const ASMModule = (() => {
           lastSub = o.subItem;
           return headerRow + `
           <tr class="${o.conditional ? 'asm-out-conditional' : ''}">
-            <td class="asm-out-name"><input class="asm-cell" value="${o.component}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'component',this.value)"></td>
-            <td class="asm-out-num"><input class="asm-cell asm-cell-num" type="number" value="${UNITS.fromMMNum(o.w)}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'w',this.value)"></td>
-            <td class="asm-out-num"><input class="asm-cell asm-cell-num" type="number" value="${UNITS.fromMMNum(o.h)}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'h',this.value)"></td>
-            <td class="asm-out-num"><input class="asm-cell asm-cell-num" type="number" value="${o.qty}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'qty',this.value)"></td>
-            <td><input class="asm-cell" value="${o.color || ''}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'color',this.value)"></td>
-            <td class="asm-out-remark"><input class="asm-cell asm-cell-remark" value="${o.remark || ''}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'remark',this.value)"></td>
+            <td class="asm-out-name" data-label="Component"><input class="asm-cell" value="${o.component}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'component',this.value)"></td>
+            <td class="asm-out-num" data-label="W"><input class="asm-cell asm-cell-num" type="number" value="${UNITS.fromMMNum(o.w)}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'w',this.value)"></td>
+            <td class="asm-out-num" data-label="H"><input class="asm-cell asm-cell-num" type="number" value="${UNITS.fromMMNum(o.h)}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'h',this.value)"></td>
+            <td class="asm-out-num" data-label="Qty" data-short="QTY"><input class="asm-cell asm-cell-num" type="number" value="${o.qty}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'qty',this.value)"></td>
+            <td data-label="Color" data-short="COL"><input class="asm-cell" value="${o.color || ''}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'color',this.value)"></td>
+            <td class="asm-out-remark" data-label="Remark"><input class="asm-cell asm-cell-remark" value="${o.remark || ''}" placeholder="remark" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'remark',this.value)"></td>
           </tr>`;
         }).join('');
 
@@ -733,7 +733,7 @@ const ASMModule = (() => {
         </div>
 
         <div class="asm-sbs-item-outputs">
-          <table class="asm-out-table">
+          <table class="asm-out-table asm-out-cards">
             <thead>
               <tr>
                 <th>Component</th><th>W</th><th>H</th><th>Qty</th><th>Color</th><th>Remark</th><th></th>
@@ -2964,6 +2964,16 @@ const ASM_CSS = `
 .asm-cell:hover { border-color: #3A3D42; }
 .asm-cell:focus { outline: none; border-color: #ECB22E; background: #14161A; }
 .asm-cell-num { text-align: right; width: 70px; color: #ECB22E; font-family: 'Inconsolata', monospace; font-weight: 600; }
+/* Remove the tiny up/down stepper arrows on all ASM number inputs */
+.asm-cell[type=number]::-webkit-outer-spin-button,
+.asm-cell[type=number]::-webkit-inner-spin-button,
+.asm-input-row input[type=number]::-webkit-outer-spin-button,
+.asm-input-row input[type=number]::-webkit-inner-spin-button {
+  -webkit-appearance: none; appearance: none; margin: 0;
+}
+.asm-cell[type=number], .asm-input-row input[type=number] {
+  -moz-appearance: textfield; appearance: textfield;
+}
 .asm-cell-remark { color: #8A8D92; font-size: 11px; }
 td .asm-cell { font-weight: 700; color: #D1D2D3; }
 td .asm-cell-num { font-weight: 600; color: #ECB22E; }
@@ -3031,19 +3041,28 @@ td .asm-cell-num { font-weight: 600; color: #ECB22E; }
 
 @media (max-width: 900px) {
   .asm-drawer-btn {
-    display: inline-flex; align-items: center; gap: 5px; cursor: pointer;
+    display: inline-flex; align-items: center; justify-content: center; gap: 5px; cursor: pointer;
     background: rgba(255,255,255,.12); border: none; color: #fff;
     height: 32px; padding: 0 10px; border-radius: 6px; font-size: 15px;
-    margin-right: 8px;
+    flex: 0 0 auto;
   }
+  .asm-drawer-cs { margin-right: 8px; }
   .asm-drawer-ris { background: rgba(236,178,46,.2); color: #ECB22E; font-size: 13px; }
   #asm-ris-badge { font-weight: 700; }
 
-  /* Title: keep short, no wrap, don't collide with buttons */
-  .asm-title { min-width: 0; overflow: hidden; }
+  /* Topbar: CS + title on the left, actions (incl. RIS) pinned hard right */
+  .asm-topbar { gap: 6px; padding: 0 10px; }
+  .asm-title {
+    min-width: 0; overflow: hidden; flex: 1 1 auto; gap: 6px;
+    font-size: 14px;
+  }
+  .asm-title > img, .asm-logo-svg { display: none; }   /* logo eats room on mobile */
+  .asm-topbar-actions { flex: 0 0 auto; margin-left: auto; gap: 6px; }
+  /* RIS is the rightmost control on mobile */
+  .asm-drawer-ris { order: 99; margin-left: 4px; }
   .asm-title > span:first-of-type {
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-    font-size: 14px; max-width: 130px;
+    font-size: 14px; max-width: 120px;
   }
   #asm-project-name { display: none; } /* project name hidden on mobile to save room */
 
@@ -3073,6 +3092,68 @@ td .asm-cell-num { font-weight: 600; color: #ECB22E; }
   .asm-scrim.show { opacity: 1; pointer-events: auto; }
 
   .asm-sbs-item-inputs { grid-template-columns: 1fr 1fr; }
+
+  /* ── Formula output as compact cards (mobile only) — R3, explicit grid ── */
+  .asm-out-cards, .asm-out-cards tbody { display: block; width: 100%; }
+  .asm-out-cards thead { display: none; }
+
+  /* 12-col grid. Row 1: name | W | H | del.  Row 2: qty | color | remark. */
+  .asm-out-cards tr {
+    display: grid;
+    grid-template-columns: 1fr 56px 56px 26px;
+    grid-auto-rows: auto;
+    align-items: center;
+    column-gap: 6px; row-gap: 5px;
+    position: relative;
+    background: #161619; border: 1px solid #262629; border-radius: 10px;
+    padding: 8px 11px; margin: 0 0 6px;
+  }
+  .asm-out-cards tr.asm-out-conditional { border-color: #4A3D1A; }
+
+  /* Sub-item header (colspan) — full-width band, revert grid */
+  .asm-out-cards tr:has(> td[colspan]) {
+    display: block; background: transparent; border: none; padding: 8px 0 2px; margin: 0;
+  }
+  .asm-out-cards tr > td[colspan] { display: block; border: none; background: transparent; padding: 0; }
+
+  .asm-out-cards td { border: none; padding: 0; white-space: nowrap; display: flex; align-items: center; min-width: 0; }
+  .asm-out-cards td::before { display: none; }
+  .asm-out-cards td input { background: transparent; border: 1px solid transparent; border-radius: 5px; padding: 2px 3px; min-width: 0; }
+  .asm-out-cards td input:focus { outline: none; border-color: #ECB22E; background: #26292E; }
+
+  /* Explicit placement by source-order nth-child (DOM order unchanged → patch logic safe) */
+  .asm-out-cards td:nth-child(1) { grid-column: 1; grid-row: 1; }              /* Component */
+  .asm-out-cards td:nth-child(1) input { font-weight: 700; font-size: 15px; color: #fff; text-align: left; width: 100%; }
+
+  .asm-out-cards td:nth-child(2) { grid-column: 2; grid-row: 1; }              /* W */
+  .asm-out-cards td:nth-child(3) { grid-column: 3; grid-row: 1; }              /* H */
+  .asm-out-cards td:nth-child(2) input, .asm-out-cards td:nth-child(3) input {
+    color: #F0A020; font-weight: 800; font-size: 15px; text-align: right; width: 100%;
+  }
+  .asm-out-cards td:nth-child(3)::before { display: inline; content: "×"; color: #4A4A4E; font-size: 12px; margin-right: 3px; }
+
+  .asm-out-cards td:nth-child(7) { grid-column: 4; grid-row: 1; justify-content: flex-end; }  /* delete */
+  .asm-out-cards td:nth-child(7) .asm-row-del {
+    width: 22px; height: 22px; font-size: 12px; padding: 0;
+    background: transparent; border: none; color: #5A5A5E;
+  }
+  .asm-out-cards td:nth-child(7) .asm-row-del:hover { color: #FF6B93; }
+
+  /* Row 2 */
+  .asm-out-cards td:nth-child(4) { grid-column: 1 / 2; grid-row: 2; justify-self: start;
+    background: #232327; border-radius: 6px; padding: 2px 8px; gap: 3px; }        /* Qty */
+  .asm-out-cards td:nth-child(5) { grid-column: 2 / 4; grid-row: 2; justify-self: start;
+    background: #232327; border-radius: 6px; padding: 2px 8px; gap: 3px; }        /* Color */
+  .asm-out-cards td:nth-child(6) { grid-column: 1 / 5; grid-row: 3; }             /* Remark full width */
+  .asm-out-cards td:nth-child(4)::before { display: inline; content: "QTY"; color: #7A7D82; font-size: 10px; }
+  .asm-out-cards td:nth-child(5)::before { display: inline; content: "COL"; color: #7A7D82; font-size: 10px; }
+  .asm-out-cards td:nth-child(4) input { color: #F0A020; font-weight: 700; font-size: 12px; text-align: left; width: 28px; }
+  .asm-out-cards td:nth-child(5) input { color: #C9A7FF; font-size: 12px; text-align: left; width: 84px; }
+  .asm-out-cards td:nth-child(6) input { color: #8A8D92; font-size: 12px; text-align: left; width: 100%; }
+  /* Collapse the remark row entirely when the field is empty (many panels have no remark) */
+  .asm-out-cards td:nth-child(6):has(input:placeholder-shown) { display: none; }
+
+  .asm-out-empty { display: block; text-align: center; padding: 20px; }
 
   /* Modals full-width on mobile, tables scroll horizontally */
   #quote-overlay .q-modal { width: 96vw; }
