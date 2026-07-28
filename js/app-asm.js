@@ -152,7 +152,7 @@ const ASMModule = (() => {
           <button class="asm-top-btn" onclick="ASMModule.showProjects()">My ASM Projects</button>
           <button class="asm-top-btn asm-save-btn" onclick="ASMModule.saveProject()">Save</button>
           <button class="asm-top-btn" id="asm-upgrade-btn" onclick="ASMModule.showPricing()" style="background:rgba(236,178,46,.3);color:#ECB22E">UPGRADE</button>
-          <button class="asm-close" onclick="ASMModule.closeASM()" title="Close">✕</button>
+          <button class="asm-close" onclick="ASMModule.closeASM()" title="Close">&#10005;</button>
         </div>
       </div>
 
@@ -221,7 +221,7 @@ const ASMModule = (() => {
       <!-- Image Modal -->
       <div class="asm-modal-overlay" id="asm-modal" onclick="if(event.target===this)ASMModule.closeImageModal()">
         <div class="asm-modal-content">
-          <button class="asm-modal-close" onclick="ASMModule.closeImageModal()">✕</button>
+          <button class="asm-modal-close" onclick="ASMModule.closeImageModal()">&#10005;</button>
           <button id="asm-modal-prev" onclick="ASMModule.modalNav(-1)" style="display:none;position:absolute;left:10px;top:50%;transform:translateY(-50%);width:44px;height:44px;border-radius:50%;background:rgba(0,0,0,.5);color:#fff;border:none;font-size:22px;cursor:pointer;align-items:center;justify-content:center;z-index:2">‹</button>
           <button id="asm-modal-next" onclick="ASMModule.modalNav(1)" style="display:none;position:absolute;right:10px;top:50%;transform:translateY(-50%);width:44px;height:44px;border-radius:50%;background:rgba(0,0,0,.5);color:#fff;border:none;font-size:22px;cursor:pointer;align-items:center;justify-content:center;z-index:2">›</button>
           <img id="asm-modal-image" class="asm-modal-image" src="" alt="Reference">
@@ -520,14 +520,14 @@ const ASMModule = (() => {
         <td><input class="asm-cell asm-cell-num" type="number" value="${row.qty}" onchange="ASMModule.editManualRow('${inst.instanceId}',${idx},'qty',this.value)"></td>
         <td><input class="asm-cell" value="${row.material||''}" onchange="ASMModule.editManualRow('${inst.instanceId}',${idx},'material',this.value)"></td>
         <td><input class="asm-cell asm-cell-remark" value="${row.remark||''}" onchange="ASMModule.editManualRow('${inst.instanceId}',${idx},'remark',this.value)"></td>
-        <td style="text-align:center"><button class="asm-row-del" title="Delete row" onclick="ASMModule.deleteManualRow('${inst.instanceId}',${idx})">✕</button></td>
+        <td style="text-align:center"><button class="asm-row-del" title="Delete row" onclick="ASMModule.deleteManualRow('${inst.instanceId}',${idx})">&#10005;</button></td>
       </tr>`).join('');
 
     return `
       <div class="asm-sbs-item" id="${inst.instanceId}">
         <div class="asm-sbs-item-head">
           <span class="asm-sbs-item-title">${inst.itemName}</span>
-          <button class="asm-sbs-item-remove" onclick="ASMModule.removeFromSBS('${inst.instanceId}')">✕</button>
+          <button class="asm-sbs-item-remove" onclick="ASMModule.removeFromSBS('${inst.instanceId}')">&#10005;</button>
         </div>
         <div class="asm-sbs-item-diagram-section" id="diagram_${inst.instanceId}">${imagesHtml}</div>
         <div style="margin:10px 16px"><label style="font-size:12px;color:#9A9DA2;margin-right:8px">Room Name (optional)</label><input type="text" value="${inst.roomName ? String(inst.roomName).replace(/"/g,'&quot;') : ''}" placeholder="e.g. Master Bedroom" oninput="ASMModule.setRoomName('${inst.instanceId}',this.value)" style="background:#2A2D31;border:1px solid #3A3D42;color:#E8E8E8;border-radius:6px;padding:6px 10px;font-size:13px;width:240px"></div>
@@ -564,7 +564,7 @@ const ASMModule = (() => {
       '<td><input class="asm-cell asm-cell-num" type="number" value="" onchange="ASMModule.editManualRow(\'' + instanceId + '\',' + idx + ',\'qty\',this.value)"></td>' +
       '<td><input class="asm-cell" value="" onchange="ASMModule.editManualRow(\'' + instanceId + '\',' + idx + ',\'material\',this.value)"></td>' +
       '<td><input class="asm-cell asm-cell-remark" value="" onchange="ASMModule.editManualRow(\'' + instanceId + '\',' + idx + ',\'remark\',this.value)"></td>' +
-      '<td style="text-align:center"><button class="asm-row-del" title="Delete row" onclick="ASMModule.deleteManualRow(\'' + instanceId + '\',' + idx + ')">✕</button></td>';
+      '<td style="text-align:center"><button class="asm-row-del" title="Delete row" onclick="ASMModule.deleteManualRow(\'' + instanceId + '\',' + idx + ')">&#10005;</button></td>';
     tbody.appendChild(tr);
   }
 
@@ -717,7 +717,7 @@ const ASMModule = (() => {
       <div class="asm-sbs-item" id="${inst.instanceId}">
         <div class="asm-sbs-item-head">
           <span class="asm-sbs-item-title">${inst.itemName}</span>
-          <button class="asm-sbs-item-remove" onclick="ASMModule.removeFromSBS('${inst.instanceId}')" title="Remove">✕</button>
+          <button class="asm-sbs-item-remove" onclick="ASMModule.removeFromSBS('${inst.instanceId}')" title="Remove">&#10005;</button>
         </div>
 
         <div class="asm-sbs-item-diagram-section" id="diagram_${inst.instanceId}">
@@ -890,7 +890,7 @@ const ASMModule = (() => {
               <td class="asm-out-num"><input class="asm-cell asm-cell-num" type="number" value="${o.qty}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'qty',this.value)"></td>
               <td><input class="asm-cell" value="${o.color || ''}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'color',this.value)"></td>
               <td class="asm-out-remark"><input class="asm-cell asm-cell-remark" value="${o.remark || ''}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'remark',this.value)"></td>
-              <td style="text-align:center"><button class="asm-row-del" title="Delete row" onclick="ASMModule.deleteOutputRow('${inst.instanceId}',${idx})">✕</button></td>
+              <td style="text-align:center"><button class="asm-row-del" title="Delete row" onclick="ASMModule.deleteOutputRow('${inst.instanceId}',${idx})">&#10005;</button></td>
             </tr>`;
           }).join('');
     }
@@ -1185,7 +1185,7 @@ const ASMModule = (() => {
           <div class="asm-ris-item-head">
             <span class="asm-ris-num">${origIdx + 1}</span>
             <span class="asm-ris-name" style="cursor:pointer" onclick="ASMModule.reopenReady('${it.readyId}')" title="Click to edit">${it.itemName}${it.roomName ? ' <span style="font-size:10px;background:rgba(236,178,46,.16);color:#ECB22E;padding:2px 7px;border-radius:10px;font-weight:700">'+it.roomName+'</span>' : ''}${isEditing ? ' <span style="font-size:9px;background:#ECB22E;color:#1A1D21;padding:1px 5px;border-radius:3px;font-weight:700">EDITING</span>' : ''}</span>
-            <button class="asm-ris-remove" onclick="ASMModule.removeReady('${it.readyId}')" title="Remove">✕</button>
+            <button class="asm-ris-remove" onclick="ASMModule.removeReady('${it.readyId}')" title="Remove">&#10005;</button>
           </div>
           <div class="asm-ris-meta">
             ${it.imported ? 'Imported file' : (() => { const i = it.inputs; const w = i.width || i.w || i.W || '?'; const h = i.ht || i.h || i.H || i.height || '?'; const d = i.depth || i.d || i.D || '?'; return w + '×' + h + '×' + d + 'mm'; })()}
@@ -1271,7 +1271,7 @@ const ASMModule = (() => {
       <div style="background:#1E2124;border:1px solid #3A3D42;border-radius:12px;width:min(720px,92vw);max-height:85vh;display:flex;flex-direction:column;overflow:hidden">
         <div style="padding:16px 20px;border-bottom:1px solid #2A2D31;display:flex;align-items:center;justify-content:space-between">
           <div style="font-size:17px;font-weight:700;color:#fff">Review Check — ${readyItems.length} item${readyItems.length > 1 ? 's' : ''}</div>
-          <button onclick="this.closest('.asm-review-overlay').remove()" style="background:none;border:none;color:#9A9DA2;font-size:22px;cursor:pointer;line-height:1">✕</button>
+          <button onclick="this.closest('.asm-review-overlay').remove()" style="background:none;border:none;color:#9A9DA2;font-size:22px;cursor:pointer;line-height:1">&#10005;</button>
         </div>
         <div style="overflow:auto;padding:0 4px">
           <table style="width:100%;border-collapse:collapse;font-size:13px">
@@ -2116,7 +2116,7 @@ const ASMModule = (() => {
       <div style="background:#1A1D21;border:1px solid #3A3D42;border-radius:12px;width:440px;max-height:85vh;overflow:auto">
         <div style="padding:16px 20px;background:#222529;border-bottom:1px solid #3A3D42;display:flex;justify-content:space-between;align-items:center">
           <div style="font-size:15px;font-weight:700;color:#fff">📄 Export PDF Options</div>
-          <button onclick="document.getElementById('asm-export-modal').remove()" style="background:none;border:none;color:#7A7D82;font-size:20px;cursor:pointer">✕</button>
+          <button onclick="document.getElementById('asm-export-modal').remove()" style="background:none;border:none;color:#7A7D82;font-size:20px;cursor:pointer">&#10005;</button>
         </div>
         <div style="padding:16px 20px">
           ${row('eo-logo','Company Logo','Your logo from My Profile', false, !hf('pdfLogoHeader')||!gp.logo)}
@@ -2575,7 +2575,7 @@ const ASMModule = (() => {
       <div style="background:#1A1D21;border:1px solid #3A3D42;border-radius:12px;width:440px;overflow:hidden">
         <div style="padding:16px 20px;background:#222529;border-bottom:1px solid #3A3D42;display:flex;justify-content:space-between;align-items:center">
           <div style="font-size:15px;font-weight:700;color:#fff">Import your own Sizes in RIS</div>
-          <button onclick="document.getElementById('asm-import-modal').remove()" style="background:none;border:none;color:#7A7D82;font-size:20px;cursor:pointer">✕</button>
+          <button onclick="document.getElementById('asm-import-modal').remove()" style="background:none;border:none;color:#7A7D82;font-size:20px;cursor:pointer">&#10005;</button>
         </div>
         <div style="padding:20px">
           <div style="font-size:12px;color:#ABABAD;margin-bottom:12px">Columns: Component | W | H | Qty | Material | Remark. Component optional. Item name = file name.</div>
@@ -3100,10 +3100,10 @@ td .asm-cell-num { font-weight: 600; color: #ECB22E; }
   /* 12-col grid. Row 1: name | W | H | del.  Row 2: qty | color | remark. */
   .asm-out-cards tr {
     display: grid;
-    grid-template-columns: 1fr 56px 56px 26px;
-    grid-auto-rows: auto;
+    grid-template-columns: repeat(12, 1fr);
+    grid-template-rows: auto auto;
     align-items: center;
-    column-gap: 6px; row-gap: 5px;
+    column-gap: 4px; row-gap: 4px;
     position: relative;
     background: #161619; border: 1px solid #262629; border-radius: 10px;
     padding: 8px 11px; margin: 0 0 6px;
@@ -3121,37 +3121,38 @@ td .asm-cell-num { font-weight: 600; color: #ECB22E; }
   .asm-out-cards td input { background: transparent; border: 1px solid transparent; border-radius: 5px; padding: 2px 3px; min-width: 0; }
   .asm-out-cards td input:focus { outline: none; border-color: #ECB22E; background: #26292E; }
 
-  /* Explicit placement by source-order nth-child (DOM order unchanged → patch logic safe) */
-  .asm-out-cards td:nth-child(1) { grid-column: 1; grid-row: 1; }              /* Component */
+  /* Explicit placement (DOM order unchanged → patch logic safe). 12-col grid. */
+  .asm-out-cards td:nth-child(1) { grid-column: 1 / 6; grid-row: 1; }           /* Component */
   .asm-out-cards td:nth-child(1) input { font-weight: 700; font-size: 15px; color: #fff; text-align: left; width: 100%; }
 
-  .asm-out-cards td:nth-child(2) { grid-column: 2; grid-row: 1; }              /* W */
-  .asm-out-cards td:nth-child(3) { grid-column: 3; grid-row: 1; }              /* H */
-  .asm-out-cards td:nth-child(2) input, .asm-out-cards td:nth-child(3) input {
-    color: #F0A020; font-weight: 800; font-size: 15px; text-align: right; width: 100%;
-  }
-  .asm-out-cards td:nth-child(3)::before { display: inline; content: "×"; color: #4A4A4E; font-size: 12px; margin-right: 3px; }
+  .asm-out-cards td:nth-child(2) { grid-column: 8 / 10; grid-row: 1; justify-content: flex-end; }   /* W */
+  .asm-out-cards td:nth-child(3) { grid-column: 10 / 12; grid-row: 1; justify-content: flex-start; }  /* H */
+  .asm-out-cards td:nth-child(2) input { color: #F0A020; font-weight: 800; font-size: 15px; text-align: right; width: 100%; }
+  .asm-out-cards td:nth-child(3) input { color: #F0A020; font-weight: 800; font-size: 15px; text-align: left; width: 100%; }
+  .asm-out-cards td:nth-child(3)::before { display: inline; content: "\\00D7"; color: #6A6A6E; font-size: 13px; margin: 0 4px 0 0; flex: 0 0 auto; }
 
-  .asm-out-cards td:nth-child(7) { grid-column: 4; grid-row: 1; justify-content: flex-end; }  /* delete */
+  .asm-out-cards td:nth-child(7) { grid-column: 12 / 13; grid-row: 1; justify-content: flex-end; }  /* delete */
   .asm-out-cards td:nth-child(7) .asm-row-del {
-    width: 22px; height: 22px; font-size: 12px; padding: 0;
-    background: transparent; border: none; color: #5A5A5E;
+    width: 26px; height: 26px; font-size: 13px; padding: 0; line-height: 1;
+    background: rgba(224,30,90,.15); border: 1px solid rgba(224,30,90,.55);
+    color: #FF5C85; border-radius: 6px;
   }
-  .asm-out-cards td:nth-child(7) .asm-row-del:hover { color: #FF6B93; }
+  .asm-out-cards td:nth-child(7) .asm-row-del:hover {
+    background: rgba(224,30,90,.28); color: #fff;
+  }
 
-  /* Row 2 */
-  .asm-out-cards td:nth-child(4) { grid-column: 1 / 2; grid-row: 2; justify-self: start;
+  /* Row 2 — Qty | Color | Remark on 12-col grid, no collisions */
+  .asm-out-cards td:nth-child(4) { grid-column: 1 / 3; grid-row: 2; justify-self: start;
     background: #232327; border-radius: 6px; padding: 2px 8px; gap: 3px; }        /* Qty */
-  .asm-out-cards td:nth-child(5) { grid-column: 2 / 4; grid-row: 2; justify-self: start;
-    background: #232327; border-radius: 6px; padding: 2px 8px; gap: 3px; }        /* Color */
-  .asm-out-cards td:nth-child(6) { grid-column: 1 / 5; grid-row: 3; }             /* Remark full width */
-  .asm-out-cards td:nth-child(4)::before { display: inline; content: "QTY"; color: #7A7D82; font-size: 10px; }
-  .asm-out-cards td:nth-child(5)::before { display: inline; content: "COL"; color: #7A7D82; font-size: 10px; }
+  .asm-out-cards td:nth-child(5) { grid-column: 3 / 7; grid-row: 2; justify-self: start;
+    background: #232327; border-radius: 6px; padding: 2px 8px; gap: 3px; max-width: 100%; }  /* Color */
+  .asm-out-cards td:nth-child(6) { grid-column: 7 / 13; grid-row: 2; justify-self: stretch; min-width: 0; overflow: hidden; }  /* Remark */
+  .asm-out-cards td:nth-child(4)::before { display: inline; content: "QTY"; color: #7A7D82; font-size: 10px; flex: 0 0 auto; }
+  .asm-out-cards td:nth-child(5)::before { display: inline; content: "COL"; color: #7A7D82; font-size: 10px; flex: 0 0 auto; }
   .asm-out-cards td:nth-child(4) input { color: #F0A020; font-weight: 700; font-size: 12px; text-align: left; width: 28px; }
-  .asm-out-cards td:nth-child(5) input { color: #C9A7FF; font-size: 12px; text-align: left; width: 84px; }
-  .asm-out-cards td:nth-child(6) input { color: #8A8D92; font-size: 12px; text-align: left; width: 100%; }
-  /* Collapse the remark row entirely when the field is empty (many panels have no remark) */
-  .asm-out-cards td:nth-child(6):has(input:placeholder-shown) { display: none; }
+  .asm-out-cards td:nth-child(5) input { color: #C9A7FF; font-size: 12px; text-align: left; width: 100%; min-width: 0; }
+  .asm-out-cards td:nth-child(6) input { color: #8A8D92; font-size: 12px; text-align: left; width: 100%; min-width: 0; text-overflow: ellipsis; }
+  .asm-out-cards td:nth-child(6) input::placeholder { color: #3A3D42; }
 
   .asm-out-empty { display: block; text-align: center; padding: 20px; }
 
