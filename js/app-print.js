@@ -302,8 +302,10 @@ function buildSVG(sheet, scale, customFonts={}) {
       .pc${ci}t{fill:${txtFill};font-family:'Inconsolata','Courier New',monospace;font-size:${fs}px;font-weight:700}
       .pc${ci}rem{fill:${txtFill};font-family:'Inconsolata','Courier New',monospace;font-weight:700}
       .pc${ci}s{fill:${dimFill};font-family:'Inconsolata','Courier New',monospace;font-size:${fsDim}px;font-weight:600}
+      .pc${ci}mask{fill:#ffffff;opacity:1}
       @media print{
         .pc${ci}r{fill:${pf};stroke:${ps};stroke-width:1pt}
+        .pc${ci}mask{fill:${pf};opacity:1}
         .pc${ci}t{fill:${txtFillPr};font-family:'Courier New',monospace;font-weight:700}
         .pc${ci}rem{fill:${txtFillPr};font-family:'Courier New',monospace;font-weight:700}
         .pc${ci}s{fill:${txtFillPr};font-family:'Courier New',monospace;opacity:1;font-weight:700}
@@ -328,10 +330,18 @@ function buildSVG(sheet, scale, customFonts={}) {
       const cx = px + pw / 2;
       const cy = py + ph / 2;
 
+      // Background mask so band lines don't run through the dimension numbers.
+      // Screen: panel sits ~near-white; use white. Print: use the print fill.
+      const maskFill   = '#ffffff';
+      const maskFillPr = pf;
+      const maskH = fsDim + 2;
+
       // ── Width dim: top edge, centred, small ──
       const dimPadTop = fsDim + 3;
       const widthFits = pw > fsDim * widthTxt.length * 0.62 + 6;
       if (widthFits) {
+        const wMaskW = fsDim * widthTxt.length * 0.62 + 6;
+        o += `<rect x="${cx - wMaskW/2}" y="${py + dimPadTop - fsDim*0.8}" width="${wMaskW}" height="${maskH}" class="pc${ci}mask"/>`;
         o += `<text x="${cx}" y="${py + dimPadTop}" text-anchor="middle" class="pc${ci}s">${widthTxt}</text>`;
       }
 
@@ -341,6 +351,8 @@ function buildSVG(sheet, scale, customFonts={}) {
       const hdx = px + pw - hInset;
       const heightFits = ph > fsDim * heightTxt.length * 0.62 + 6;
       if (heightFits) {
+        const hMaskW = fsDim * heightTxt.length * 0.62 + 6;
+        o += `<rect transform="rotate(-90,${hdx},${cy})" x="${hdx - hMaskW/2}" y="${cy - maskH/2}" width="${hMaskW}" height="${maskH}" class="pc${ci}mask"/>`;
         o += `<text transform="rotate(-90,${hdx},${cy})" x="${hdx}" y="${cy + fsDim * 0.35}" text-anchor="middle" class="pc${ci}s">${heightTxt}</text>`;
       }
 
