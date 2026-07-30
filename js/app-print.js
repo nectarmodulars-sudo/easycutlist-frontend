@@ -147,13 +147,19 @@ function doPrint(){
   const SVG_W_WITHOUT = 100; // % when no summary
 
   setTimeout(()=>{
-    const printWin = window.open('','_blank');
     const sheets = document.querySelectorAll('.sheet-block');
-    let sheetsHtml = '';
-    sheets.forEach(s => { sheetsHtml += s.outerHTML; });
 
     const svgPct = showPanelSummary ? SVG_W_WITH : SVG_W_WITHOUT;
     const tablePct = 100 - svgPct - 2; // 2% gap
+
+    // Detect mobile: mobile gets a same-tab hidden iframe (window.open is blocked
+    // once the tap gesture expires). Desktop keeps the new-tab preview + Print button.
+    const isMobile = window.matchMedia('(max-width:900px)').matches
+      || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+
+    // Toolbar is only useful on the desktop new-tab preview.
+    const toolbarHtml = isMobile ? '' :
+      '<div class="toolbar"><button onclick="window.print()">\uD83D\uDDA8 Print / Save as PDF</button><span class="info">Preview — ' + sheets.length + ' sheet' + (sheets.length>1?'s':'') + ' · Click Print then choose Save as PDF</span></div>';
 
     const printHtml = '<!DOCTYPE html><html><head><meta charset="UTF-8">'
       + '<title>EasyCutList Cut Plan</title>'
@@ -196,14 +202,49 @@ function doPrint(){
       + (showDims ? '' : '.sv-sz,[class*="pc"][class$="s"]{display:none!important}')
       + '</style>'
       + '</head><body>'
-      + '<div class="toolbar"><button onclick="window.print()">\uD83D\uDDA8 Print / Save as PDF</button><span class="info">Preview — ' + sheets.length + ' sheet' + (sheets.length>1?'s':'') + ' · Click Print then choose Save as PDF</span></div>'
+      + toolbarHtml
       + '<div class="pages">'
       + Array.from(sheets).map(s => '<div class="page">'+s.outerHTML+'</div>').join('')
       + '</div>'
       + '</body></html>';
 
-    printWin.document.write(printHtml);
-    printWin.document.close();
+    if (isMobile) {
+      // ── MOBILE: same-tab hidden iframe → contentWindow.print() ──
+      // No popup permission needed; OS print sheet (Save as PDF / share) opens directly.
+      const old = document.getElementById('ecl-print-iframe');
+      if (old) old.remove();
+      const iframe = document.createElement('iframe');
+      iframe.id = 'ecl-print-iframe';
+      iframe.setAttribute('aria-hidden','true');
+      iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
+      document.body.appendChild(iframe);
+
+      let done = false;
+      const fire = () => {
+        if (done) return; done = true;
+        try {
+          iframe.contentWindow.focus();
+          iframe.contentWindow.print();
+        } catch(e) {
+          alert('Could not open the print dialog. Please try again.');
+        }
+        // Clean up after the sheet has had time to open.
+        setTimeout(()=>{ iframe.remove(); }, 60000);
+      };
+
+      iframe.onload = () => setTimeout(fire, 300); // iOS needs a beat after load
+      const doc = iframe.contentWindow.document;
+      doc.open();
+      doc.write(printHtml);
+      doc.close();
+      // Fallback if onload doesn't fire (some WebViews)
+      setTimeout(fire, 800);
+    } else {
+      // ── DESKTOP: new-tab preview with Print button (unchanged behaviour) ──
+      const printWin = window.open('','_blank');
+      printWin.document.write(printHtml);
+      printWin.document.close();
+    }
   }, 200);
 }
 
