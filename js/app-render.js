@@ -205,9 +205,9 @@ function renderResults(sheets,unfitted,scale){
       const crGlobalIdx = crMatch ? panelRows.indexOf(crMatch) : -1;
       const crBaseSr = crGlobalIdx >= 0 ? crGlobalIdx + 1 : p.piece.colorIdx + 1;
       const crSrDisplay = p.piece.instance > 1 ? `${crBaseSr}-${p.piece.instance}` : `${crBaseSr}`;
-      // Show entered dims (from original row), oriented to placement, not round-tripped geometry.
-      let cw=p.pw, ch=p.ph;
-      if(crMatch){ const rot=Math.abs(p.pw-crMatch.w)<Math.abs(p.pw-crMatch.l); cw=rot?crMatch.w:crMatch.l; ch=rot?crMatch.l:crMatch.w; }
+      // Cut size (entered − band) via shared module. See eband-deduct.js.
+      var _cd = (typeof EBandDeduct !== 'undefined') ? EBandDeduct.labelSize(crMatch, p.pw, p.ph) : { w:p.pw, h:p.ph };
+      let cw=_cd.w, ch=_cd.h;
       return `<tr><td><span class="piece-dot" style="background:${PRINT_STROKES[p.piece.colorIdx%PRINT_STROKES.length]};-webkit-print-color-adjust:exact;print-color-adjust:exact"></span><strong>#${crSrDisplay}</strong></td><td>${_dim(cw,ch)}</td><td>${esc(s.material)}</td><td>${esc(crRemark)}</td></tr>`;
     }).join('');
 
@@ -242,8 +242,8 @@ function renderResults(sheets,unfitted,scale){
       const remark = plMatch ? (plMatch.remark || plMatch.label || '') : (p.piece.label || '');
       const bg = ri%2===0 ? '#fff' : '#f9f4f9';
       const cellStyle = `padding:3px 5px;border-bottom:1px solid #eee;vertical-align:top`;
-      let plw=p.pw, plh=p.ph;
-      if(plMatch){ const rot=Math.abs(p.pw-plMatch.w)<Math.abs(p.pw-plMatch.l); plw=rot?plMatch.w:plMatch.l; plh=rot?plMatch.l:plMatch.w; }
+      var _pld = (typeof EBandDeduct !== 'undefined') ? EBandDeduct.labelSize(plMatch, p.pw, p.ph) : { w:p.pw, h:p.ph };
+      let plw=_pld.w, plh=_pld.h;
       return '<tr style="background:'+bg+'">'
         + '<td style="'+cellStyle+';border-right:1px solid #ddd;font-weight:700;color:#3F0E40;font-family:monospace;white-space:nowrap">#'+srDisplay+'</td>'
         + '<td style="'+cellStyle+';border-right:1px solid #ddd;font-family:monospace;white-space:nowrap;font-size:7.5pt">'+_dim(plw,plh)+'</td>'

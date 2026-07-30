@@ -2329,9 +2329,17 @@ const ASMModule = (() => {
     renderCatalogue();
   }
 
+  let _asmCoupon = '';
+  function resetPlanPrices(box) {
+    box.querySelectorAll('.asm-plan-price').forEach(function(el){
+      el.innerHTML = '₹' + Number(el.getAttribute('data-base')).toLocaleString();
+    });
+  }
+
   async function showPricing() {
     const token = getAuthToken();
     if (!token) { showToast('Please login first', 'error'); return; }
+    _asmCoupon = '';
 
     let plans = [];
     let keyId = '';
@@ -2374,7 +2382,7 @@ const ASMModule = (() => {
       let inner = '';
       if (isPopular) inner += '<div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:#ECB22E;color:#1A1D21;font-size:9px;font-weight:800;padding:2px 10px;border-radius:10px">BEST VALUE</div>';
       inner += '<div style="font-size:14px;font-weight:800;color:#fff;margin-bottom:4px">' + p.label + '</div>';
-      inner += '<div style="font-size:28px;font-weight:900;color:#ECB22E;margin:10px 0">₹' + p.price.toLocaleString() + '</div>';
+      inner += '<div class="asm-plan-price" data-base="' + p.price + '" style="font-size:28px;font-weight:900;color:#ECB22E;margin:10px 0">₹' + p.price.toLocaleString() + '</div>';
       inner += '<div style="font-size:11px;color:#7A7D82;margin-bottom:16px">₹' + perMonth.toLocaleString() + '/month</div>';
       inner += '<button class="asm-btn asm-btn-primary" style="width:100%;padding:10px" onclick="ASMModule.startASMPayment(\'' + p.id + '\')">Choose Plan</button>';
 
@@ -2388,7 +2396,54 @@ const ASMModule = (() => {
     const features = document.createElement('div');
     features.style.cssText = 'padding:0 28px 20px;font-size:11px;color:#7A7D82;text-align:center';
     features.innerHTML = 'Includes: All 93+ furniture items | Unlimited projects | Save to cloud | PDF export | Export to optimizer | Priority support';
+    // Coupon field
+    const couponWrap = document.createElement('div');
+    couponWrap.style.cssText = 'padding:0 28px 16px';
+    couponWrap.innerHTML =
+      '<div style="display:flex;gap:8px;max-width:340px;margin:0 auto">' +
+        '<input id="asm-coupon-field" type="text" placeholder="Coupon code (optional)" style="flex:1;text-transform:uppercase;background:#222529;border:1px solid #3A3D42;color:#fff;border-radius:6px;padding:9px;font-size:13px">' +
+        '<button id="asm-coupon-apply" class="asm-btn asm-btn-ghost" style="white-space:nowrap">Apply</button>' +
+      '</div>' +
+      '<div id="asm-coupon-msg" style="text-align:center;font-size:12px;margin-top:8px;min-height:15px"></div>';
+    box.appendChild(couponWrap);
+
     box.appendChild(features);
+
+    // Wire coupon apply — updates each plan card's displayed price
+    const applyBtn = couponWrap.querySelector('#asm-coupon-apply');
+    const field = couponWrap.querySelector('#asm-coupon-field');
+    const msg = couponWrap.querySelector('#asm-coupon-msg');
+    applyBtn.onclick = async function() {
+      const code = (field.value || '').trim().toUpperCase();
+      if (!code) { _asmCoupon = ''; resetPlanPrices(box); msg.textContent = ''; return; }
+      msg.textContent = 'Checking…'; msg.style.color = '#7A7D82';
+      // Validate against the first plan just to check validity; per-plan recompute below.
+      let anyValid = false, lastReason = '';
+      const priceEls = box.querySelectorAll('.asm-plan-price');
+      for (const el of priceEls) {
+        const base = Number(el.getAttribute('data-base'));
+        const planCard = el.closest('div');
+        // find plan id from the card's button
+        const btn = el.parentElement.querySelector('button[onclick*="startASMPayment"]');
+        const pid = btn ? btn.getAttribute('onclick').match(/startASMPayment\('([^']+)'\)/)[1] : null;
+        try {
+          const r = await fetch(apiBase() + '/asm/payments/validate-coupon', {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({ code, planId: pid, email: (CURRENT_USER && CURRENT_USER.email) || '' })
+          });
+          const d = await r.json();
+          if (d.valid) {
+            anyValid = true;
+            el.innerHTML = '<span style="text-decoration:line-through;color:#7A7D82;font-size:18px">₹' + base.toLocaleString() + '</span> ₹' + Math.round(d.finalPrice).toLocaleString();
+          } else {
+            lastReason = d.reason || 'Invalid coupon';
+            el.innerHTML = '₹' + base.toLocaleString();
+          }
+        } catch (e) { lastReason = e.message; }
+      }
+      if (anyValid) { _asmCoupon = code; msg.textContent = '✓ Coupon applied'; msg.style.color = '#2EB67D'; }
+      else { _asmCoupon = ''; msg.textContent = lastReason || 'Invalid coupon'; msg.style.color = '#E01E5A'; }
+    };
 
     // Close
     const closeDiv = document.createElement('div');
@@ -2403,6 +2458,70 @@ const ASMModule = (() => {
     modal.appendChild(box);
     modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
     document.body.appendChild(modal);
+  }
+
+  // Coupon prompt — returns code string (applied), '' (skipped), or false (cancelled).
+  function promptCoupon(planId, email, token) {
+    return new Promise(function(resolve) {
+      let modal = document.getElementById('asm-coupon-modal');
+      if (modal) modal.remove();
+      modal = document.createElement('div');
+      modal.id = 'asm-coupon-modal';
+      modal.style.cssText = 'position:fixed;inset:0;z-index:10007;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;padding:16px';
+      modal.innerHTML =
+        '<div style="background:#1A1D21;border:1px solid #3A3D42;border-radius:12px;width:100%;max-width:380px;padding:20px">' +
+          '<h3 style="margin:0 0 4px;color:#ECB22E;font-size:16px">Have a coupon?</h3>' +
+          '<p style="margin:0 0 14px;color:#9A9DA2;font-size:12px">Enter a code, or skip to pay full price.</p>' +
+          '<div style="display:flex;gap:8px">' +
+            '<input id="asm-coupon-input" type="text" placeholder="COUPON CODE" style="flex:1;text-transform:uppercase;background:#222529;border:1px solid #3A3D42;color:#fff;border-radius:6px;padding:9px;font-size:13px">' +
+            '<button id="asm-coupon-apply" class="asm-btn asm-btn-ghost" style="white-space:nowrap">Apply</button>' +
+          '</div>' +
+          '<div id="asm-coupon-status" style="font-size:12px;margin-top:10px;min-height:16px"></div>' +
+          '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">' +
+            '<button id="asm-coupon-cancel" class="asm-btn asm-btn-ghost">Cancel</button>' +
+            '<button id="asm-coupon-continue" class="asm-btn asm-btn-primary">Continue</button>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(modal);
+
+      const input = modal.querySelector('#asm-coupon-input');
+      const status = modal.querySelector('#asm-coupon-status');
+      let validCode = ''; // set once a coupon validates
+
+      function done(val) { modal.remove(); resolve(val); }
+
+      modal.querySelector('#asm-coupon-apply').onclick = async function() {
+        const code = (input.value || '').trim().toUpperCase();
+        if (!code) { status.textContent = 'Enter a code first'; status.style.color = '#E01E5A'; return; }
+        status.textContent = 'Checking…'; status.style.color = '#7A7D82';
+        try {
+          const r = await fetch(apiBase() + '/asm/payments/validate-coupon', {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({ code, planId, email })
+          });
+          const d = await r.json();
+          if (d.valid) {
+            validCode = d.code;
+            status.innerHTML = '✓ Applied: ₹' + d.basePrice.toLocaleString('en-IN') +
+              ' → <b style="color:#2EB67D">₹' + d.finalPrice.toLocaleString('en-IN') + '</b> (save ₹' + d.discount.toLocaleString('en-IN') + ')';
+            status.style.color = '#2EB67D';
+          } else {
+            validCode = '';
+            status.textContent = d.reason || 'Invalid coupon';
+            status.style.color = '#E01E5A';
+          }
+        } catch (e) { status.textContent = e.message; status.style.color = '#E01E5A'; }
+      };
+
+      modal.querySelector('#asm-coupon-continue').onclick = function() {
+        // If they typed a code but didn't Apply, treat it as the code (server re-validates anyway).
+        const typed = (input.value || '').trim().toUpperCase();
+        done(validCode || typed || '');
+      };
+      modal.querySelector('#asm-coupon-cancel').onclick = function() { done(false); };
+      modal.addEventListener('click', function(e) { if (e.target === modal) done(false); });
+      input.focus();
+    });
   }
 
   async function startASMPayment(planId) {
@@ -2429,12 +2548,14 @@ const ASMModule = (() => {
 
     if (!userId) { showToast('Could not identify user', 'error'); return; }
 
+    const coupon = _asmCoupon || '';
+
     try {
       // Create order
       const res = await fetch(apiBase() + '/asm/payments/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-        body: JSON.stringify({ planId, userId, email })
+        body: JSON.stringify({ planId, userId, email, coupon: coupon || '' })
       });
       const order = await res.json();
 

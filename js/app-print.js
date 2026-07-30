@@ -282,22 +282,18 @@ function buildSVG(sheet, scale, customFonts={}) {
     const fs     = customSrNoFont || Math.min(13, Math.max(6, minDim / 6));
     const fsDim  = customDimFont || Math.max(6, fs * 0.88);
 
-    // Show the ENTERED panel dimensions (from the original row), not the
-    // packer's round-tripped geometry — avoids drift like 14" -> 356mm -> 14.02".
-    // Orient to match placement: if the packer rotated the piece, swap w/h.
-    let origW = p.pw, origH = p.ph; // fallback: packer geometry (mm)
-    if (svgPanelMatch) {
-      const ol = svgPanelMatch.l, ow = svgPanelMatch.w; // stored mm (entered)
-      const rotated = Math.abs(p.pw - ow) < Math.abs(p.pw - ol);
-      origW = rotated ? ow : ol;
-      origH = rotated ? ol : ow;
-    }
+    // Dimension label = actual cut size (entered − band) via shared module,
+    // oriented to placement. See eband-deduct.js.
+    const _ld = (typeof EBandDeduct !== 'undefined')
+      ? EBandDeduct.labelSize(svgPanelMatch, p.pw, p.ph)
+      : { w: p.pw, h: p.ph };
+    const origW = _ld.w, origH = _ld.h;
     const widthTxt  = String(_pd(origW));
     const heightTxt = String(_pd(origH));
 
     // Text fill: black when blackText is on, otherwise the panel's screen/print colour
     const txtFill   = blackText ? '#000' : sc;
-    const dimFill   = blackText ? '#000' : `${sc}dd`;
+    const dimFill   = '#000'; // dimension numbers always black on-screen (PDF handles its own via @media print)
     const txtFillPr = blackText ? '#000' : ps;
 
     o += `<g>`;
