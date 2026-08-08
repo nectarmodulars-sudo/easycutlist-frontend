@@ -2,6 +2,9 @@
 // Plan fetched from API on load. Falls back to 'free' if API unavailable.
 let PLAN = localStorage.getItem('ecl_plan') || 'free';
 let FEATURE_FLAGS = JSON.parse(localStorage.getItem('ecl_flags')||'{}');
+// Feature-set granted by the user's current plan (flag_key -> true).
+// Empty for free users. Populated from /my-plan.
+let PLAN_FEATURES = JSON.parse(localStorage.getItem('ecl_plan_features')||'{}');
 
 // Fetch plan + flags from server (non-blocking)
 async function fetchPlanAndFlags(){
@@ -12,8 +15,10 @@ async function fetchPlanAndFlags(){
     ]);
     if(planRes.ok){
       const data = await planRes.json();
-      const {plan, trialExportsUsed, planExpiresAt, trialLimit} = data;
+      const {plan, trialExportsUsed, planExpiresAt, trialLimit, features} = data;
       PLAN = plan;
+      PLAN_FEATURES = features || {};
+      localStorage.setItem('ecl_plan_features', JSON.stringify(PLAN_FEATURES));
       TRIAL_EXPORTS_USED = trialExportsUsed || 0;
       PLAN_EXPIRES_AT    = planExpiresAt || null;
       TRIAL_LIMIT        = trialLimit || 3;
@@ -30,6 +35,23 @@ async function fetchPlanAndFlags(){
       localStorage.setItem('ecl_flags', JSON.stringify(FEATURE_FLAGS));
     }
   } catch(e){ /* use cached values */ }
+  // Resume a pending buy if the user just logged in via the Buy button.
+  try {
+    if(CURRENT_USER){
+      const pend = JSON.parse(localStorage.getItem('ecl_pending_buy')||'null');
+      // Only honour a recent intent (10 min) to avoid stale reopens.
+      if(pend && pend.tierId && (Date.now() - (pend.t||0) < 600000)){
+        localStorage.removeItem('ecl_pending_buy');
+        _selectedTier   = pend.tierId;
+        _selectedMonths = pend.months || 6;
+        await openPricing();
+        // Give the modal a tick to render, then start payment.
+        setTimeout(()=>{ startPayment(); }, 400);
+      } else if(pend){
+        localStorage.removeItem('ecl_pending_buy');
+      }
+    }
+  } catch(e){}
 }
 
 const PREMIUM_FEATURES = {
@@ -59,13 +81,22 @@ const FLAG_KEY_MAP = {
 
 function isPro(){ return PLAN === 'pro'; }
 
-// Returns true if the feature is currently accessible:
-// either the user is Pro, OR the admin has set this flag to "free".
+// Feature access resolution (order matters):
+// 1. Admin flag set to "free" → available to everyone (global override).
+// 2. User's plan grants this specific feature → available.
+// 3. Otherwise locked.
+// Note: gating here is UX only; the server is the source of truth on
+// paid actions (trial export counting, etc.).
 function hasFeature(flagKey){
-  if(isPro()) return true;
-  // Also check the feature flags from the server
+  // 1. Admin global "free" override — available to everyone
   const flag = FEATURE_FLAGS && FEATURE_FLAGS[flagKey];
-  return flag === 'free' || flag === true;
+  if(flag === 'free' || flag === true) return true;
+  // 2. Granted only if the user's plan feature-set includes it.
+  //    (Backend always returns a real tier feature-set for pro users,
+  //     so there is no "empty = all-on" fallback — unchecked means locked.)
+  if(isPro() && PLAN_FEATURES && PLAN_FEATURES[flagKey] === true) return true;
+  // 3. Locked
+  return false;
 }
 
 // Also show/hide upgrade button based on current plan
@@ -88,16 +119,8 @@ function requirePro(featureKey, cb){
 }
 
 function showUpgrade(featureName=''){
-  if(CURRENT_USER){
-    openPricing(featureName);
-  } else {
-    document.getElementById('upgrade-title').textContent = '⭐ Upgrade to Pro';
-    document.getElementById('upgrade-sub').textContent =
-      featureName
-        ? `"${featureName}" is a Pro feature. Sign in to upgrade.`
-        : 'Sign in to upgrade to EasyCutList Pro.';
-    document.getElementById('upgrade-modal').style.display='flex';
-  }
+  // Open the pricing modal for everyone (logged in or not).
+  openPricing(featureName);
 }
 function closeUpgrade(){ document.getElementById('upgrade-modal').style.display='none'; }
 function goUpgrade(){
@@ -105,18 +128,35 @@ function goUpgrade(){
   openPricing();
 }
 
-// ══ PRICING & PAYMENTS ══
-let _selectedPlan = '6month';
-let _pricingData  = null;
+// ══ PRICING & PAYMENTS (tier system) ══
+let _selectedTier   = null;   // tier_id
+let _selectedMonths = 6;      // duration toggle
+let _tierData       = null;   // { tiers:[], pricing:[] }
 let TRIAL_EXPORTS_USED = 0;
 let TRIAL_LIMIT = 3;
 let PLAN_EXPIRES_AT = null;
 
+// The 11 gateable features, in display order. Must match admin OPT_FEATURES keys.
+const TIER_FEATURE_LIST = [
+  ['edgeBanding',      'Edge band effect'],
+  ['exportLabels',     'Panel stickers print'],
+  ['exportOrder',      'Export material order'],
+  ['costEstimation',   'Cost estimation'],
+  ['projects',         'Save projects'],
+  ['pdfLogoHeader',    'PDF — Company logo'],
+  ['pdfClientName',    'PDF — Client name'],
+  ['pdfCompanyName',   'PDF — Company name'],
+  ['pdfCustomText',    'PDF — Custom header'],
+  ['cutSequenceTable', 'Cutting sequence badge'],
+  ['reviewCheck',      'Review check'],
+];
+
 async function openPricing(featureName=''){
-  if(!CURRENT_USER){ signInGoogle(); return; }
+  // Open for everyone — logged-out users can browse plans.
+  // Login is only required at Buy (see startPayment).
   const sub = document.getElementById('pricing-sub');
-  if(featureName && sub) sub.textContent = `"${featureName}" is a Pro feature. Upgrade to unlock it and much more.`;
-  else if(sub) sub.textContent = 'Unlock all features. Pay once per period, cancel anytime.';
+  if(featureName && sub) sub.textContent = `"${featureName}" is a Pro feature. Choose a plan to unlock it.`;
+  else if(sub) sub.textContent = 'Choose the plan that fits you. Cancel anytime.';
   document.getElementById('pricing-modal').style.display = 'flex';
   await loadPricing();
 }
@@ -127,55 +167,107 @@ function closePricing(){
 
 async function loadPricing(){
   try {
-    const res = await fetch(`${API_URL}/payments/pricing`);
+    const res = await fetch(`${API_URL}/tiers`);
     if(!res.ok) return;
-    _pricingData = await res.json();
-    // Update price display
-    const fmt = v => '₹' + Math.round(v/100).toLocaleString('en-IN');
-    if(_pricingData['3month']) document.getElementById('price-3month').innerHTML = fmt(_pricingData['3month'].amountPaise) + '<span>/3mo</span>';
-    if(_pricingData['6month']) document.getElementById('price-6month').innerHTML = fmt(_pricingData['6month'].amountPaise) + '<span>/6mo</span>';
-    if(_pricingData['1year'])  document.getElementById('price-1year').innerHTML  = fmt(_pricingData['1year'].amountPaise)  + '<span>/yr</span>';
-    // Calculate savings vs 3-month rate
-    if(_pricingData['3month'] && _pricingData['6month']){
-      const base6  = _pricingData['3month'].amountPaise * 2;
-      const actual6 = _pricingData['6month'].amountPaise;
-      if(base6 > actual6){
-        const pct = Math.round((base6-actual6)/base6*100);
-        const saveEl = document.getElementById('save-6month');
-        if(saveEl) saveEl.textContent = `Save ${pct}%`;
-      }
-    }
-    if(_pricingData['3month'] && _pricingData['1year']){
-      const base12   = _pricingData['3month'].amountPaise * 4;
-      const actual12 = _pricingData['1year'].amountPaise;
-      if(base12 > actual12){
-        const pct = Math.round((base12-actual12)/base12*100);
-        const saveEl = document.getElementById('save-1year');
-        if(saveEl) saveEl.textContent = `Save ${pct}%`;
-      }
-    }
+    _tierData = await res.json();
+    if(!_tierData.tiers || !_tierData.tiers.length) return;
+
+    // Available durations (from pricing rows), ascending
+    const months = [...new Set((_tierData.pricing||[]).map(p => p.months))].sort((a,b)=>a-b);
+    if(!months.length) return;
+    if(!months.includes(_selectedMonths)) _selectedMonths = months.includes(6) ? 6 : months[0];
+
+    renderDurationToggle(months);
+    renderTierColumns();
   } catch(e){ console.error('loadPricing:', e); }
 }
 
-function selectPlan(planId){
-  _selectedPlan = planId;
-  ['3month','6month','1year'].forEach(id => {
-    const el = document.getElementById('plan-'+id);
-    if(el) el.className = 'plan-card' + (id===planId?' selected':'');
+function renderDurationToggle(months){
+  const el = document.getElementById('pricing-duration-toggle');
+  if(!el) return;
+  const lbl = m => m === 12 ? '1 Year' : (m + ' Months');
+  el.innerHTML = months.map(m =>
+    `<button class="dur-btn${m===_selectedMonths?' active':''}" onclick="setDuration(${m})">${lbl(m)}</button>`
+  ).join('');
+}
+
+function setDuration(m){
+  _selectedMonths = m;
+  const months = [...new Set((_tierData.pricing||[]).map(p => p.months))].sort((a,b)=>a-b);
+  renderDurationToggle(months);
+  renderTierColumns();
+}
+
+function priceFor(tierId, months){
+  const row = (_tierData.pricing||[]).find(p => p.tier_id===tierId && p.months===months);
+  return row ? Number(row.price_inr) : null;
+}
+
+function renderTierColumns(){
+  const wrap = document.getElementById('pricing-tiers');
+  if(!wrap) return;
+  const tiers = _tierData.tiers || [];
+
+  // Default selection = highest-rank tier that has a price for this duration
+  if(!_selectedTier || !priceFor(_selectedTier, _selectedMonths)){
+    const firstPriced = tiers.find(t => priceFor(t.tier_id, _selectedMonths) != null);
+    _selectedTier = firstPriced ? firstPriced.tier_id : (tiers[0] && tiers[0].tier_id);
+  }
+
+  wrap.innerHTML = tiers.map(t => {
+    const price = priceFor(t.tier_id, _selectedMonths);
+    const feats = t.features || {};
+    const sel = (t.tier_id === _selectedTier) ? ' selected' : '';
+    const badge = t.badge ? `<div class="tier-badge">${esc(t.badge)}</div>` : '';
+    const priceHtml = price != null
+      ? `₹${price.toLocaleString('en-IN')}<span>/${_selectedMonths===12?'yr':_selectedMonths+'mo'}</span>`
+      : '<span style="font-size:13px;color:var(--sl-text2)">Not available</span>';
+    const featRows = TIER_FEATURE_LIST.map(f => {
+      const on = feats[f[0]] === true;
+      return `<div class="tier-feat ${on?'on':'off'}">${on?'✓':'✗'} ${f[1]}</div>`;
+    }).join('');
+    const disabled = price == null ? ' disabled' : '';
+    return `<div class="tier-col${sel}" id="tier-${t.tier_id}" onclick="selectTier('${t.tier_id}')">
+      ${badge}
+      <div class="tier-name">${esc(t.name)}</div>
+      ${t.subtitle?`<div class="tier-sub">${esc(t.subtitle)}</div>`:''}
+      <div class="tier-price">${priceHtml}</div>
+      <div class="tier-feats">${featRows}</div>
+      <button class="tier-buy"${disabled} onclick="event.stopPropagation();selectTier('${t.tier_id}');startPayment()">Buy now</button>
+    </div>`;
+  }).join('');
+}
+
+function selectTier(tierId){
+  _selectedTier = tierId;
+  document.querySelectorAll('#pricing-tiers .tier-col').forEach(el => {
+    el.classList.toggle('selected', el.id === 'tier-'+tierId);
   });
 }
 
 async function startPayment(){
-  if(!CURRENT_USER){ signInGoogle(); return; }
-  const btn = document.getElementById('pricing-pay-btn');
-  if(btn){ btn.disabled=true; btn.textContent='Creating order...'; }
+  if(!_selectedTier){ alert('Please select a plan.'); return; }
+  const price = priceFor(_selectedTier, _selectedMonths);
+  if(price == null){ alert('This plan is not available for the selected duration.'); return; }
+
+  // Not logged in → stash selection, send to Google sign-in, resume after redirect.
+  if(!CURRENT_USER){
+    try {
+      localStorage.setItem('ecl_pending_buy', JSON.stringify({
+        tierId: _selectedTier, months: _selectedMonths, t: Date.now()
+      }));
+    } catch(e){}
+    signInGoogle();
+    return;
+  }
 
   try {
     const res = await fetch(`${API_URL}/payments/create-order`, {
       method:'POST',
       headers:{'Content-Type':'application/json', ...authHeader()},
       body: JSON.stringify({
-        planId:  _selectedPlan,
+        tierId:  _selectedTier,
+        months:  _selectedMonths,
         userId:  CURRENT_USER.id,
         email:   CURRENT_USER.email,
       })
@@ -183,29 +275,23 @@ async function startPayment(){
     const order = await res.json();
     if(!res.ok) throw new Error(order.error || 'Failed to create order');
 
-    // Launch Razorpay checkout
+    const tierObj = (_tierData.tiers||[]).find(t => t.tier_id===_selectedTier);
     const rzp = new Razorpay({
       key:         order.keyId,
       amount:      order.amount,
       currency:    order.currency,
       order_id:    order.orderId,
-      name:        'EasyCutList Pro',
-      description: _pricingData?.[_selectedPlan]?.label || 'Pro Plan',
+      name:        'EasyCutList',
+      description: (tierObj?.name || 'Pro') + ' — ' + (_selectedMonths===12?'1 Year':_selectedMonths+' Months'),
       prefill:     { email: CURRENT_USER.email || '' },
       theme:       { color: '#3F0E40' },
       handler: async function(response){
         await verifyPayment(response, order.orderId);
       },
-      modal: {
-        ondismiss: function(){
-          if(btn){ btn.disabled=false; btn.textContent='🚀 Pay & Upgrade Now'; }
-        }
-      }
     });
     rzp.open();
   } catch(e){
     alert('Error: ' + e.message);
-    if(btn){ btn.disabled=false; btn.textContent='🚀 Pay & Upgrade Now'; }
   }
 }
 
@@ -219,7 +305,8 @@ async function verifyPayment(response, orderId){
         razorpay_payment_id: response.razorpay_payment_id,
         razorpay_signature:  response.razorpay_signature,
         userId:  CURRENT_USER.id,
-        planId:  _selectedPlan,
+        tierId:  _selectedTier,
+        months:  _selectedMonths,
       })
     });
     const result = await res.json();

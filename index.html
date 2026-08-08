@@ -811,6 +811,26 @@ table.cuts-table{width:100%;border-collapse:collapse;font-family:var(--mono);fon
 .plan-card-price{font-size:26px;font-weight:900;color:var(--sl-text);font-family:var(--mono)}
 .plan-card-price span{font-size:13px;font-weight:400;color:var(--sl-text2)}
 .plan-card-save{font-size:10px;font-weight:700;color:var(--sl-green);margin-top:4px}
+/* ── Tier pricing modal ── */
+.pricing-duration-toggle{display:flex;justify-content:center;gap:6px;background:var(--sl-bg2);border:1px solid var(--sl-border2);border-radius:999px;padding:4px;margin:0 auto 18px;width:fit-content}
+.dur-btn{border:none;background:transparent;color:var(--sl-text2);font-weight:700;font-size:13px;padding:7px 18px;border-radius:999px;cursor:pointer;font-family:var(--sans)}
+.dur-btn.active{background:#fff;color:var(--sl-text);box-shadow:0 1px 4px rgba(0,0,0,.12)}
+.pricing-tiers{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:14px;margin-bottom:18px}
+.tier-col{position:relative;border:2px solid var(--sl-border2);border-radius:12px;padding:20px 16px;text-align:left;cursor:pointer;transition:all .15s;background:#fff}
+.tier-col:hover{border-color:#3F0E40}
+.tier-col.selected{border-color:#3F0E40;box-shadow:0 6px 20px rgba(63,14,64,.18)}
+.tier-badge{position:absolute;top:-11px;left:50%;transform:translateX(-50%);background:var(--sl-yellow);color:#1D1C1D;font-size:10px;font-weight:900;padding:3px 12px;border-radius:999px;white-space:nowrap;letter-spacing:.4px}
+.tier-name{font-size:18px;font-weight:900;color:var(--sl-text)}
+.tier-sub{font-size:11px;color:var(--sl-text2);margin-bottom:10px}
+.tier-price{font-size:26px;font-weight:900;color:var(--sl-text);font-family:var(--mono);margin:8px 0 14px}
+.tier-price span{font-size:13px;font-weight:400;color:var(--sl-text2)}
+.tier-feats{display:flex;flex-direction:column;gap:6px;margin-bottom:16px}
+.tier-feat{font-size:12px;color:var(--sl-text)}
+.tier-feat.off{color:var(--sl-text3);opacity:.5}
+.tier-feat.on{color:var(--sl-text)}
+.tier-buy{width:100%;background:#3F0E40;color:#fff;border:none;border-radius:8px;padding:10px;font-weight:900;font-size:13px;cursor:pointer;font-family:var(--sans)}
+.tier-buy:hover{background:#2d0a2e}
+.tier-buy:disabled{background:var(--sl-border2);color:var(--sl-text3);cursor:not-allowed}
 .plan-popular{position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:var(--sl-yellow);color:#1D1C1D;font-size:9px;font-weight:900;padding:2px 10px;border-radius:10px;white-space:nowrap}
 .trial-bar{background:var(--sl-orange-light);border:1px solid rgba(232,145,45,.3);border-radius:var(--radius);padding:8px 14px;margin-bottom:14px;display:flex;align-items:center;gap:10px;font-size:12px}
 .trial-bar-icon{font-size:18px}
@@ -1593,36 +1613,12 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
 <script src="js/asm-quotation.js"></script>
 <!-- Pricing / Upgrade Modal -->
 <div class="upgrade-overlay" id="pricing-modal" style="display:none" onclick="if(event.target===this)closePricing()">
-  <div class="upgrade-box" style="width:560px;max-width:95vw">
+  <div class="upgrade-box" style="width:820px;max-width:96vw">
     <div class="upgrade-icon">⭐</div>
     <div class="upgrade-title">Upgrade to EasyCutList Pro</div>
-    <div class="upgrade-sub" id="pricing-sub">Unlock all features. Cancel anytime.</div>
-    <div class="upgrade-features" style="margin-bottom:16px">
-      <div class="upgrade-feat">Cutting sequence diagram (numbered cut order)</div>
-      <div class="upgrade-feat">Excel &amp; CSV export of results</div>
-      <div class="upgrade-feat">Custom PDF branding with your logo</div>
-      <div class="upgrade-feat">Unlimited cloud-saved projects</div>
-      <div class="upgrade-feat">Client management &amp; price book</div>
-      <div class="upgrade-feat">Priority support</div>
-    </div>
-    <div class="pricing-plans" id="pricing-plans">
-      <div class="plan-card" id="plan-3month" onclick="selectPlan('3month')">
-        <div class="plan-card-name">3 Months</div>
-        <div class="plan-card-price" id="price-3month">₹999<span>/3mo</span></div>
-      </div>
-      <div class="plan-card selected" id="plan-6month" onclick="selectPlan('6month')">
-        <div class="plan-popular">POPULAR</div>
-        <div class="plan-card-name">6 Months</div>
-        <div class="plan-card-price" id="price-6month">₹1,799<span>/6mo</span></div>
-        <div class="plan-card-save" id="save-6month">Save 10%</div>
-      </div>
-      <div class="plan-card" id="plan-1year" onclick="selectPlan('1year')">
-        <div class="plan-card-name">1 Year</div>
-        <div class="plan-card-price" id="price-1year">₹2,999<span>/yr</span></div>
-        <div class="plan-card-save" id="save-1year">Save 25%</div>
-      </div>
-    </div>
-    <button class="upgrade-btn" id="pricing-pay-btn" onclick="startPayment()">🚀 Pay &amp; Upgrade Now</button>
+    <div class="upgrade-sub" id="pricing-sub">Choose the plan that fits you. Cancel anytime.</div>
+    <div class="pricing-duration-toggle" id="pricing-duration-toggle"></div>
+    <div class="pricing-tiers" id="pricing-tiers"></div>
     <div class="upgrade-skip" onclick="closePricing()">Maybe later</div>
   </div>
 </div>
