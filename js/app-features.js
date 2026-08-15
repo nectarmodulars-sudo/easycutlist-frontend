@@ -289,6 +289,57 @@ function openProfile(){
   const prev=document.getElementById('pf-logo-preview');
   prev.innerHTML=p.logo?`<img src="${p.logo}" style="max-height:50px;border-radius:4px;border:1px solid var(--sl-border2)">`:'' ;
   document.getElementById('profile-modal').style.display='flex';
+  loadProfilePlans();
+}
+
+// Fetch + show current Optimizer + ASM plans with expiry in the profile modal
+async function loadProfilePlans(){
+  const box = document.getElementById('pf-plans');
+  if(!box) return;
+  if(!CURRENT_USER){ box.innerHTML = '<div style="font-size:12px;color:var(--sl-text2)">Sign in to see your plans.</div>'; return; }
+  box.innerHTML = '<div style="font-size:12px;color:var(--sl-text2)">Loading plans…</div>';
+
+  const fmtDate = d => d ? new Date(d).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '';
+  const line = (label, planName, expiry, active) => {
+    const isPaid = active && planName && planName.toLowerCase() !== 'free';
+    const name = isPaid ? planName : 'Free';
+    const exp = (isPaid && expiry) ? ' · expires ' + fmtDate(expiry) : '';
+    const color = isPaid ? 'var(--sl-green,#2e9e4e)' : 'var(--sl-text2)';
+    return `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--sl-border2)">
+      <span style="font-size:13px;color:var(--sl-text)">${label}</span>
+      <span style="font-size:13px;font-weight:700;color:${color}">${esc(name)}${exp}</span>
+    </div>`;
+  };
+
+  let optHtml = line('Optimizer', 'Free', null, false);
+  let asmHtml = line('ASM Module', 'Free', null, false);
+
+  // Optimizer plan (+ tier name)
+  try {
+    const r = await fetch(`${API_URL}/my-plan`, { headers: authHeader() });
+    if(r.ok){
+      const d = await r.json();
+      let tierName = 'Pro';
+      if(d.plan === 'pro' && d.tierId){
+        try {
+          const tr = await fetch(`${API_URL}/tiers`);
+          if(tr.ok){ const td = await tr.json(); const t = (td.tiers||[]).find(x=>x.tier_id===d.tierId); if(t) tierName = t.name; }
+        } catch(e){}
+      }
+      optHtml = line('Optimizer', d.plan==='pro'?tierName:'Free', d.planExpiresAt, d.plan==='pro');
+    }
+  } catch(e){}
+
+  // ASM plan
+  try {
+    const r = await fetch(`${API_URL}/asm/payments/status`, { headers: authHeader() });
+    if(r.ok){
+      const d = await r.json();
+      asmHtml = line('ASM Module', d.active?'Pro':'Free', d.expiresAt, d.active);
+    }
+  } catch(e){}
+
+  box.innerHTML = optHtml + asmHtml;
 }
 function closeProfile(){document.getElementById('profile-modal').style.display='none'}
 function loadLogo(e){

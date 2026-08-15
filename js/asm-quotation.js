@@ -18,6 +18,11 @@
   var _itemRates = {};    // readyId/index -> rate
   var _matRates = {};     // material -> rate
   var _clientName = '';
+  var _clientPhone = '';
+  var _clientAddress = '';
+  var _discType = 'percent';   // 'percent' | 'flat'
+  var _discValue = 0;
+  var _quoteDesc = '';
 
   function areaDivisor() { return _areaUnit === 'sqft' ? MM2_PER_SQFT : MM2_PER_SQM; }
   function areaLabel() { return _areaUnit === 'sqft' ? 'sq.ft' : 'sq.m'; }
@@ -84,6 +89,7 @@
     if (!body) return;
     if (!getReady().length) { body.innerHTML = '<div style="padding:30px;text-align:center;color:#888">No items in Ready Items. Build and save items first.</div>'; return; }
     body.innerHTML = _mode === 'item' ? renderItemTable() : renderPanelTable();
+    _refreshFinal();
   }
 
   function renderItemTable() {
@@ -160,10 +166,32 @@
     }
     var foot = body.querySelector('tfoot .q-amt');
     if (foot) foot.textContent = money(total);
+    _refreshFinal();
   }
   function setMode(m) { _mode = m; syncToggle(); render(); }
   function setAreaUnit(u) { _areaUnit = u; syncToggle(); render(); }
   function setClient(v) { _clientName = v; }
+
+  // Discount: returns {total, discount, final}
+  function computeTotals() {
+    var ed = buildExportData();
+    var total = ed.total;
+    var disc = 0;
+    if (_discType === 'percent') disc = total * (Number(_discValue) || 0) / 100;
+    else disc = Number(_discValue) || 0;
+    disc = Math.max(0, Math.min(disc, total));
+    return { total: round2(total), discount: round2(disc), final: round2(total - disc) };
+  }
+  function _refreshFinal() {
+    var el = document.getElementById('q-final-summary');
+    if (!el) return;
+    var t = computeTotals();
+    var inr = n => '₹' + n.toLocaleString('en-IN');
+    el.innerHTML = 'Total ' + inr(t.total) + (t.discount > 0 ? ' &nbsp;−&nbsp; Disc ' + inr(t.discount) : '') +
+      ' &nbsp;=&nbsp; <b style="color:#2EB67D">Final ' + inr(t.final) + '</b>';
+  }
+  function _setDiscType(v) { _discType = v; _refreshFinal(); }
+  function _setDiscVal(v) { _discValue = +v || 0; _refreshFinal(); }
 
   function syncToggle() {
     var im = document.getElementById('q-mode-item'), pm = document.getElementById('q-mode-panel');
@@ -227,13 +255,21 @@
       '<button id="q-mode-panel" class="q-tab" onclick="ASMQuote.setMode(\'panel\')">Panel-wise</button></div>' +
       '<div class="q-tabs"><button id="q-area-sqft" class="q-tab active" onclick="ASMQuote.setAreaUnit(\'sqft\')">sq.ft</button>' +
       '<button id="q-area-sqm" class="q-tab" onclick="ASMQuote.setAreaUnit(\'sqm\')">sq.m</button></div>' +
-      '<div class="q-client"><span style="font-size:12px;color:#888">Client</span><input type="text" placeholder="Client name (optional)" oninput="ASMQuote.setClient(this.value)"></div>' +
       '</div>' +
       '<div id="quote-body" class="q-body"></div>' +
-      '<div class="q-foot">' +
+      '<div class="q-foot" style="flex-direction:column;align-items:stretch;gap:10px">' +
+      '<div style="display:flex;align-items:center;justify-content:flex-end;gap:10px">' +
+        '<span style="font-size:12px;color:#888">Discount</span>' +
+        '<select id="q-disc-type" onchange="ASMQuote._setDiscType(this.value)" style="padding:6px;background:#111;border:1px solid #444;color:#fff;border-radius:5px;font-size:12px">' +
+          '<option value="percent">% off</option><option value="flat">Flat ₹</option></select>' +
+        '<input id="q-disc-val" type="number" min="0" step="1" value="0" oninput="ASMQuote._setDiscVal(this.value)" style="width:90px;padding:6px;background:#111;border:1px solid #444;color:#fff;border-radius:5px;font-size:12px">' +
+        '<span id="q-final-summary" style="font-size:12px;color:#ddd;min-width:220px;text-align:right"></span>' +
+      '</div>' +
+      '<div style="display:flex;gap:10px;justify-content:flex-end">' +
       '<button class="q-btn q-close" onclick="ASMQuote.close()">Close</button>' +
       '<button class="q-btn q-xls" onclick="ASMQuote.exportExcel()">Export Excel</button>' +
       '<button class="q-btn q-pdf" onclick="ASMQuote.exportPDF()">Export PDF</button>' +
+      '</div>' +
       '</div></div>';
     return ov;
   }
@@ -256,24 +292,79 @@
     }
   }
 
-  function exportExcel() {
-    if (typeof XLSX === 'undefined') {
-      var s = document.createElement('script');
-      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
-      s.onload = _doExcel; document.head.appendChild(s);
-    } else { _doExcel(); }
+  // Ask for client details, then run the given export
+  function _clientModal(onProceed) {
+    var m = document.getElementById('q-client-modal');
+    if (m) m.remove();
+    m = document.createElement('div');
+    m.id = 'q-client-modal';
+    m.style.cssText = 'position:fixed;inset:0;z-index:10005;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center';
+    m.innerHTML =
+      '<div style="background:#1A1D21;border:1px solid #31353D;border-radius:10px;padding:20px;width:420px;max-width:95%;font-family:system-ui,sans-serif;color:#eee">' +
+        '<div style="font-size:15px;font-weight:700;margin-bottom:12px">Client Details</div>' +
+        '<label style="font-size:11px;color:#9A9DA2">Client name</label>' +
+        '<input id="qc-name" value="' + esc(_clientName) + '" style="width:100%;box-sizing:border-box;margin:2px 0 10px;padding:8px;background:#111;border:1px solid #444;color:#fff;border-radius:5px">' +
+        '<label style="font-size:11px;color:#9A9DA2">Phone</label>' +
+        '<input id="qc-phone" value="' + esc(_clientPhone) + '" style="width:100%;box-sizing:border-box;margin:2px 0 10px;padding:8px;background:#111;border:1px solid #444;color:#fff;border-radius:5px">' +
+        '<label style="font-size:11px;color:#9A9DA2">Address</label>' +
+        '<textarea id="qc-addr" rows="2" style="width:100%;box-sizing:border-box;margin:2px 0 10px;padding:8px;background:#111;border:1px solid #444;color:#fff;border-radius:5px">' + esc(_clientAddress) + '</textarea>' +
+        '<label style="font-size:11px;color:#9A9DA2">Description</label>' +
+        '<textarea id="qc-desc" rows="3" style="width:100%;box-sizing:border-box;margin:2px 0 14px;padding:8px;background:#111;border:1px solid #444;color:#fff;border-radius:5px">' + esc(_quoteDesc) + '</textarea>' +
+        '<div style="display:flex;gap:10px;justify-content:flex-end">' +
+          '<button id="qc-cancel" style="padding:8px 14px;border:1px solid #444;border-radius:6px;background:transparent;color:#ddd;cursor:pointer">Cancel</button>' +
+          '<button id="qc-go" style="padding:8px 14px;border:0;border-radius:6px;background:#ECB22E;color:#1A1D21;font-weight:700;cursor:pointer">Continue</button>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(m);
+    m.addEventListener('click', function (e) { if (e.target === m) m.remove(); });
+    document.getElementById('qc-cancel').onclick = function () { m.remove(); };
+    document.getElementById('qc-go').onclick = function () {
+      _clientName = document.getElementById('qc-name').value.trim();
+      _clientPhone = document.getElementById('qc-phone').value.trim();
+      _clientAddress = document.getElementById('qc-addr').value.trim();
+      _quoteDesc = document.getElementById('qc-desc').value.trim();
+      m.remove();
+      onProceed();
+    };
   }
+
+  function exportExcel() {
+    _clientModal(function () {
+      if (typeof XLSX === 'undefined') {
+        var s = document.createElement('script');
+        s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+        s.onload = _doExcel; document.head.appendChild(s);
+      } else { _doExcel(); }
+    });
+  }
+  // Read company info from optimizer's My Profile (global `profile`)
+  function _prof() {
+    var p = (typeof profile !== 'undefined' && profile) ? profile : {};
+    return { biz: p.biz || '', name: p.name || '', logo: p.logo || '' };
+  }
+
   function _doExcel() {
     var ed = buildExportData();
+    var pr = _prof();
     var aoa = [];
+    if (pr.biz) aoa.push([pr.biz]);
     aoa.push([ed.title]);
     if (_clientName) aoa.push(['Client:', _clientName]);
+    if (_clientPhone) aoa.push(['Phone:', _clientPhone]);
+    if (_clientAddress) aoa.push(['Address:', _clientAddress]);
     aoa.push(['Date:', new Date().toLocaleDateString('en-IN')]);
     aoa.push([]);
     aoa.push(ed.header);
     ed.data.forEach(function (r) { aoa.push(r); });
     aoa.push([]);
-    aoa.push(['', '', '', '', '', '', '', 'Grand Total', ed.total]);
+    var t = computeTotals();
+    aoa.push(['', '', '', '', '', '', '', 'Total', t.total]);
+    if (t.discount > 0) {
+      var dlabel = _discType === 'percent' ? ('Discount (' + _discValue + '%)') : 'Discount';
+      aoa.push(['', '', '', '', '', '', '', dlabel, -t.discount]);
+    }
+    aoa.push(['', '', '', '', '', '', '', 'Grand Total', t.final]);
+    if (_quoteDesc) { aoa.push([]); aoa.push(['Description:', _quoteDesc]); }
     var ws = XLSX.utils.aoa_to_sheet(aoa);
     var wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Quotation');
@@ -281,6 +372,9 @@
   }
 
   function exportPDF() {
+    _clientModal(_doPDF);
+  }
+  function _doPDF() {
     var ed = buildExportData();
     var au = areaLabel();
     var rowsHtml = ed.data.map(function (r) {
@@ -292,6 +386,20 @@
       }).join('') + '</tr>';
     }).join('');
     var win = window.open('', '_blank');
+    var pr = _prof();
+    var headerHtml = (pr.biz || pr.logo)
+      ? '<div style="display:flex;align-items:center;gap:14px;border-bottom:2px solid #4A154B;padding-bottom:10px;margin-bottom:14px">' +
+          (pr.logo ? '<img src="' + pr.logo + '" style="max-height:56px;max-width:160px">' : '') +
+          (pr.biz ? '<div style="font-size:20px;font-weight:800;color:#4A154B">' + esc(pr.biz) + '</div>' : '') +
+        '</div>'
+      : '';
+    var clientHtml = (_clientName || _clientPhone || _clientAddress)
+      ? '<div style="margin-bottom:14px">' +
+          (_clientName ? '<div style="font-size:18px;font-weight:700;color:#222">' + esc(_clientName) + '</div>' : '') +
+          (_clientPhone ? '<div style="font-size:12px;color:#444">Phone: ' + esc(_clientPhone) + '</div>' : '') +
+          (_clientAddress ? '<div style="font-size:12px;color:#444">' + esc(_clientAddress).replace(/\n/g,'<br>') + '</div>' : '') +
+        '</div>'
+      : '';
     win.document.write(
       '<html><head><title>' + ed.title + '</title><style>' +
       'body{font-family:Arial,sans-serif;font-size:12px;color:#222;padding:24px}' +
@@ -299,20 +407,47 @@
       'table{width:100%;border-collapse:collapse}th{background:#4A154B;color:#fff;padding:7px;text-align:left;font-size:11px}' +
       'td{padding:6px 7px;border-bottom:1px solid #ddd}tfoot td{font-weight:bold;border-top:2px solid #333}' +
       '.tot{text-align:right}</style></head><body>' +
+      headerHtml +
       '<h1>' + ed.title + '</h1>' +
-      '<div class="meta">' + (_clientName ? 'Client: ' + esc(_clientName) + ' &nbsp;·&nbsp; ' : '') +
-      'Date: ' + new Date().toLocaleDateString('en-IN') + ' &nbsp;·&nbsp; Area unit: ' + au + '</div>' +
+      clientHtml +
+      '<div class="meta">Date: ' + new Date().toLocaleDateString('en-IN') + ' &nbsp;·&nbsp; Area unit: ' + au + '</div>' +
       '<table><thead><tr>' + ed.header.map(function (hh, i) { return '<th' + (i >= 2 ? ' style="text-align:right"' : '') + '>' + esc(hh) + '</th>'; }).join('') + '</tr></thead>' +
       '<tbody>' + rowsHtml + '</tbody>' +
-      '<tfoot><tr><td colspan="' + (ed.header.length - 1) + '" class="tot">Grand Total</td><td class="tot">₹' + round2(ed.total).toLocaleString('en-IN') + '</td></tr></tfoot>' +
-      '</table></body></html>');
+      '<tfoot>' + (function(){ var t=computeTotals(); var span=ed.header.length-1; var inr=n=>'₹'+n.toLocaleString('en-IN');
+        var h='<tr><td colspan="'+span+'" class="tot">Total</td><td class="tot">'+inr(t.total)+'</td></tr>';
+        if(t.discount>0){ var dl=_discType==='percent'?('Discount ('+_discValue+'%)'):'Discount'; h+='<tr><td colspan="'+span+'" class="tot">'+dl+'</td><td class="tot">−'+inr(t.discount)+'</td></tr>'; }
+        h+='<tr><td colspan="'+span+'" class="tot">Grand Total</td><td class="tot">'+inr(t.final)+'</td></tr>';
+        return h; })() + '</tfoot>' +
+      '</table>' +
+      (_quoteDesc ? '<div style="margin-top:16px;font-size:12px;color:#333;white-space:pre-wrap;border-top:1px solid #ddd;padding-top:10px">' + esc(_quoteDesc) + '</div>' : '') +
+      '</body></html>');
     win.document.close();
-    setTimeout(function () { win.print(); }, 300);
+    // Wait for the window (and any logo image) to finish loading before printing,
+    // otherwise print() can fire on a blank page and the dialog never appears.
+    var fired = false;
+    var go = function () {
+      if (fired) return; fired = true;
+      try { win.focus(); win.print(); } catch (e) {}
+    };
+    var imgs = win.document.images;
+    if (imgs && imgs.length) {
+      var pending = imgs.length;
+      var done = function () { if (--pending <= 0) go(); };
+      for (var i = 0; i < imgs.length; i++) {
+        if (imgs[i].complete) { done(); }
+        else { imgs[i].onload = done; imgs[i].onerror = done; }
+      }
+      setTimeout(go, 1500); // fallback
+    } else {
+      (win.onload = go);
+      setTimeout(go, 400);  // fallback for instant docs
+    }
   }
 
   global.ASMQuote = {
     open: open, close: close, setMode: setMode, setAreaUnit: setAreaUnit,
     setClient: setClient, _setItemRate: _setItemRate, _setMatRate: _setMatRate,
+    _setDiscType: _setDiscType, _setDiscVal: _setDiscVal,
     exportPDF: exportPDF, exportExcel: exportExcel
   };
 })(typeof window !== 'undefined' ? window : this);
