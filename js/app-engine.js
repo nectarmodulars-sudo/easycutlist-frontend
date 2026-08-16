@@ -32,6 +32,12 @@ async function calculate() {
   if (!stockRows.length) { alert('Add at least one stock sheet.'); return; }
   if (!panelRows.length) { alert('Add at least one panel.'); return; }
 
+  // Material consolidation: offer to combine compound materials before packing
+  if (typeof MatConsolidate !== 'undefined' && MatConsolidate.needsPrompt()) {
+    MatConsolidate.open(() => calculate());
+    return;
+  }
+
   const kerf        = +document.getElementById('kerf').value || 0;
   const matchMat    = document.getElementById('mat-toggle').checked;
   const scale       = +document.getElementById('scale').value || 1;
@@ -66,7 +72,7 @@ async function calculate() {
           w:         Math.round(cut.l),
           h:         Math.round(cut.w),
           qty:       p.qty,
-          material:  p.material,
+          material:  (typeof MatConsolidate !== 'undefined') ? MatConsolidate.mapMaterial(p.material) : p.material,
           canRotate: true,
           srNo:      p.srNo || null,
         };
@@ -76,7 +82,7 @@ async function calculate() {
         w:        Math.round(s.l),
         h:        Math.round(s.w),
         qty:      s.qty,
-        material: s.material,
+        material: (typeof MatConsolidate !== 'undefined') ? MatConsolidate.mapMaterial(s.material) : s.material,
         grainLocked: s.grainLocked || false,
       })),
       kerf,
