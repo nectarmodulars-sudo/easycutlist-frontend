@@ -1,5 +1,26 @@
 // ══ UNITS (shared setting with ASM via localStorage 'ecl_unit') ══
 // All stored panel/stock dimensions stay in mm. Convert only at entry + display.
+
+// ── One-time migration: bump old default sheet size 1210×2430 → 1220×2440.
+// Runs once per browser. Only rewrites profiles still on the OLD default;
+// users who set a custom size are left untouched.
+(function migrateDefaultSheet(){
+  try {
+    if (localStorage.getItem('ecl_sheetdef_v2')) return;
+    const raw = localStorage.getItem('ecl_profile');
+    if (raw) {
+      const p = JSON.parse(raw);
+      const w = +p.defaultSheetW, h = +p.defaultSheetH;
+      if ((!w && !h) || (w === 1210 && h === 2430)) {
+        p.defaultSheetW = 1220; p.defaultSheetH = 2440;
+        localStorage.setItem('ecl_profile', JSON.stringify(p));
+        if (typeof profile !== 'undefined' && profile) { profile.defaultSheetW = 1220; profile.defaultSheetH = 2440; }
+      }
+    }
+    localStorage.setItem('ecl_sheetdef_v2', '1');
+  } catch (e) { /* ignore */ }
+})();
+
 function optUnit(){ return (window.UNITS ? UNITS.get() : 'mm'); }
 function d2mm(v){ return window.UNITS ? UNITS.toMM(v) : (+v||0); }        // display -> mm
 function mm2d(v){ return window.UNITS ? UNITS.fromMMNum(v) : v; }         // mm -> display number
@@ -58,8 +79,8 @@ function autoPopulateStock(){
   const mats = [...new Set(panelRows.map(p=>p.material).filter(Boolean))];
   if(!mats.length) return;
 
-  const defW = +(profile.defaultSheetW||1210);
-  const defH = +(profile.defaultSheetH||2430);
+  const defW = +(profile.defaultSheetW||1220);
+  const defH = +(profile.defaultSheetH||2440);
 
   // Add stock for any material not already covered
   let added = false;
@@ -95,9 +116,9 @@ function renderPanels(){
   </tr>`).join('')}
 
 // ══ STOCK ══
-function addStock(label='',l=1210,w=2430,qty=1,material='Plywood',price=0,grainLocked=false){
-  const def = profile.defaultSheetW ? parseInt(profile.defaultSheetW) : 1210;
-  const defH = profile.defaultSheetH ? parseInt(profile.defaultSheetH) : 2430;
+function addStock(label='',l=1220,w=2440,qty=1,material='Plywood',price=0,grainLocked=false){
+  const def = profile.defaultSheetW ? parseInt(profile.defaultSheetW) : 1220;
+  const defH = profile.defaultSheetH ? parseInt(profile.defaultSheetH) : 2440;
   // Auto-fill price from price book if not provided
   const autoPrice = price || priceBook[material] || 0;
   stockRows.push({id:uid(),label,l:l||def,w:w||defH,qty,material,price:autoPrice,grainLocked});

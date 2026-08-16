@@ -284,8 +284,8 @@ function openProfile(){
   document.getElementById('pf-phone').value=p.phone||'';
   document.getElementById('pf-currency').value=p.currency||'₹';
   document.getElementById('pf-kerf').value=p.kerf||3;
-  document.getElementById('pf-sw').value=p.defaultSheetW||1210;
-  document.getElementById('pf-sh').value=p.defaultSheetH||2430;
+  document.getElementById('pf-sw').value=p.defaultSheetW||1220;
+  document.getElementById('pf-sh').value=p.defaultSheetH||2440;
   const prev=document.getElementById('pf-logo-preview');
   prev.innerHTML=p.logo?`<img src="${p.logo}" style="max-height:50px;border-radius:4px;border:1px solid var(--sl-border2)">`:'' ;
   document.getElementById('profile-modal').style.display='flex';
@@ -358,8 +358,8 @@ function saveProfile(){
     phone: document.getElementById('pf-phone').value.trim(),
     currency: document.getElementById('pf-currency').value,
     kerf:  +document.getElementById('pf-kerf').value||3,
-    defaultSheetW: +document.getElementById('pf-sw').value||1210,
-    defaultSheetH: +document.getElementById('pf-sh').value||2430,
+    defaultSheetW: +document.getElementById('pf-sw').value||1220,
+    defaultSheetH: +document.getElementById('pf-sh').value||2440,
     logo:  profile._pendingLogo||profile.logo||null,
   };
   localStorage.setItem('ecl_profile', JSON.stringify(profile));
