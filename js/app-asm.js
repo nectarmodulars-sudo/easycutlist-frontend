@@ -946,15 +946,33 @@ const ASMModule = (() => {
       const data = await res.json();
       if (data.success && data.updates) {
         const changed = [];
+        // Match updates by cell reference so values land on the correct row even
+        // when the server's idx is stale (after reopen from RIS, output order can
+        // differ → values would otherwise leak into unrelated rows below).
+        const cellToTarget = {};
+        inst.outputs.forEach((o, oi) => {
+          if (!o.cellRefs) return;
+          if (o.cellRefs.w) cellToTarget[o.cellRefs.w] = { oi, field: 'w' };
+          if (o.cellRefs.h) cellToTarget[o.cellRefs.h] = { oi, field: 'h' };
+          if (o.cellRefs.q) cellToTarget[o.cellRefs.q] = { oi, field: 'qty' };
+        });
         data.updates.forEach(u => {
           if (u.value === '' || u.value == null) return;
-          // don't overwrite the just-edited cell
-          if (inst.outputs[u.idx].cellRefs && inst.outputs[u.idx].cellRefs[fmap[u.field]] === editedCell) return;
-          // don't overwrite a cell the user has manually overridden
-          const tgt = inst.outputs[u.idx];
-          if (tgt._editedFields && tgt._editedFields[u.field]) return;
-          tgt[u.field] = u.value;
-          changed.push({ idx: u.idx, field: u.field, value: u.value });
+          let oi, field;
+          if (u.cell && cellToTarget[u.cell]) {
+            ({ oi, field } = cellToTarget[u.cell]);
+          } else if (u.idx != null && inst.outputs[u.idx]) {
+            oi = u.idx; field = ({ w: 'w', h: 'h', qty: 'qty' })[u.field] || u.field;
+          } else {
+            return; // can't safely locate target → skip (prevents cross-row leak)
+          }
+          const tgt = inst.outputs[oi];
+          if (!tgt) return;
+          const cf = ({ w: 'w', h: 'h', qty: 'q' })[field] || field;
+          if (tgt.cellRefs && tgt.cellRefs[cf] === editedCell) return;   // just-edited cell
+          if (tgt._editedFields && tgt._editedFields[field]) return;      // manual override
+          tgt[field] = u.value;
+          changed.push({ idx: oi, field, value: u.value });
         });
         // Patch only the changed cells in place — never rebuild the tbody,
         // which would destroy the input the user just Tabbed into (see §5.5).
@@ -1269,6 +1287,7 @@ const ASMModule = (() => {
           <div class="asm-ris-item-head">
             <span class="asm-ris-num">${origIdx + 1}</span>
             <span class="asm-ris-name" style="cursor:pointer" onclick="ASMModule.reopenReady('${it.readyId}')" title="Click to edit">${it.itemName}${it.roomName ? ' <span style="font-size:10px;background:rgba(236,178,46,.16);color:#ECB22E;padding:2px 7px;border-radius:10px;font-weight:700">'+it.roomName+'</span>' : ''}${isEditing ? ' <span style="font-size:9px;background:#ECB22E;color:#1A1D21;padding:1px 5px;border-radius:3px;font-weight:700">EDITING</span>' : ''}</span>
+            <button class="asm-ris-remove" onclick="ASMModule.duplicateReady('${it.readyId}')" title="Duplicate" style="margin-right:2px">&#10697;</button>
             <button class="asm-ris-remove" onclick="ASMModule.removeReady('${it.readyId}')" title="Remove">&#10005;</button>
           </div>
           <div class="asm-ris-meta">
@@ -1305,6 +1324,27 @@ const ASMModule = (() => {
     sbsItems.push(newInst);
     renderSBS();
     renderReadyItems();
+  }
+
+  // Duplicate a RIS item as a new independent entry (deep copy of inputs+outputs).
+  function duplicateReady(readyId) {
+    const it = readyItems.find(i => i.readyId === readyId);
+    if (!it) return;
+    const idx = readyItems.indexOf(it);
+    const copy = {
+      readyId: 'ready_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+      itemId: it.itemId,
+      itemName: it.itemName,
+      roomName: it.roomName || '',
+      catalogueKey: it.catalogueKey,
+      inputs: { ...it.inputs },
+      outputs: (it.outputs || []).map(o => ({ ...o })),
+      subItems: (it.subItems || []).map(s => ({ ...s })),
+      imported: it.imported || false
+    };
+    readyItems.splice(idx + 1, 0, copy);
+    renderReadyItems();
+    if (typeof showToast === 'function') showToast('Item duplicated', 'success');
   }
 
   function removeReady(readyId) {
@@ -2917,7 +2957,7 @@ const ASMModule = (() => {
     showImportModal, downloadSample, doImport,
     filterCatalogue, addToSBS, removeFromSBS,
     updateInput, setRoomName, editOutput, deleteOutputRow, saveToReady, reviewCheck, setRisSort, asmLogin, asmLogout,
-    reopenReady, removeReady, clearReady, exportReady, exportToPDF, _runExport, sbsFont, setUnit, switchCatalogue, showCategoryGallery, exitGallery, addManualRow, addManualRowsPrompt, deleteManualRow, editManualRow, addSBSRows, adjustEBand,
+    reopenReady, removeReady, duplicateReady, clearReady, exportReady, exportToPDF, _runExport, sbsFont, setUnit, switchCatalogue, showCategoryGallery, exitGallery, addManualRow, addManualRowsPrompt, deleteManualRow, editManualRow, addSBSRows, adjustEBand,
     saveProject, showProjects, loadProject, deleteProject,
     showPricing, startASMPayment,
     toggleNotifications, openShare,
