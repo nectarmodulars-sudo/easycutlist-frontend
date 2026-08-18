@@ -292,53 +292,37 @@ function openProfile(){
   loadProfilePlans();
 }
 
-// Fetch + show current Optimizer + ASM plans with expiry in the profile modal
+// Fill "YOUR PLANS" section with current Optimizer + ASM plan & expiry.
 async function loadProfilePlans(){
   const box = document.getElementById('pf-plans');
   if(!box) return;
-  if(!CURRENT_USER){ box.innerHTML = '<div style="font-size:12px;color:var(--sl-text2)">Sign in to see your plans.</div>'; return; }
-  box.innerHTML = '<div style="font-size:12px;color:var(--sl-text2)">Loading plans…</div>';
-
   const fmtDate = d => d ? new Date(d).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '';
-  const line = (label, planName, expiry, active) => {
-    const isPaid = active && planName && planName.toLowerCase() !== 'free';
-    const name = isPaid ? planName : 'Free';
-    const exp = (isPaid && expiry) ? ' · expires ' + fmtDate(expiry) : '';
-    const color = isPaid ? 'var(--sl-green,#2e9e4e)' : 'var(--sl-text2)';
+  const line = (label, name, expiry, active) => {
+    const paid = active && name && name.toLowerCase() !== 'free';
+    const disp = paid ? name : 'Free';
+    const exp = (paid && expiry) ? ' · expires ' + fmtDate(expiry) : '';
+    const color = paid ? 'var(--sl-green,#2e9e4e)' : 'var(--sl-text2)';
     return `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--sl-border2)">
       <span style="font-size:13px;color:var(--sl-text)">${label}</span>
-      <span style="font-size:13px;font-weight:700;color:${color}">${esc(name)}${exp}</span>
-    </div>`;
+      <span style="font-size:13px;font-weight:700;color:${color}">${esc(disp)}${exp}</span></div>`;
   };
-
-  let optHtml = line('Optimizer', 'Free', null, false);
-  let asmHtml = line('ASM Module', 'Free', null, false);
-
-  // Optimizer plan (+ tier name)
+  let optHtml = line('Optimizer','Free',null,false);
+  let asmHtml = line('ASM Module','Free',null,false);
   try {
     const r = await fetch(`${API_URL}/my-plan`, { headers: authHeader() });
     if(r.ok){
       const d = await r.json();
       let tierName = 'Pro';
-      if(d.plan === 'pro' && d.tierId){
-        try {
-          const tr = await fetch(`${API_URL}/tiers`);
-          if(tr.ok){ const td = await tr.json(); const t = (td.tiers||[]).find(x=>x.tier_id===d.tierId); if(t) tierName = t.name; }
-        } catch(e){}
+      if(d.plan && d.plan !== 'free' && d.planId){
+        try { const tr = await fetch(`${API_URL}/tiers`); if(tr.ok){ const td = await tr.json(); const t=(td.tiers||[]).find(x=>x.tier_id===d.planId); if(t) tierName=t.name; } } catch(e){}
       }
-      optHtml = line('Optimizer', d.plan==='pro'?tierName:'Free', d.planExpiresAt, d.plan==='pro');
+      optHtml = line('Optimizer', (d.plan && d.plan!=='free')?tierName:'Free', d.planExpiresAt, d.plan && d.plan!=='free');
     }
   } catch(e){}
-
-  // ASM plan
   try {
     const r = await fetch(`${API_URL}/asm/payments/status`, { headers: authHeader() });
-    if(r.ok){
-      const d = await r.json();
-      asmHtml = line('ASM Module', d.active?'Pro':'Free', d.expiresAt, d.active);
-    }
+    if(r.ok){ const d = await r.json(); asmHtml = line('ASM Module', d.active?'Pro':'Free', d.expiresAt, d.active); }
   } catch(e){}
-
   box.innerHTML = optHtml + asmHtml;
 }
 function closeProfile(){document.getElementById('profile-modal').style.display='none'}
@@ -358,8 +342,8 @@ function saveProfile(){
     phone: document.getElementById('pf-phone').value.trim(),
     currency: document.getElementById('pf-currency').value,
     kerf:  +document.getElementById('pf-kerf').value||3,
-    defaultSheetW: +document.getElementById('pf-sw').value||1220,
-    defaultSheetH: +document.getElementById('pf-sh').value||2440,
+    defaultSheetW: +document.getElementById('pf-sw').value||1210,
+    defaultSheetH: +document.getElementById('pf-sh').value||2430,
     logo:  profile._pendingLogo||profile.logo||null,
   };
   localStorage.setItem('ecl_profile', JSON.stringify(profile));
@@ -383,7 +367,7 @@ function switchSaveTab(tab){
 }
 
 function openSaveProject(){
-  if(!hasFeature('saveProjects')){ showUpgrade('Save Projects'); return; }
+  if(!hasFeature('projects')){ showUpgrade('Save Projects'); return; }
   document.getElementById('sp-client').value = _resultClientName || '';
   document.getElementById('sp-status').value='draft';
   document.getElementById('sp-notes').value='';
@@ -400,7 +384,7 @@ function openSaveProject(){
 function closeSaveProject(){document.getElementById('save-proj-modal').style.display='none'}
 
 function saveProject(){
-  if(!hasFeature('saveProjects')){ showUpgrade('Save Projects'); return; }
+  if(!hasFeature('projects')){ showUpgrade('Save Projects'); return; }
   const cutlistData = {
     id: Date.now(),
     name: '',

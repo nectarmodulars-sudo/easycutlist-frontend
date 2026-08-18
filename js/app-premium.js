@@ -27,7 +27,9 @@ async function fetchPlanAndFlags(){
       if(planEl) planEl.textContent = (plan||'free').toUpperCase();
       // Show UPGRADE button only for free users who are signed in
       const upgradeBtn = document.getElementById('hdr-upgrade-btn');
-      if(upgradeBtn) upgradeBtn.style.display = (plan === 'pro') ? 'none' : '';
+      if(upgradeBtn) upgradeBtn.style.display = (plan && plan !== 'free') ? 'none' : '';
+      const mobUpgrade = document.getElementById('mob-upgrade-btn');
+      if(mobUpgrade) mobUpgrade.style.display = (plan && plan !== 'free') ? 'none' : '';
     }
     updateUpgradeBtn();
     if(flagsRes.ok){
@@ -79,7 +81,7 @@ const FLAG_KEY_MAP = {
   reviewCheck:      'reviewCheck',
 };
 
-function isPro(){ return PLAN === 'pro'; }
+function isPro(){ return PLAN && PLAN !== 'free'; }
 
 // Feature access resolution (order matters):
 // 1. Admin flag set to "free" → available to everyone (global override).
