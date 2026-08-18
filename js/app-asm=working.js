@@ -1933,27 +1933,518 @@ const ASMModule = (() => {
   }
 
   // ========================================================================
-  // PDF EXPORT (delegated to asm-pdf-export.js / window.ASMPdf)
+  // SVG DIAGRAM GENERATOR
   // ========================================================================
 
-  function _pdfCtx() {
-    return {
-      readyItems,
-      catalogue,
-      asmPlan,
-      currentClientName,
-      showToast,
-      showPricing,
-    };
+  function generateItemDiagram(inst) {
+    if (!inst.outputs || inst.outputs.length === 0) return '';
+
+    const inp = inst.inputs;
+    const W = inp.width || inp.w || inp.W || 1000;
+    const H = inp.ht || inp.h || inp.H || inp.height || 800;
+    const D = inp.depth || inp.d || inp.D || 400;
+    const category = (inst.itemId || '').toLowerCase();
+
+    // Detect item type from name/id
+    if (category.includes('wardrobe') || category.includes('sliding')) return wardrobeDiagram(inst, W, H, D);
+    if (category.includes('cab') || category.includes('cabinet') || category.includes('shutter')) return cabinetDiagram(inst, W, H, D);
+    if (category.includes('bed')) return bedDiagram(inst, W, H, D);
+    if (category.includes('loft') || category.includes('bl')) return loftDiagram(inst, W, H, D);
+    if (category.includes('dressing') || category.includes('table')) return cabinetDiagram(inst, W, H, D);
+
+    // Generic fallback
+    return genericDiagram(inst, W, H, D);
   }
+
+  function wardrobeDiagram(inst, W, H, D) {
+    // Scale to fit in ~400x300 SVG
+    const scale = Math.min(360 / W, 260 / H);
+    const sw = Math.round(W * scale);
+    const sh = Math.round(H * scale);
+    const ox = Math.round((400 - sw) / 2); // offset x
+    const oy = 20; // offset y
+    const svgH = sh + 70;
+
+    // Find components
+    const find = (name) => inst.outputs.find(o => o.component && o.component.toUpperCase().includes(name));
+    const shelf = find('SHELF');
+    const halfShelf = find('HALF');
+    const vertical = find('VERTICAL PART') || find('PARTITION');
+    const locker = find('LOCKER');
+    const drawer = find('DRAWER') || find('FACE');
+    const door = find('DOOR');
+    const shelfCount = shelf ? shelf.qty : 0;
+    const halfCount = halfShelf ? halfShelf.qty : 0;
+    const hasLocker = locker && locker.qty > 0;
+    const hasDrawers = drawer && drawer.qty > 0;
+
+    // Panel thickness scaled
+    const pt = Math.max(2, Math.round(18 * scale));
+    const midX = ox + Math.round(sw / 2);
+
+    let svg = `<svg width="100%" viewBox="0 0 400 ${svgH}" style="max-height:300px">`;
+
+    // Back panel (dashed)
+    svg += `<rect x="${ox + pt}" y="${oy + pt}" width="${sw - pt * 2}" height="${sh - pt * 2}" fill="none" stroke="var(--text-muted)" stroke-width="0.5" stroke-dasharray="3 2" opacity="0.4"/>`;
+
+    // Top
+    svg += `<rect x="${ox}" y="${oy}" width="${sw}" height="${pt}" rx="1" fill="#1D9E75" fill-opacity="0.3" stroke="#1D9E75" stroke-width="0.5"/>`;
+    // Bottom
+    svg += `<rect x="${ox + pt}" y="${oy + sh - pt}" width="${sw - pt * 2}" height="${pt}" rx="1" fill="#1D9E75" fill-opacity="0.3" stroke="#1D9E75" stroke-width="0.5"/>`;
+    // Left side
+    svg += `<rect x="${ox}" y="${oy + pt}" width="${pt}" height="${sh - pt}" rx="1" fill="#378ADD" fill-opacity="0.3" stroke="#378ADD" stroke-width="0.5"/>`;
+    // Right side
+    svg += `<rect x="${ox + sw - pt}" y="${oy + pt}" width="${pt}" height="${sh - pt}" rx="1" fill="#378ADD" fill-opacity="0.3" stroke="#378ADD" stroke-width="0.5"/>`;
+
+    // Vertical partition (center)
+    if (vertical && vertical.qty > 0) {
+      svg += `<rect x="${midX - 1}" y="${oy + pt}" width="${3}" height="${sh - pt * 2 - (hasDrawers ? sh * 0.2 : 0)}" fill="#7F77DD" fill-opacity="0.5" stroke="#7F77DD" stroke-width="0.5"/>`;
+    }
+
+    // Shelves (left compartment)
+    const shelfArea = sh - pt * 2 - (hasDrawers ? sh * 0.25 : 0) - (hasLocker ? sh * 0.15 : 0);
+    const leftW = midX - ox - pt - 2;
+    for (let i = 0; i < Math.min(shelfCount, 6); i++) {
+      const sy = oy + pt + Math.round(shelfArea * (i + 1) / (shelfCount + 1));
+      svg += `<rect x="${ox + pt}" y="${sy}" width="${leftW}" height="2" fill="#639922" fill-opacity="0.6" stroke="#639922" stroke-width="0.5"/>`;
+    }
+
+    // Half shelves (right compartment, upper)
+    const rightX = midX + 3;
+    const rightW = ox + sw - pt - rightX;
+    const upperH = Math.round(shelfArea * 0.5);
+    for (let i = 0; i < Math.min(halfCount, 4); i++) {
+      const sy = oy + pt + Math.round(upperH * (i + 1) / (Math.min(halfCount, 4) + 1));
+      // Half shelf = two halves
+      svg += `<rect x="${rightX}" y="${sy}" width="${Math.round(rightW / 2) - 2}" height="2" fill="#BA7517" fill-opacity="0.5" stroke="#BA7517" stroke-width="0.5"/>`;
+      svg += `<rect x="${rightX + Math.round(rightW / 2) + 2}" y="${sy}" width="${Math.round(rightW / 2) - 2}" height="2" fill="#BA7517" fill-opacity="0.5" stroke="#BA7517" stroke-width="0.5"/>`;
+    }
+
+    // Drawers (bottom left)
+    if (hasDrawers) {
+      const drawerY = oy + sh - pt - Math.round(sh * 0.22);
+      const drawerH = Math.round(sh * 0.18);
+      const rows = Math.min(drawer.qty, 4);
+      const rowH = Math.round(drawerH / rows);
+      for (let i = 0; i < rows; i++) {
+        svg += `<rect x="${ox + pt + 4}" y="${drawerY + i * rowH + 2}" width="${leftW - 8}" height="${rowH - 4}" rx="2" fill="#D85A30" fill-opacity="0.2" stroke="#D85A30" stroke-width="0.5"/>`;
+        // Handle
+        const hy = drawerY + i * rowH + Math.round(rowH / 2);
+        svg += `<line x1="${ox + pt + leftW / 2 - 8}" y1="${hy}" x2="${ox + pt + leftW / 2 + 8}" y2="${hy}" stroke="#D85A30" stroke-width="1.5" stroke-linecap="round"/>`;
+      }
+    }
+
+    // Locker (bottom right)
+    if (hasLocker) {
+      const lockerY = oy + sh - pt - Math.round(sh * 0.18);
+      const lockerH = Math.round(sh * 0.14);
+      svg += `<rect x="${rightX + 2}" y="${lockerY}" width="${rightW - 4}" height="${lockerH}" rx="2" fill="none" stroke="var(--text-muted)" stroke-width="0.5" stroke-dasharray="3 2"/>`;
+      svg += `<text x="${rightX + rightW / 2}" y="${lockerY + lockerH / 2 + 4}" text-anchor="middle" fill="var(--text-muted)" font-size="9" font-family="var(--font-sans)">LOCKER</text>`;
+    }
+
+    // Sliding doors (overlay)
+    svg += `<rect x="${ox + 2}" y="${oy + pt + 2}" width="${Math.round(sw / 2) - 4}" height="${sh - pt * 2 - 4}" rx="2" fill="none" stroke="var(--text-accent)" stroke-width="0.8" stroke-dasharray="8 4" opacity="0.4"/>`;
+    svg += `<rect x="${midX + 2}" y="${oy + pt + 2}" width="${Math.round(sw / 2) - 4}" height="${sh - pt * 2 - 4}" rx="2" fill="none" stroke="var(--text-accent)" stroke-width="0.8" stroke-dasharray="8 4" opacity="0.4"/>`;
+
+    // Skirting
+    svg += `<rect x="${ox}" y="${oy + sh}" width="${sw}" height="${Math.max(3, Math.round(8 * scale))}" rx="1" fill="var(--text-muted)" fill-opacity="0.3" stroke="var(--text-muted)" stroke-width="0.5"/>`;
+
+    // Dimension labels
+    svg += `<text x="${ox + sw / 2}" y="${oy + sh + 30}" text-anchor="middle" fill="var(--text-secondary)" font-size="11" font-family="var(--font-sans)" font-weight="500">${W} × ${H} × ${D} mm</text>`;
+
+    // Component count
+    svg += `<text x="${ox + sw / 2}" y="${oy + sh + 45}" text-anchor="middle" fill="var(--text-muted)" font-size="9" font-family="var(--font-sans)">${inst.outputs.length} components</text>`;
+
+    svg += '</svg>';
+    return svg;
+  }
+
+  function cabinetDiagram(inst, W, H, D) {
+    const scale = Math.min(360 / W, 260 / H);
+    const sw = Math.round(W * scale);
+    const sh = Math.round(H * scale);
+    const ox = Math.round((400 - sw) / 2);
+    const oy = 20;
+    const svgH = sh + 70;
+    const pt = Math.max(2, Math.round(18 * scale));
+
+    const find = (name) => inst.outputs.find(o => o.component && o.component.toUpperCase().includes(name));
+    const shelf = find('SHELF');
+    const door = find('DOOR');
+    const shelfCount = shelf ? shelf.qty : 0;
+    const doorCount = door ? door.qty : 1;
+
+    let svg = `<svg width="100%" viewBox="0 0 400 ${svgH}" style="max-height:280px">`;
+
+    // Back (dashed)
+    svg += `<rect x="${ox + pt}" y="${oy + pt}" width="${sw - pt * 2}" height="${sh - pt * 2}" fill="none" stroke="var(--text-muted)" stroke-width="0.5" stroke-dasharray="3 2" opacity="0.4"/>`;
+
+    // Top, Bottom
+    svg += `<rect x="${ox}" y="${oy}" width="${sw}" height="${pt}" rx="1" fill="#1D9E75" fill-opacity="0.3" stroke="#1D9E75" stroke-width="0.5"/>`;
+    svg += `<rect x="${ox + pt}" y="${oy + sh - pt}" width="${sw - pt * 2}" height="${pt}" rx="1" fill="#1D9E75" fill-opacity="0.3" stroke="#1D9E75" stroke-width="0.5"/>`;
+
+    // Sides
+    svg += `<rect x="${ox}" y="${oy + pt}" width="${pt}" height="${sh - pt}" rx="1" fill="#378ADD" fill-opacity="0.3" stroke="#378ADD" stroke-width="0.5"/>`;
+    svg += `<rect x="${ox + sw - pt}" y="${oy + pt}" width="${pt}" height="${sh - pt}" rx="1" fill="#378ADD" fill-opacity="0.3" stroke="#378ADD" stroke-width="0.5"/>`;
+
+    // Shelves
+    const innerW = sw - pt * 2;
+    for (let i = 0; i < Math.min(shelfCount, 6); i++) {
+      const sy = oy + pt + Math.round((sh - pt * 2) * (i + 1) / (shelfCount + 1));
+      svg += `<rect x="${ox + pt}" y="${sy}" width="${innerW}" height="2" fill="#639922" fill-opacity="0.6" stroke="#639922" stroke-width="0.5"/>`;
+    }
+
+    // Doors overlay
+    const doorW = Math.round(innerW / Math.min(doorCount, 4));
+    for (let i = 0; i < Math.min(doorCount, 4); i++) {
+      const dx = ox + pt + i * doorW;
+      svg += `<rect x="${dx + 3}" y="${oy + pt + 3}" width="${doorW - 6}" height="${sh - pt * 2 - 6}" rx="3" fill="none" stroke="var(--text-accent)" stroke-width="0.8" stroke-dasharray="6 3" opacity="0.4"/>`;
+      // Handle
+      const hx = dx + doorW - 12;
+      svg += `<line x1="${hx}" y1="${oy + sh / 2 - 8}" x2="${hx}" y2="${oy + sh / 2 + 8}" stroke="var(--text-accent)" stroke-width="1.5" stroke-linecap="round" opacity="0.5"/>`;
+    }
+
+    svg += `<text x="${ox + sw / 2}" y="${oy + sh + 30}" text-anchor="middle" fill="var(--text-secondary)" font-size="11" font-family="var(--font-sans)" font-weight="500">${W} × ${H} × ${D} mm</text>`;
+    svg += `<text x="${ox + sw / 2}" y="${oy + sh + 45}" text-anchor="middle" fill="var(--text-muted)" font-size="9" font-family="var(--font-sans)">${inst.outputs.length} components</text>`;
+    svg += '</svg>';
+    return svg;
+  }
+
+  function bedDiagram(inst, W, H, D) {
+    // Bed is wide and short
+    const scale = Math.min(360 / W, 180 / H);
+    const sw = Math.round(W * scale);
+    const sh = Math.round(H * scale);
+    const ox = Math.round((400 - sw) / 2);
+    const oy = 30;
+    const svgH = sh + 90;
+
+    let svg = `<svg width="100%" viewBox="0 0 400 ${svgH}" style="max-height:240px">`;
+
+    // Mattress area
+    svg += `<rect x="${ox}" y="${oy}" width="${sw}" height="${sh}" rx="6" fill="var(--text-muted)" fill-opacity="0.08" stroke="var(--text-muted)" stroke-width="1"/>`;
+
+    // Headboard
+    svg += `<rect x="${ox}" y="${oy - 16}" width="${sw}" height="18" rx="3" fill="#7F77DD" fill-opacity="0.3" stroke="#7F77DD" stroke-width="0.5"/>`;
+    svg += `<text x="${ox + sw / 2}" y="${oy - 5}" text-anchor="middle" fill="var(--text-muted)" font-size="8" font-family="var(--font-sans)">HEADBOARD</text>`;
+
+    // Side rails
+    svg += `<rect x="${ox}" y="${oy}" width="6" height="${sh}" rx="1" fill="#378ADD" fill-opacity="0.3" stroke="#378ADD" stroke-width="0.5"/>`;
+    svg += `<rect x="${ox + sw - 6}" y="${oy}" width="6" height="${sh}" rx="1" fill="#378ADD" fill-opacity="0.3" stroke="#378ADD" stroke-width="0.5"/>`;
+
+    // Bottom panel
+    svg += `<rect x="${ox + 6}" y="${oy + sh - 6}" width="${sw - 12}" height="6" rx="1" fill="#1D9E75" fill-opacity="0.3" stroke="#1D9E75" stroke-width="0.5"/>`;
+
+    // Storage (if trolley/flap)
+    const hasTrolley = (inst.itemId || '').toLowerCase().includes('trl') || (inst.itemId || '').toLowerCase().includes('trolley');
+    if (hasTrolley) {
+      svg += `<rect x="${ox + 10}" y="${oy + 10}" width="${sw - 20}" height="${sh - 20}" rx="3" fill="none" stroke="var(--text-muted)" stroke-width="0.5" stroke-dasharray="4 2"/>`;
+      svg += `<text x="${ox + sw / 2}" y="${oy + sh / 2 + 3}" text-anchor="middle" fill="var(--text-muted)" font-size="9" font-family="var(--font-sans)">STORAGE</text>`;
+    }
+
+    svg += `<text x="${ox + sw / 2}" y="${oy + sh + 30}" text-anchor="middle" fill="var(--text-secondary)" font-size="11" font-family="var(--font-sans)" font-weight="500">${W} × ${H} × ${D} mm</text>`;
+    svg += `<text x="${ox + sw / 2}" y="${oy + sh + 45}" text-anchor="middle" fill="var(--text-muted)" font-size="9" font-family="var(--font-sans)">${inst.outputs.length} components</text>`;
+    svg += '</svg>';
+    return svg;
+  }
+
+  function loftDiagram(inst, W, H, D) {
+    // Loft is wide and short (overhead cabinet)
+    const scale = Math.min(360 / W, 160 / H);
+    const sw = Math.round(W * scale);
+    const sh = Math.round(H * scale);
+    const ox = Math.round((400 - sw) / 2);
+    const oy = 20;
+    const svgH = sh + 70;
+    const pt = Math.max(2, Math.round(14 * scale));
+
+    const find = (name) => inst.outputs.find(o => o.component && o.component.toUpperCase().includes(name));
+    const door = find('DOOR');
+    const doorCount = door ? door.qty : 1;
+
+    let svg = `<svg width="100%" viewBox="0 0 400 ${svgH}" style="max-height:220px">`;
+
+    // Structure
+    svg += `<rect x="${ox}" y="${oy}" width="${sw}" height="${sh}" rx="3" fill="var(--text-muted)" fill-opacity="0.06" stroke="var(--text-muted)" stroke-width="1"/>`;
+    svg += `<rect x="${ox}" y="${oy}" width="${sw}" height="${pt}" rx="1" fill="#1D9E75" fill-opacity="0.3" stroke="#1D9E75" stroke-width="0.5"/>`;
+    svg += `<rect x="${ox}" y="${oy + sh - pt}" width="${sw}" height="${pt}" rx="1" fill="#1D9E75" fill-opacity="0.3" stroke="#1D9E75" stroke-width="0.5"/>`;
+    svg += `<rect x="${ox}" y="${oy + pt}" width="${pt}" height="${sh - pt * 2}" rx="1" fill="#378ADD" fill-opacity="0.3" stroke="#378ADD" stroke-width="0.5"/>`;
+    svg += `<rect x="${ox + sw - pt}" y="${oy + pt}" width="${pt}" height="${sh - pt * 2}" rx="1" fill="#378ADD" fill-opacity="0.3" stroke="#378ADD" stroke-width="0.5"/>`;
+
+    // Doors
+    const innerW = sw - pt * 2;
+    const dw = Math.round(innerW / Math.min(doorCount, 3));
+    for (let i = 0; i < Math.min(doorCount, 3); i++) {
+      svg += `<rect x="${ox + pt + i * dw + 3}" y="${oy + pt + 3}" width="${dw - 6}" height="${sh - pt * 2 - 6}" rx="2" fill="none" stroke="var(--text-accent)" stroke-width="0.8" stroke-dasharray="5 3" opacity="0.5"/>`;
+    }
+
+    svg += `<text x="${ox + sw / 2}" y="${oy + sh + 25}" text-anchor="middle" fill="var(--text-secondary)" font-size="11" font-family="var(--font-sans)" font-weight="500">${W} × ${H} × ${D} mm</text>`;
+    svg += `<text x="${ox + sw / 2}" y="${oy + sh + 40}" text-anchor="middle" fill="var(--text-muted)" font-size="9" font-family="var(--font-sans)">${inst.outputs.length} components</text>`;
+    svg += '</svg>';
+    return svg;
+  }
+
+  function genericDiagram(inst, W, H, D) {
+    const scale = Math.min(360 / W, 240 / H);
+    const sw = Math.round(W * scale);
+    const sh = Math.round(H * scale);
+    const ox = Math.round((400 - sw) / 2);
+    const oy = 20;
+    const svgH = sh + 70;
+
+    let svg = `<svg width="100%" viewBox="0 0 400 ${svgH}" style="max-height:260px">`;
+    svg += `<rect x="${ox}" y="${oy}" width="${sw}" height="${sh}" rx="4" fill="var(--text-muted)" fill-opacity="0.06" stroke="var(--text-muted)" stroke-width="1"/>`;
+
+    // Show component names inside
+    const maxShow = Math.min(inst.outputs.length, 8);
+    for (let i = 0; i < maxShow; i++) {
+      const o = inst.outputs[i];
+      const ty = oy + 20 + i * 16;
+      svg += `<text x="${ox + 12}" y="${ty}" fill="var(--text-secondary)" font-size="9" font-family="var(--font-sans)">${o.component}: ${o.w}×${o.h} (${o.qty})</text>`;
+    }
+    if (inst.outputs.length > maxShow) {
+      svg += `<text x="${ox + 12}" y="${oy + 20 + maxShow * 16}" fill="var(--text-muted)" font-size="9" font-family="var(--font-sans)">+ ${inst.outputs.length - maxShow} more...</text>`;
+    }
+
+    svg += `<text x="${ox + sw / 2}" y="${oy + sh + 25}" text-anchor="middle" fill="var(--text-secondary)" font-size="11" font-family="var(--font-sans)" font-weight="500">${W} × ${H} × ${D} mm</text>`;
+    svg += '</svg>';
+    return svg;
+  }
+
+  // ========================================================================
+  // EXPORT TO PDF
+  // ========================================================================
+
   function exportToPDF() {
-    if (!window.ASMPdf) { showToast('PDF module not loaded', 'error'); return; }
-    ASMPdf.exportToPDF(_pdfCtx());
+    if (readyItems.length === 0) { showToast('No items to export', 'error'); return; }
+    if (asmPlan !== 'pro') {
+      const hasLockedItems = readyItems.some(it => {
+        const ci = catalogue.find(x => x.id === it.itemId);
+        return ci ? !ci.is_free : true;
+      });
+      if (hasLockedItems) { showToast('PDF export with PRO items requires upgrade', 'error'); showPricing(); return; }
+    }
+    showExportOptions();
   }
+
+  function hf(flag){ try { return (typeof hasFeature==='function') ? hasFeature(flag) : (asmPlan==='pro'); } catch(e){ return asmPlan==='pro'; } }
+
+  function showExportOptions() {
+    const old = document.getElementById('asm-export-modal'); if (old) old.remove();
+    const gp = (typeof profile!=='undefined' && profile) ? profile : {};
+    const overlay = document.createElement('div');
+    overlay.id = 'asm-export-modal';
+    overlay.dataset.client = currentClientName || '';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:10005;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center';
+    overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+    const row = (id, label, sub, checked, locked) =>
+      `<label class="asm-eo-row" style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #2A2D31;${locked?'opacity:.45':''}">
+         <div><div style="font-size:13px;color:#E8E8E8">${label}${locked?' <span style="color:#ECB22E;font-size:10px">⭐PRO</span>':''}</div>
+         <div style="font-size:11px;color:#7A7D82">${sub}</div></div>
+         <input type="checkbox" id="${id}" ${checked?'checked':''} ${locked?'disabled':''} style="width:18px;height:18px;accent-color:#2EB67D">
+       </label>`;
+    overlay.innerHTML = `
+      <div style="background:#1A1D21;border:1px solid #3A3D42;border-radius:12px;width:440px;max-height:85vh;overflow:auto">
+        <div style="padding:16px 20px;background:#222529;border-bottom:1px solid #3A3D42;display:flex;justify-content:space-between;align-items:center">
+          <div style="font-size:15px;font-weight:700;color:#fff">📄 Export PDF Options</div>
+          <button onclick="document.getElementById('asm-export-modal').remove()" style="background:none;border:none;color:#7A7D82;font-size:20px;cursor:pointer">&#10005;</button>
+        </div>
+        <div style="padding:16px 20px">
+          ${row('eo-logo','Company Logo','Your logo from My Profile', false, !hf('pdfLogoHeader')||!gp.logo)}
+          ${row('eo-company','Company Name','Business name from My Profile', false, !hf('pdfCompanyName')||!gp.biz)}
+          <div style="padding:12px 0;border-bottom:1px solid #2A2D31">
+            <div style="font-size:13px;color:#E8E8E8;margin-bottom:6px">Client Name</div>
+            <input type="text" id="eo-client-text" value="${(currentClientName||'').replace(/"/g,'&quot;')}" placeholder="Type client name" style="width:100%;padding:8px 10px;background:#222529;border:1px solid #3A3D42;border-radius:6px;color:#fff;font-size:13px;box-sizing:border-box">
+          </div>
+          ${row('eo-outer','Print Outer Details','Input values grid atop each item', true, false)}
+          ${row('eo-summary','Panel Summary','Components / panels line per item', true, false)}
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0 4px">
+            <div><div style="font-size:13px;color:#E8E8E8">W×H×Qty×Material font (pt)</div>
+            <div style="font-size:11px;color:#7A7D82">Component table text size</div></div>
+            <input type="number" id="eo-font" value="14" min="8" max="24" style="width:60px;padding:6px 8px;background:#222529;border:1px solid #3A3D42;border-radius:6px;color:#fff;font-size:13px;text-align:center">
+          </div>
+        </div>
+        <div style="padding:12px 20px;background:#222529;border-top:1px solid #3A3D42;display:flex;justify-content:flex-end;gap:8px">
+          <button onclick="document.getElementById('asm-export-modal').remove()" style="padding:8px 16px;background:#3A3D42;border:none;border-radius:6px;color:#ABABAD;font-size:13px;cursor:pointer">Cancel</button>
+          <button onclick="ASMModule._runExport()" style="padding:8px 16px;background:#ECB22E;border:none;border-radius:6px;color:#1A1D21;font-weight:700;font-size:13px;cursor:pointer">Export PDF</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+  }
+
   function _runExport() {
-    if (!window.ASMPdf) { showToast('PDF module not loaded', 'error'); return; }
-    ASMPdf.runExport(_pdfCtx());
+    const gp = (typeof profile!=='undefined' && profile) ? profile : {};
+    const modalEl = document.getElementById('asm-export-modal');
+    const opt = {
+      logo:    document.getElementById('eo-logo')?.checked && gp.logo,
+      company: document.getElementById('eo-company')?.checked && gp.biz,
+      phone:   document.getElementById('eo-company')?.checked && gp.phone,
+      client:  (document.getElementById('eo-client-text')?.value || '').trim(),
+      outer:   document.getElementById('eo-outer')?.checked,
+      summary: document.getElementById('eo-summary')?.checked,
+      font:    parseInt(document.getElementById('eo-font')?.value) || 14,
+      biz: gp.biz, logoSrc: gp.logo, phoneNum: gp.phone
+    };
+    document.getElementById('asm-export-modal')?.remove();
+    _doExportPDF(opt);
   }
+
+  function _doExportPDF(opt) {
+    opt = opt || {};
+    const fs = opt.font || 14;
+    let html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+      <title>EasyCutList ASM - Size Sheet</title>
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; font-size: 11px; color: #333; padding: 15px; }
+        .header { text-align: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #333; }
+        .header h1 { font-size: 16px; margin-bottom: 3px; }
+        .header p { font-size: 10px; color: #666; }
+        .item { margin-bottom: 18px; }
+        .item-table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+        .item-table:first-of-type { margin-top: 0; }
+        /* Title row (was .item-title) */
+        .it-title-row td { background: #333; color: #fff; padding: 6px 10px; font-size: 13px; font-weight: bold; }
+        /* Input rows (was .item-inputs) */
+        .it-input-row td { background: #f5f5f5; padding: 3px 8px; font-size: 9px; color: #555; border: 1px solid #ddd; }
+        .it-input-pad { background: #f5f5f5 !important; border: 1px solid #ddd; }
+        /* Column-header row */
+        .it-colhead th { background: #eee; padding: 4px 6px; text-align: left; font-size: ${fs}px; border: 1px solid #ccc; font-weight: 700; }
+        /* Only keep the title row from being stranded alone at the very bottom
+           of a page. Everything else (inputs, header, size rows) flows freely
+           and fills the page — items continue immediately after one another. */
+        .it-title-row { break-after: avoid; }
+        .run-header { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #333; padding-bottom: 8px; position: running(hdr); width: 100%; }
+        @page { margin: 34mm 12mm 16mm 12mm; @top-center { content: element(hdr); } @bottom-left { content: "Generated by EasyCutList ASM"; font-size: 9px; color: #999; } @bottom-right { content: "Page " counter(page) " of " counter(pages); font-size: 9px; color: #999; } }
+        table { width: 100%; border-collapse: collapse; }
+        tr { break-inside: avoid; }
+        th { background: #eee; padding: 4px 6px; text-align: left; font-size: ${fs}px; border: 1px solid #ccc; font-weight: 700; }
+        td { padding: 4px 6px; border: 1px solid #ccc; font-size: ${fs}px; }
+        td.num { text-align: right; font-weight: 600; }
+        .summary { font-size: 10px; color: #666; text-align: right; padding: 4px; }
+        .footer { margin-top: 20px; text-align: left; font-size: 12px; color: #666; border-top: 1px solid #ccc; padding-top: 8px; }
+        @media print { body { padding: 10px; } tr { page-break-inside: avoid; } }
+      </style>
+    </head><body>`;
+
+    const escH = s => String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    if (opt.logo || opt.company || opt.client) {
+      const center = [];
+      if (opt.company && opt.biz) center.push(`<div style="font-weight:900;font-size:16px">${escH(opt.biz)}</div>`);
+      if (opt.phone && opt.phoneNum) center.push(`<div style="font-size:11px;color:#666">${escH(opt.phoneNum)}</div>`);
+      const logoImg = (opt.logo && opt.logoSrc) ? `<img src="${opt.logoSrc}" style="max-height:40px;max-width:90px;object-fit:contain">` : '';
+      const clientHtml = opt.client ? `<div style="font-size:15px;font-weight:700;color:#c0392b;margin-top:2px">${escH(opt.client)}</div>` : '';
+      html += `<div class="run-header">
+        <div style="flex:1;display:flex;align-items:center;gap:12px">${logoImg}${clientHtml}</div>
+        <div style="flex:1;text-align:center">${center.join('')}</div>
+        <div style="flex:1;text-align:right;font-size:9px;color:#aaa">${new Date().toLocaleDateString('en-IN')}<div style="font-size:8px;color:#bbb">Generated by EasyCutList ASM</div></div>
+      </div>`;
+    } else {
+      html += `<div class="header">
+        <h1>EasyCutList - Auto Size Module (ASM)</h1>
+        <p>Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}</p>
+      </div>`;
+    }
+
+    let grandTotalPanels = 0;
+    let globalSrNo = 0;
+
+    readyItems.forEach((it, idx) => {
+      const inp = it.inputs;
+      const _w = inp.width || inp.w || inp.W;
+      const _h = inp.ht || inp.h || inp.H || inp.height;
+      const _d = inp.depth || inp.d || inp.D;
+      const w = _w != null ? UNITS.fromMM(_w) : '?';
+      const h = _h != null ? UNITS.fromMM(_h) : '?';
+      const d = _d != null ? UNITS.fromMM(_d) : '?';
+      const _uLbl = (UNITS.MODES[UNITS.get()] || {}).label || '';
+      const dims = w + ' x ' + h + ' x ' + d + ' (' + _uLbl + ')';
+      const totalPanels = it.outputs.reduce((a, o) => a + (o.qty || 0), 0);
+      grandTotalPanels += totalPanels;
+
+      // Input summary as clean table
+      const inputRows = Object.entries(it.inputs)
+        .filter(([k, v]) => v !== '' && v !== null && v !== undefined)
+        .map(([k, v]) => {
+          let dv = v;
+          if (typeof v === 'number' && !UNITS.isCountKey(k)) dv = UNITS.fromMM(v);
+          return '<td style="padding:2px 8px;border:1px solid #ddd;font-weight:600;background:#f9f9f9;font-size:9px">' + k + '</td><td style="padding:2px 8px;border:1px solid #ddd;font-size:9px">' + dv + '</td>';
+        })
+      
+      // Show inputs in rows of 4 pairs each
+      let inputTable = '<table style="width:100%;border-collapse:collapse;margin:2px 0"><tr>';
+      inputRows.forEach((cell, i) => {
+        inputTable += cell;
+        if ((i + 1) % 4 === 0 && i < inputRows.length - 1) inputTable += '</tr><tr>';
+      });
+      inputTable += '</tr></table>';
+
+      const roomPrefix = it.roomName ? (String(it.roomName).trim() + ' — ') : '';
+      const _uAbbr = { generic:'', mm:' (mm)', cm:' (cm)', m:' (m)', in:' (in)', in_frac:' (in)', ft_in:' (ft-in)', ft_in_frac:' (ft-in)' }[UNITS.get()] || '';
+
+      // ONE continuous table per item: title row + input rows + column-header row
+      // + size rows. paged.js flows this row-by-row, filling each page and
+      // splitting between rows — no block-then-table gap.
+      html += '<table class="item-table"><tbody>';
+
+      // Title row (full width, spans all 8 columns)
+      html += '<tr class="it-title-row"><td colspan="8">' + (idx + 1) + '. ' + roomPrefix + it.itemName + '  |  ' + dims + '  |  Qty: ' + (inp.qty || inp.Qty || 1) + '</td></tr>';
+
+      // Input rows (each pair label/value; pack 4 pairs per row → 8 cells)
+      if (opt.outer && inputRows.length) {
+        for (let i = 0; i < inputRows.length; i += 4) {
+          const chunk = inputRows.slice(i, i + 4).join('');
+          // pad to 8 cells so colspan lines up
+          const cellsInChunk = Math.min(4, inputRows.length - i) * 2;
+          const pad = cellsInChunk < 8 ? '<td colspan="' + (8 - cellsInChunk) + '" class="it-input-pad"></td>' : '';
+          html += '<tr class="it-input-row">' + chunk + pad + '</tr>';
+        }
+      }
+
+      // Column header row (does not repeat across pages — acceptable per spec)
+      html += '<tr class="it-colhead"><th>Sr</th><th>Component</th><th>W' + _uAbbr + '</th><th>H' + _uAbbr + '</th><th>Qty</th><th>Color</th><th>Remark</th><th>Box No</th></tr>';
+
+      it.outputs.forEach((o) => {
+        globalSrNo++;
+        let color = String(o.color || '-');
+        let remark = String(o.remark || '-');
+        if (color.includes('===') || color.includes('?') || color.includes('||')) color = '-';
+        if (remark.includes('===') || remark.includes('?') || remark.includes('||')) remark = '-';
+        color = color.replace(/^["']|["']$/g, '');
+        remark = remark.replace(/^["']|["']$/g, '');
+
+        html += '<tr>';
+        html += '<td>' + globalSrNo + '</td>';
+        html += '<td>' + (o.component || '-') + '</td>';
+        html += '<td class="num">' + UNITS.fromMM(o.w || 0) + '</td>';
+        html += '<td class="num">' + UNITS.fromMM(o.h || 0) + '</td>';
+        html += '<td class="num">' + (o.qty || 0) + '</td>';
+        html += '<td>' + color + '</td>';
+        html += '<td>' + remark + '</td>';
+        html += '<td></td>';
+        html += '</tr>';
+      });
+
+      html += '</tbody></table>';
+      if (opt.summary) html += '<div class="summary">' + it.outputs.length + ' components | ' + totalPanels + ' panels</div>';
+    });
+
+    html += '<div class="footer">Total: ' + readyItems.length + ' items | ' + grandTotalPanels + ' panels<br>Generated and calculated with EasyCutList ASM</div>';
+    html += '<script src="https://unpkg.com/pagedjs/dist/paged.polyfill.js"><\/script>';
+    html += '<script>window.PagedConfig={auto:true,after:()=>{setTimeout(()=>window.print(),200);}};<\/script>';
+    html += '</body></html>';
+
+    // Open print window
+    const printWin = window.open('', '_blank');
+    if (!printWin) { showToast('Allow popups to export PDF', 'error'); return; }
+    printWin.document.write(html);
+    printWin.document.close();
+    printWin.focus();
+  }
+
+  // ========================================================================
+  // ASM PLAN & PRICING
+  // ========================================================================
 
   async function checkASMPlan() {
     const token = getAuthToken();
