@@ -147,13 +147,19 @@ function doPrint(){
   const SVG_W_WITHOUT = 100; // % when no summary
 
   setTimeout(()=>{
-    const printWin = window.open('','_blank');
     const sheets = document.querySelectorAll('.sheet-block');
-    let sheetsHtml = '';
-    sheets.forEach(s => { sheetsHtml += s.outerHTML; });
 
     const svgPct = showPanelSummary ? SVG_W_WITH : SVG_W_WITHOUT;
     const tablePct = 100 - svgPct - 2; // 2% gap
+
+    // Detect mobile: mobile gets a same-tab hidden iframe (window.open is blocked
+    // once the tap gesture expires). Desktop keeps the new-tab preview + Print button.
+    const isMobile = window.matchMedia('(max-width:900px)').matches
+      || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+
+    // Toolbar is only useful on the desktop new-tab preview.
+    const toolbarHtml = isMobile ? '' :
+      '<div class="toolbar"><button onclick="window.print()">\uD83D\uDDA8 Print / Save as PDF</button><span class="info">Preview — ' + sheets.length + ' sheet' + (sheets.length>1?'s':'') + ' · Click Print then choose Save as PDF</span></div>';
 
     const printHtml = '<!DOCTYPE html><html><head><meta charset="UTF-8">'
       + '<title>EasyCutList Cut Plan</title>'
@@ -196,14 +202,49 @@ function doPrint(){
       + (showDims ? '' : '.sv-sz,[class*="pc"][class$="s"]{display:none!important}')
       + '</style>'
       + '</head><body>'
-      + '<div class="toolbar"><button onclick="window.print()">\uD83D\uDDA8 Print / Save as PDF</button><span class="info">Preview — ' + sheets.length + ' sheet' + (sheets.length>1?'s':'') + ' · Click Print then choose Save as PDF</span></div>'
+      + toolbarHtml
       + '<div class="pages">'
       + Array.from(sheets).map(s => '<div class="page">'+s.outerHTML+'</div>').join('')
       + '</div>'
       + '</body></html>';
 
-    printWin.document.write(printHtml);
-    printWin.document.close();
+    if (isMobile) {
+      // ── MOBILE: same-tab hidden iframe → contentWindow.print() ──
+      // No popup permission needed; OS print sheet (Save as PDF / share) opens directly.
+      const old = document.getElementById('ecl-print-iframe');
+      if (old) old.remove();
+      const iframe = document.createElement('iframe');
+      iframe.id = 'ecl-print-iframe';
+      iframe.setAttribute('aria-hidden','true');
+      iframe.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
+      document.body.appendChild(iframe);
+
+      let done = false;
+      const fire = () => {
+        if (done) return; done = true;
+        try {
+          iframe.contentWindow.focus();
+          iframe.contentWindow.print();
+        } catch(e) {
+          alert('Could not open the print dialog. Please try again.');
+        }
+        // Clean up after the sheet has had time to open.
+        setTimeout(()=>{ iframe.remove(); }, 60000);
+      };
+
+      iframe.onload = () => setTimeout(fire, 300); // iOS needs a beat after load
+      const doc = iframe.contentWindow.document;
+      doc.open();
+      doc.write(printHtml);
+      doc.close();
+      // Fallback if onload doesn't fire (some WebViews)
+      setTimeout(fire, 800);
+    } else {
+      // ── DESKTOP: new-tab preview with Print button (unchanged behaviour) ──
+      const printWin = window.open('','_blank');
+      printWin.document.write(printHtml);
+      printWin.document.close();
+    }
   }, 200);
 }
 
@@ -212,6 +253,10 @@ function doPrint(){
 // Each placed piece shows its own L×H label inside the rectangle — no segment ticks.
 
 function buildSVG(sheet, scale, customFonts={}) {
+  // Unit display: geometry stays mm, only label TEXT converts.
+  const _pu = (window.UNITS?UNITS.get():'mm');
+  const _pd = (mm)=> (window.UNITS?UNITS.fromMMNum(mm):Math.round(mm));
+  const _psuf = ({mm:'mm',cm:'cm',m:'m',in:'in',generic:''})[_pu]||'';
   const MAX_W = 580;
   const s  = Math.min(scale, MAX_W / sheet.L);
   const ML = 8, MT = 8, MR = 8, MB = 24;
@@ -278,12 +323,18 @@ function buildSVG(sheet, scale, customFonts={}) {
     const fs     = customSrNoFont || Math.min(13, Math.max(6, minDim / 6));
     const fsDim  = customDimFont || Math.max(6, fs * 0.88);
 
-    const widthTxt  = String(p.pw);
-    const heightTxt = String(p.ph);
+    // Dimension label = actual cut size (entered − band) via shared module,
+    // oriented to placement. See eband-deduct.js.
+    const _ld = (typeof EBandDeduct !== 'undefined')
+      ? EBandDeduct.labelSize(svgPanelMatch, p.pw, p.ph)
+      : { w: p.pw, h: p.ph };
+    const origW = _ld.w, origH = _ld.h;
+    const widthTxt  = String(_pd(origW));
+    const heightTxt = String(_pd(origH));
 
     // Text fill: black when blackText is on, otherwise the panel's screen/print colour
     const txtFill   = blackText ? '#000' : sc;
-    const dimFill   = blackText ? '#000' : `${sc}dd`;
+    const dimFill   = '#000'; // dimension numbers always black on-screen (PDF handles its own via @media print)
     const txtFillPr = blackText ? '#000' : ps;
 
     o += `<g>`;
@@ -292,8 +343,10 @@ function buildSVG(sheet, scale, customFonts={}) {
       .pc${ci}t{fill:${txtFill};font-family:'Inconsolata','Courier New',monospace;font-size:${fs}px;font-weight:700}
       .pc${ci}rem{fill:${txtFill};font-family:'Inconsolata','Courier New',monospace;font-weight:700}
       .pc${ci}s{fill:${dimFill};font-family:'Inconsolata','Courier New',monospace;font-size:${fsDim}px;font-weight:600}
+      .pc${ci}mask{fill:#ffffff;opacity:1}
       @media print{
         .pc${ci}r{fill:${pf};stroke:${ps};stroke-width:1pt}
+        .pc${ci}mask{fill:${pf};opacity:1}
         .pc${ci}t{fill:${txtFillPr};font-family:'Courier New',monospace;font-weight:700}
         .pc${ci}rem{fill:${txtFillPr};font-family:'Courier New',monospace;font-weight:700}
         .pc${ci}s{fill:${txtFillPr};font-family:'Courier New',monospace;opacity:1;font-weight:700}
@@ -318,10 +371,18 @@ function buildSVG(sheet, scale, customFonts={}) {
       const cx = px + pw / 2;
       const cy = py + ph / 2;
 
+      // Background mask so band lines don't run through the dimension numbers.
+      // Screen: panel sits ~near-white; use white. Print: use the print fill.
+      const maskFill   = '#ffffff';
+      const maskFillPr = pf;
+      const maskH = fsDim + 2;
+
       // ── Width dim: top edge, centred, small ──
       const dimPadTop = fsDim + 3;
       const widthFits = pw > fsDim * widthTxt.length * 0.62 + 6;
       if (widthFits) {
+        const wMaskW = fsDim * widthTxt.length * 0.62 + 6;
+        o += `<rect x="${cx - wMaskW/2}" y="${py + dimPadTop - fsDim*0.8}" width="${wMaskW}" height="${maskH}" class="pc${ci}mask"/>`;
         o += `<text x="${cx}" y="${py + dimPadTop}" text-anchor="middle" class="pc${ci}s">${widthTxt}</text>`;
       }
 
@@ -331,6 +392,8 @@ function buildSVG(sheet, scale, customFonts={}) {
       const hdx = px + pw - hInset;
       const heightFits = ph > fsDim * heightTxt.length * 0.62 + 6;
       if (heightFits) {
+        const hMaskW = fsDim * heightTxt.length * 0.62 + 6;
+        o += `<rect transform="rotate(-90,${hdx},${cy})" x="${hdx - hMaskW/2}" y="${cy - maskH/2}" width="${hMaskW}" height="${maskH}" class="pc${ci}mask"/>`;
         o += `<text transform="rotate(-90,${hdx},${cy})" x="${hdx}" y="${cy + fsDim * 0.35}" text-anchor="middle" class="pc${ci}s">${heightTxt}</text>`;
       }
 
@@ -452,8 +515,8 @@ function buildSVG(sheet, scale, customFonts={}) {
   o += `<rect x="${ML}" y="${MT}" width="${bW}" height="${bH}" class="sv-bdr" stroke-width="1.5"/>`;
 
   // Simple total dimension labels — just one number per axis, centred below/right
-  o += `<text x="${ML + bW/2}" y="${MT + bH + 15}" text-anchor="middle" class="sv-sz">${sheet.L} mm</text>`;
-  o += `<text transform="rotate(-90,${ML+bW+MR-2},${MT+bH/2})" x="${ML+bW+MR-2}" y="${MT+bH/2}" text-anchor="middle" class="sv-sz">${sheet.W} mm</text>`;
+  o += `<text x="${ML + bW/2}" y="${MT + bH + 15}" text-anchor="middle" class="sv-sz">${_pd(sheet.L)} ${_psuf}</text>`;
+  o += `<text transform="rotate(-90,${ML+bW+MR-2},${MT+bH/2})" x="${ML+bW+MR-2}" y="${MT+bH/2}" text-anchor="middle" class="sv-sz">${_pd(sheet.W)} ${_psuf}</text>`;
 
   o += `</svg>`;
   return o;

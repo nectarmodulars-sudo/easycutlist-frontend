@@ -97,10 +97,8 @@ const ASMModule = (() => {
     if (loginBtn) loginBtn.style.display = loggedIn ? 'none' : '';
     if (logoutBtn) logoutBtn.style.display = loggedIn ? '' : 'none';
     const bell = document.getElementById('asm-bell-btn');
-    if (bell) bell.style.display = 'none';   // notifications retired — messaging replaces it
-    const msgsBtn = document.getElementById('asm-msgs-btn');
-    if (msgsBtn) msgsBtn.style.display = loggedIn ? '' : 'none';
-    if (loggedIn) { refreshMyProblemsBadge(); }
+    if (bell) bell.style.display = loggedIn ? '' : 'none';
+    if (loggedIn) startNotifications(); else stopNotifications();
   }
 
   function asmLogin() {
@@ -139,7 +137,7 @@ const ASMModule = (() => {
         <div class="asm-title">
           <button class="asm-drawer-btn asm-drawer-cs" onclick="ASMModule.toggleDrawer('cs')" aria-label="Catalogue">☰</button>
           <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABwAAAAcCAIAAAD9b0jDAAAD1UlEQVR42o1Vz2sdVRg95947P/KDvhTTSjCSFlNLhBbtsquCrkQ3iiiImyIIuhFcKbhxIV2IO7sQseBWBKH+Da5KF6UQxJ9Nk0pTheQlTWbezHzHxbyZN/OShcMsZu7c79zvO9/5zvDy4AqOXAQA6Lh1/Y9tbrwoSQLU7FOzVZ0b6iOoh6h2LUAAAZLjsDodEhgvHVMDxnn0cp2UEer1GqgJlCeqipX1UabgCe+lcVHs4ob6SU0WjsoLjnIOTpjzqnM+ltyywnDo40RJLLO2SAIKHVrkiCzn6VPl+1f/vfhcFrljG1QHozTcWU+vf/vEw+2QJjJNqAjtbhJlycGJ6vq1rZW1DI/9pBFsodoVAVw+l184n139cHlv34cgjXHh6i6BcA77B+71V4Yra1n2KCpyliXhML494AjWr6pKV4x4uO2fPp+98eru4wM6TjoZevpyeubMSIVzDlGMssRfGzGP6FPC8lIRxTKjCrd6duRcj6fQp40QKDiv3X330adLd9bTNBnXpbrNDnnuLqxlX362NZeKAkCyJ5LQ5b7tRJixWz/Pr/+W3PzuXpqYGQRCAuEd8hFfu7py6/bciy8Na3GrkZU6oGMtsCNCE+MIt+/OkJAQRQBQjEBHQFHUjhzR5CmIYFs+p0dYCEG7Q3f9xkkz0mH7UQBw+lQpg3PYHfrgNVUhm5fQh2qPV1Hg1GL5440NEm6h+uTjpyB9fu2B7XgAL799ZlRw7Bzqh6sHSk7OZf3ZDHRwxqoCABis7syxg4u6bQrd8e5bDgGaSIPZOMoqmE1z1Z7Q0MHQgevtFBC8kkSAkJhzAORSxZlAed9Vrbr4agxl6kgACNTO0N27H0eR/H51mBHgw8242vOlcXfPe9dlalqnmuaIKA/cpRcOVs+O3npvOU0ksCwB4M13zpDIc6yezS89f1geuDBr6vCndkwbYajxblUVTg7s6y+2NjajmhZ2dkhcWS6SGY0yqCuZRpqh03GY4c/7MWPIWOQIQeeezY+4qUBUuStymJEx/rgXVTaxMAJu4qbi3Kz98NNg89ckXSyiWN4BBVACJVG2D0RB7xVFSheLB78n398czM2a1TZQp3x5cIUTl8JhxqUniw/e/efiWh5c56d15CqNd39JvvpmcfPvaCY1M06S7YKOTWjEYsSFhcr7CV8iWHtKo5yqws6OjyIkicy6Hs7Q0acImiGOlMbKM07aKjUC6elvft4kNqPRaL2dqPbHV/fPBOenpkutttsQGTt/YrWDGto0NGWrmqJzgqgjHsxmCOsI1/oe+wHHVNCxJDV2qinfkAT8B++6/aS1MZ2hAAAAAElFTkSuQmCC" width="28" height="28" style="border-radius:6px">
-          <span>Easy<span style="color:#ECB22E">CutList</span> SIZE BUILDER</span>
+          <span>Easy<span style="color:#ECB22E">CutList</span> AUTO SIZE MODULE (ASM)</span>
           <span id="asm-project-name" style="margin-left:14px;padding-left:14px;border-left:1px solid rgba(255,255,255,.2);font-size:13px;font-weight:500;color:rgba(255,255,255,.75)">Untitled</span>
         </div>
         <div class="asm-topbar-actions">
@@ -148,8 +146,7 @@ const ASMModule = (() => {
           <span id="asm-plan-badge" style="font-size:10px;padding:2px 8px;border-radius:3px;font-weight:700;margin-right:4px"></span>
           <button class="asm-top-btn" id="asm-login-btn" onclick="ASMModule.asmLogin()" style="display:none;background:rgba(66,133,244,.25);color:#8AB4F8">Login</button>
           <button class="asm-top-btn" id="asm-logout-btn" onclick="ASMModule.asmLogout()" style="display:none">Logout</button>
-          
-          <button class="asm-top-btn" id="asm-msgs-btn" onclick="ASMModule.openMyProblems()" title="My messages" style="position:relative;display:none"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg><span id="asm-msgs-badge" style="position:absolute;top:-4px;right:-4px;background:#E01E5A;color:#fff;font-size:9px;font-weight:800;min-width:15px;height:15px;border-radius:8px;display:none;align-items:center;justify-content:center;padding:0 3px">0</span></button>
+          <button class="asm-top-btn" id="asm-bell-btn" onclick="ASMModule.toggleNotifications()" title="Notifications" style="position:relative;display:none">🔔<span id="asm-bell-badge" style="position:absolute;top:-4px;right:-4px;background:#E01E5A;color:#fff;font-size:9px;font-weight:800;min-width:15px;height:15px;border-radius:8px;display:none;align-items:center;justify-content:center;padding:0 3px">0</span></button>
           <button class="asm-top-btn" onclick="ASMModule.closeASM()">← Optimizer</button>
           <button class="asm-top-btn asm-newproj-btn" onclick="ASMModule.newProject()">+ New Project</button>
           <button class="asm-top-btn" onclick="ASMModule.showProjects()">My ASM Projects</button>
@@ -546,7 +543,6 @@ const ASMModule = (() => {
         </div>
         <div class="asm-sbs-item-actions">
           <button class="asm-btn asm-btn-ghost" onclick="ASMModule.adjustEBand('${inst.instanceId}')">Adjust EBand</button>
-          <button class="asm-btn" style="background:#E01E5A;color:#fff" onclick="ASMModule.reportProblem('${inst.instanceId}')">Report Problem</button>
           <button class="asm-btn asm-btn-ghost" onclick="ASMModule.removeFromSBS('${inst.instanceId}')">Cancel</button>
           <button class="asm-btn asm-btn-primary" onclick="ASMModule.saveToReady('${inst.instanceId}')">Save → Ready</button>
         </div>
@@ -755,7 +751,6 @@ const ASMModule = (() => {
         <div class="asm-sbs-item-actions">
           <button class="asm-btn asm-btn-ghost" onclick="ASMModule.addSBSRows('${inst.instanceId}')">+ Add Rows</button>
           <button class="asm-btn asm-btn-ghost" onclick="ASMModule.adjustEBand('${inst.instanceId}')">Adjust EBand</button>
-          <button class="asm-btn" style="background:#E01E5A;color:#fff" onclick="ASMModule.reportProblem('${inst.instanceId}')">Report Problem</button>
           <button class="asm-btn asm-btn-ghost" onclick="ASMModule.removeFromSBS('${inst.instanceId}')">Cancel</button>
           <button class="asm-btn asm-btn-primary" onclick="ASMModule.saveToReady('${inst.instanceId}')">Save → Ready</button>
         </div>
@@ -1481,7 +1476,6 @@ const ASMModule = (() => {
       window.autoPopulateStock();
     }
 
-    trackAsm('export_optimizer');
     showToast(totalPanels + ' panels exported to optimizer', 'success');
     // Keep readyItems so user can return to ASM and edit
     showExportSuccessModal(totalPanels);
@@ -1539,23 +1533,9 @@ const ASMModule = (() => {
 
   function apiBase() { return API_BASE.replace('/asm', ''); }
 
-  // fire-and-forget analytics; never blocks UI, never throws
-  function trackAsm(event) {
-    try {
-      var token = getAuthToken();
-      if (!token) return;
-      fetch(apiBase() + '/asm/track', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-        body: JSON.stringify({ event: event })
-      }).catch(function(){});
-    } catch (e) {}
-  }
-
   // ══ NOTIFICATIONS ══
   let _notifTimer = null;
   let _notifs = [];
-  let _myProblemsOverlay = null;
 
   function startNotifications() {
     const bell = document.getElementById('asm-bell-btn');
@@ -1953,28 +1933,518 @@ const ASMModule = (() => {
   }
 
   // ========================================================================
-  // PDF EXPORT (delegated to asm-pdf-export.js / window.ASMPdf)
+  // SVG DIAGRAM GENERATOR
   // ========================================================================
 
-  function _pdfCtx() {
-    return {
-      readyItems,
-      catalogue,
-      asmPlan,
-      currentClientName,
-      showToast,
-      showPricing,
-    };
+  function generateItemDiagram(inst) {
+    if (!inst.outputs || inst.outputs.length === 0) return '';
+
+    const inp = inst.inputs;
+    const W = inp.width || inp.w || inp.W || 1000;
+    const H = inp.ht || inp.h || inp.H || inp.height || 800;
+    const D = inp.depth || inp.d || inp.D || 400;
+    const category = (inst.itemId || '').toLowerCase();
+
+    // Detect item type from name/id
+    if (category.includes('wardrobe') || category.includes('sliding')) return wardrobeDiagram(inst, W, H, D);
+    if (category.includes('cab') || category.includes('cabinet') || category.includes('shutter')) return cabinetDiagram(inst, W, H, D);
+    if (category.includes('bed')) return bedDiagram(inst, W, H, D);
+    if (category.includes('loft') || category.includes('bl')) return loftDiagram(inst, W, H, D);
+    if (category.includes('dressing') || category.includes('table')) return cabinetDiagram(inst, W, H, D);
+
+    // Generic fallback
+    return genericDiagram(inst, W, H, D);
   }
+
+  function wardrobeDiagram(inst, W, H, D) {
+    // Scale to fit in ~400x300 SVG
+    const scale = Math.min(360 / W, 260 / H);
+    const sw = Math.round(W * scale);
+    const sh = Math.round(H * scale);
+    const ox = Math.round((400 - sw) / 2); // offset x
+    const oy = 20; // offset y
+    const svgH = sh + 70;
+
+    // Find components
+    const find = (name) => inst.outputs.find(o => o.component && o.component.toUpperCase().includes(name));
+    const shelf = find('SHELF');
+    const halfShelf = find('HALF');
+    const vertical = find('VERTICAL PART') || find('PARTITION');
+    const locker = find('LOCKER');
+    const drawer = find('DRAWER') || find('FACE');
+    const door = find('DOOR');
+    const shelfCount = shelf ? shelf.qty : 0;
+    const halfCount = halfShelf ? halfShelf.qty : 0;
+    const hasLocker = locker && locker.qty > 0;
+    const hasDrawers = drawer && drawer.qty > 0;
+
+    // Panel thickness scaled
+    const pt = Math.max(2, Math.round(18 * scale));
+    const midX = ox + Math.round(sw / 2);
+
+    let svg = `<svg width="100%" viewBox="0 0 400 ${svgH}" style="max-height:300px">`;
+
+    // Back panel (dashed)
+    svg += `<rect x="${ox + pt}" y="${oy + pt}" width="${sw - pt * 2}" height="${sh - pt * 2}" fill="none" stroke="var(--text-muted)" stroke-width="0.5" stroke-dasharray="3 2" opacity="0.4"/>`;
+
+    // Top
+    svg += `<rect x="${ox}" y="${oy}" width="${sw}" height="${pt}" rx="1" fill="#1D9E75" fill-opacity="0.3" stroke="#1D9E75" stroke-width="0.5"/>`;
+    // Bottom
+    svg += `<rect x="${ox + pt}" y="${oy + sh - pt}" width="${sw - pt * 2}" height="${pt}" rx="1" fill="#1D9E75" fill-opacity="0.3" stroke="#1D9E75" stroke-width="0.5"/>`;
+    // Left side
+    svg += `<rect x="${ox}" y="${oy + pt}" width="${pt}" height="${sh - pt}" rx="1" fill="#378ADD" fill-opacity="0.3" stroke="#378ADD" stroke-width="0.5"/>`;
+    // Right side
+    svg += `<rect x="${ox + sw - pt}" y="${oy + pt}" width="${pt}" height="${sh - pt}" rx="1" fill="#378ADD" fill-opacity="0.3" stroke="#378ADD" stroke-width="0.5"/>`;
+
+    // Vertical partition (center)
+    if (vertical && vertical.qty > 0) {
+      svg += `<rect x="${midX - 1}" y="${oy + pt}" width="${3}" height="${sh - pt * 2 - (hasDrawers ? sh * 0.2 : 0)}" fill="#7F77DD" fill-opacity="0.5" stroke="#7F77DD" stroke-width="0.5"/>`;
+    }
+
+    // Shelves (left compartment)
+    const shelfArea = sh - pt * 2 - (hasDrawers ? sh * 0.25 : 0) - (hasLocker ? sh * 0.15 : 0);
+    const leftW = midX - ox - pt - 2;
+    for (let i = 0; i < Math.min(shelfCount, 6); i++) {
+      const sy = oy + pt + Math.round(shelfArea * (i + 1) / (shelfCount + 1));
+      svg += `<rect x="${ox + pt}" y="${sy}" width="${leftW}" height="2" fill="#639922" fill-opacity="0.6" stroke="#639922" stroke-width="0.5"/>`;
+    }
+
+    // Half shelves (right compartment, upper)
+    const rightX = midX + 3;
+    const rightW = ox + sw - pt - rightX;
+    const upperH = Math.round(shelfArea * 0.5);
+    for (let i = 0; i < Math.min(halfCount, 4); i++) {
+      const sy = oy + pt + Math.round(upperH * (i + 1) / (Math.min(halfCount, 4) + 1));
+      // Half shelf = two halves
+      svg += `<rect x="${rightX}" y="${sy}" width="${Math.round(rightW / 2) - 2}" height="2" fill="#BA7517" fill-opacity="0.5" stroke="#BA7517" stroke-width="0.5"/>`;
+      svg += `<rect x="${rightX + Math.round(rightW / 2) + 2}" y="${sy}" width="${Math.round(rightW / 2) - 2}" height="2" fill="#BA7517" fill-opacity="0.5" stroke="#BA7517" stroke-width="0.5"/>`;
+    }
+
+    // Drawers (bottom left)
+    if (hasDrawers) {
+      const drawerY = oy + sh - pt - Math.round(sh * 0.22);
+      const drawerH = Math.round(sh * 0.18);
+      const rows = Math.min(drawer.qty, 4);
+      const rowH = Math.round(drawerH / rows);
+      for (let i = 0; i < rows; i++) {
+        svg += `<rect x="${ox + pt + 4}" y="${drawerY + i * rowH + 2}" width="${leftW - 8}" height="${rowH - 4}" rx="2" fill="#D85A30" fill-opacity="0.2" stroke="#D85A30" stroke-width="0.5"/>`;
+        // Handle
+        const hy = drawerY + i * rowH + Math.round(rowH / 2);
+        svg += `<line x1="${ox + pt + leftW / 2 - 8}" y1="${hy}" x2="${ox + pt + leftW / 2 + 8}" y2="${hy}" stroke="#D85A30" stroke-width="1.5" stroke-linecap="round"/>`;
+      }
+    }
+
+    // Locker (bottom right)
+    if (hasLocker) {
+      const lockerY = oy + sh - pt - Math.round(sh * 0.18);
+      const lockerH = Math.round(sh * 0.14);
+      svg += `<rect x="${rightX + 2}" y="${lockerY}" width="${rightW - 4}" height="${lockerH}" rx="2" fill="none" stroke="var(--text-muted)" stroke-width="0.5" stroke-dasharray="3 2"/>`;
+      svg += `<text x="${rightX + rightW / 2}" y="${lockerY + lockerH / 2 + 4}" text-anchor="middle" fill="var(--text-muted)" font-size="9" font-family="var(--font-sans)">LOCKER</text>`;
+    }
+
+    // Sliding doors (overlay)
+    svg += `<rect x="${ox + 2}" y="${oy + pt + 2}" width="${Math.round(sw / 2) - 4}" height="${sh - pt * 2 - 4}" rx="2" fill="none" stroke="var(--text-accent)" stroke-width="0.8" stroke-dasharray="8 4" opacity="0.4"/>`;
+    svg += `<rect x="${midX + 2}" y="${oy + pt + 2}" width="${Math.round(sw / 2) - 4}" height="${sh - pt * 2 - 4}" rx="2" fill="none" stroke="var(--text-accent)" stroke-width="0.8" stroke-dasharray="8 4" opacity="0.4"/>`;
+
+    // Skirting
+    svg += `<rect x="${ox}" y="${oy + sh}" width="${sw}" height="${Math.max(3, Math.round(8 * scale))}" rx="1" fill="var(--text-muted)" fill-opacity="0.3" stroke="var(--text-muted)" stroke-width="0.5"/>`;
+
+    // Dimension labels
+    svg += `<text x="${ox + sw / 2}" y="${oy + sh + 30}" text-anchor="middle" fill="var(--text-secondary)" font-size="11" font-family="var(--font-sans)" font-weight="500">${W} × ${H} × ${D} mm</text>`;
+
+    // Component count
+    svg += `<text x="${ox + sw / 2}" y="${oy + sh + 45}" text-anchor="middle" fill="var(--text-muted)" font-size="9" font-family="var(--font-sans)">${inst.outputs.length} components</text>`;
+
+    svg += '</svg>';
+    return svg;
+  }
+
+  function cabinetDiagram(inst, W, H, D) {
+    const scale = Math.min(360 / W, 260 / H);
+    const sw = Math.round(W * scale);
+    const sh = Math.round(H * scale);
+    const ox = Math.round((400 - sw) / 2);
+    const oy = 20;
+    const svgH = sh + 70;
+    const pt = Math.max(2, Math.round(18 * scale));
+
+    const find = (name) => inst.outputs.find(o => o.component && o.component.toUpperCase().includes(name));
+    const shelf = find('SHELF');
+    const door = find('DOOR');
+    const shelfCount = shelf ? shelf.qty : 0;
+    const doorCount = door ? door.qty : 1;
+
+    let svg = `<svg width="100%" viewBox="0 0 400 ${svgH}" style="max-height:280px">`;
+
+    // Back (dashed)
+    svg += `<rect x="${ox + pt}" y="${oy + pt}" width="${sw - pt * 2}" height="${sh - pt * 2}" fill="none" stroke="var(--text-muted)" stroke-width="0.5" stroke-dasharray="3 2" opacity="0.4"/>`;
+
+    // Top, Bottom
+    svg += `<rect x="${ox}" y="${oy}" width="${sw}" height="${pt}" rx="1" fill="#1D9E75" fill-opacity="0.3" stroke="#1D9E75" stroke-width="0.5"/>`;
+    svg += `<rect x="${ox + pt}" y="${oy + sh - pt}" width="${sw - pt * 2}" height="${pt}" rx="1" fill="#1D9E75" fill-opacity="0.3" stroke="#1D9E75" stroke-width="0.5"/>`;
+
+    // Sides
+    svg += `<rect x="${ox}" y="${oy + pt}" width="${pt}" height="${sh - pt}" rx="1" fill="#378ADD" fill-opacity="0.3" stroke="#378ADD" stroke-width="0.5"/>`;
+    svg += `<rect x="${ox + sw - pt}" y="${oy + pt}" width="${pt}" height="${sh - pt}" rx="1" fill="#378ADD" fill-opacity="0.3" stroke="#378ADD" stroke-width="0.5"/>`;
+
+    // Shelves
+    const innerW = sw - pt * 2;
+    for (let i = 0; i < Math.min(shelfCount, 6); i++) {
+      const sy = oy + pt + Math.round((sh - pt * 2) * (i + 1) / (shelfCount + 1));
+      svg += `<rect x="${ox + pt}" y="${sy}" width="${innerW}" height="2" fill="#639922" fill-opacity="0.6" stroke="#639922" stroke-width="0.5"/>`;
+    }
+
+    // Doors overlay
+    const doorW = Math.round(innerW / Math.min(doorCount, 4));
+    for (let i = 0; i < Math.min(doorCount, 4); i++) {
+      const dx = ox + pt + i * doorW;
+      svg += `<rect x="${dx + 3}" y="${oy + pt + 3}" width="${doorW - 6}" height="${sh - pt * 2 - 6}" rx="3" fill="none" stroke="var(--text-accent)" stroke-width="0.8" stroke-dasharray="6 3" opacity="0.4"/>`;
+      // Handle
+      const hx = dx + doorW - 12;
+      svg += `<line x1="${hx}" y1="${oy + sh / 2 - 8}" x2="${hx}" y2="${oy + sh / 2 + 8}" stroke="var(--text-accent)" stroke-width="1.5" stroke-linecap="round" opacity="0.5"/>`;
+    }
+
+    svg += `<text x="${ox + sw / 2}" y="${oy + sh + 30}" text-anchor="middle" fill="var(--text-secondary)" font-size="11" font-family="var(--font-sans)" font-weight="500">${W} × ${H} × ${D} mm</text>`;
+    svg += `<text x="${ox + sw / 2}" y="${oy + sh + 45}" text-anchor="middle" fill="var(--text-muted)" font-size="9" font-family="var(--font-sans)">${inst.outputs.length} components</text>`;
+    svg += '</svg>';
+    return svg;
+  }
+
+  function bedDiagram(inst, W, H, D) {
+    // Bed is wide and short
+    const scale = Math.min(360 / W, 180 / H);
+    const sw = Math.round(W * scale);
+    const sh = Math.round(H * scale);
+    const ox = Math.round((400 - sw) / 2);
+    const oy = 30;
+    const svgH = sh + 90;
+
+    let svg = `<svg width="100%" viewBox="0 0 400 ${svgH}" style="max-height:240px">`;
+
+    // Mattress area
+    svg += `<rect x="${ox}" y="${oy}" width="${sw}" height="${sh}" rx="6" fill="var(--text-muted)" fill-opacity="0.08" stroke="var(--text-muted)" stroke-width="1"/>`;
+
+    // Headboard
+    svg += `<rect x="${ox}" y="${oy - 16}" width="${sw}" height="18" rx="3" fill="#7F77DD" fill-opacity="0.3" stroke="#7F77DD" stroke-width="0.5"/>`;
+    svg += `<text x="${ox + sw / 2}" y="${oy - 5}" text-anchor="middle" fill="var(--text-muted)" font-size="8" font-family="var(--font-sans)">HEADBOARD</text>`;
+
+    // Side rails
+    svg += `<rect x="${ox}" y="${oy}" width="6" height="${sh}" rx="1" fill="#378ADD" fill-opacity="0.3" stroke="#378ADD" stroke-width="0.5"/>`;
+    svg += `<rect x="${ox + sw - 6}" y="${oy}" width="6" height="${sh}" rx="1" fill="#378ADD" fill-opacity="0.3" stroke="#378ADD" stroke-width="0.5"/>`;
+
+    // Bottom panel
+    svg += `<rect x="${ox + 6}" y="${oy + sh - 6}" width="${sw - 12}" height="6" rx="1" fill="#1D9E75" fill-opacity="0.3" stroke="#1D9E75" stroke-width="0.5"/>`;
+
+    // Storage (if trolley/flap)
+    const hasTrolley = (inst.itemId || '').toLowerCase().includes('trl') || (inst.itemId || '').toLowerCase().includes('trolley');
+    if (hasTrolley) {
+      svg += `<rect x="${ox + 10}" y="${oy + 10}" width="${sw - 20}" height="${sh - 20}" rx="3" fill="none" stroke="var(--text-muted)" stroke-width="0.5" stroke-dasharray="4 2"/>`;
+      svg += `<text x="${ox + sw / 2}" y="${oy + sh / 2 + 3}" text-anchor="middle" fill="var(--text-muted)" font-size="9" font-family="var(--font-sans)">STORAGE</text>`;
+    }
+
+    svg += `<text x="${ox + sw / 2}" y="${oy + sh + 30}" text-anchor="middle" fill="var(--text-secondary)" font-size="11" font-family="var(--font-sans)" font-weight="500">${W} × ${H} × ${D} mm</text>`;
+    svg += `<text x="${ox + sw / 2}" y="${oy + sh + 45}" text-anchor="middle" fill="var(--text-muted)" font-size="9" font-family="var(--font-sans)">${inst.outputs.length} components</text>`;
+    svg += '</svg>';
+    return svg;
+  }
+
+  function loftDiagram(inst, W, H, D) {
+    // Loft is wide and short (overhead cabinet)
+    const scale = Math.min(360 / W, 160 / H);
+    const sw = Math.round(W * scale);
+    const sh = Math.round(H * scale);
+    const ox = Math.round((400 - sw) / 2);
+    const oy = 20;
+    const svgH = sh + 70;
+    const pt = Math.max(2, Math.round(14 * scale));
+
+    const find = (name) => inst.outputs.find(o => o.component && o.component.toUpperCase().includes(name));
+    const door = find('DOOR');
+    const doorCount = door ? door.qty : 1;
+
+    let svg = `<svg width="100%" viewBox="0 0 400 ${svgH}" style="max-height:220px">`;
+
+    // Structure
+    svg += `<rect x="${ox}" y="${oy}" width="${sw}" height="${sh}" rx="3" fill="var(--text-muted)" fill-opacity="0.06" stroke="var(--text-muted)" stroke-width="1"/>`;
+    svg += `<rect x="${ox}" y="${oy}" width="${sw}" height="${pt}" rx="1" fill="#1D9E75" fill-opacity="0.3" stroke="#1D9E75" stroke-width="0.5"/>`;
+    svg += `<rect x="${ox}" y="${oy + sh - pt}" width="${sw}" height="${pt}" rx="1" fill="#1D9E75" fill-opacity="0.3" stroke="#1D9E75" stroke-width="0.5"/>`;
+    svg += `<rect x="${ox}" y="${oy + pt}" width="${pt}" height="${sh - pt * 2}" rx="1" fill="#378ADD" fill-opacity="0.3" stroke="#378ADD" stroke-width="0.5"/>`;
+    svg += `<rect x="${ox + sw - pt}" y="${oy + pt}" width="${pt}" height="${sh - pt * 2}" rx="1" fill="#378ADD" fill-opacity="0.3" stroke="#378ADD" stroke-width="0.5"/>`;
+
+    // Doors
+    const innerW = sw - pt * 2;
+    const dw = Math.round(innerW / Math.min(doorCount, 3));
+    for (let i = 0; i < Math.min(doorCount, 3); i++) {
+      svg += `<rect x="${ox + pt + i * dw + 3}" y="${oy + pt + 3}" width="${dw - 6}" height="${sh - pt * 2 - 6}" rx="2" fill="none" stroke="var(--text-accent)" stroke-width="0.8" stroke-dasharray="5 3" opacity="0.5"/>`;
+    }
+
+    svg += `<text x="${ox + sw / 2}" y="${oy + sh + 25}" text-anchor="middle" fill="var(--text-secondary)" font-size="11" font-family="var(--font-sans)" font-weight="500">${W} × ${H} × ${D} mm</text>`;
+    svg += `<text x="${ox + sw / 2}" y="${oy + sh + 40}" text-anchor="middle" fill="var(--text-muted)" font-size="9" font-family="var(--font-sans)">${inst.outputs.length} components</text>`;
+    svg += '</svg>';
+    return svg;
+  }
+
+  function genericDiagram(inst, W, H, D) {
+    const scale = Math.min(360 / W, 240 / H);
+    const sw = Math.round(W * scale);
+    const sh = Math.round(H * scale);
+    const ox = Math.round((400 - sw) / 2);
+    const oy = 20;
+    const svgH = sh + 70;
+
+    let svg = `<svg width="100%" viewBox="0 0 400 ${svgH}" style="max-height:260px">`;
+    svg += `<rect x="${ox}" y="${oy}" width="${sw}" height="${sh}" rx="4" fill="var(--text-muted)" fill-opacity="0.06" stroke="var(--text-muted)" stroke-width="1"/>`;
+
+    // Show component names inside
+    const maxShow = Math.min(inst.outputs.length, 8);
+    for (let i = 0; i < maxShow; i++) {
+      const o = inst.outputs[i];
+      const ty = oy + 20 + i * 16;
+      svg += `<text x="${ox + 12}" y="${ty}" fill="var(--text-secondary)" font-size="9" font-family="var(--font-sans)">${o.component}: ${o.w}×${o.h} (${o.qty})</text>`;
+    }
+    if (inst.outputs.length > maxShow) {
+      svg += `<text x="${ox + 12}" y="${oy + 20 + maxShow * 16}" fill="var(--text-muted)" font-size="9" font-family="var(--font-sans)">+ ${inst.outputs.length - maxShow} more...</text>`;
+    }
+
+    svg += `<text x="${ox + sw / 2}" y="${oy + sh + 25}" text-anchor="middle" fill="var(--text-secondary)" font-size="11" font-family="var(--font-sans)" font-weight="500">${W} × ${H} × ${D} mm</text>`;
+    svg += '</svg>';
+    return svg;
+  }
+
+  // ========================================================================
+  // EXPORT TO PDF
+  // ========================================================================
+
   function exportToPDF() {
-    if (!window.ASMPdf) { showToast('PDF module not loaded', 'error'); return; }
-    trackAsm('export_pdf');
-    ASMPdf.exportToPDF(_pdfCtx());
+    if (readyItems.length === 0) { showToast('No items to export', 'error'); return; }
+    if (asmPlan !== 'pro') {
+      const hasLockedItems = readyItems.some(it => {
+        const ci = catalogue.find(x => x.id === it.itemId);
+        return ci ? !ci.is_free : true;
+      });
+      if (hasLockedItems) { showToast('PDF export with PRO items requires upgrade', 'error'); showPricing(); return; }
+    }
+    showExportOptions();
   }
+
+  function hf(flag){ try { return (typeof hasFeature==='function') ? hasFeature(flag) : (asmPlan==='pro'); } catch(e){ return asmPlan==='pro'; } }
+
+  function showExportOptions() {
+    const old = document.getElementById('asm-export-modal'); if (old) old.remove();
+    const gp = (typeof profile!=='undefined' && profile) ? profile : {};
+    const overlay = document.createElement('div');
+    overlay.id = 'asm-export-modal';
+    overlay.dataset.client = currentClientName || '';
+    overlay.style.cssText = 'position:fixed;inset:0;z-index:10005;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center';
+    overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+    const row = (id, label, sub, checked, locked) =>
+      `<label class="asm-eo-row" style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #2A2D31;${locked?'opacity:.45':''}">
+         <div><div style="font-size:13px;color:#E8E8E8">${label}${locked?' <span style="color:#ECB22E;font-size:10px">⭐PRO</span>':''}</div>
+         <div style="font-size:11px;color:#7A7D82">${sub}</div></div>
+         <input type="checkbox" id="${id}" ${checked?'checked':''} ${locked?'disabled':''} style="width:18px;height:18px;accent-color:#2EB67D">
+       </label>`;
+    overlay.innerHTML = `
+      <div style="background:#1A1D21;border:1px solid #3A3D42;border-radius:12px;width:440px;max-height:85vh;overflow:auto">
+        <div style="padding:16px 20px;background:#222529;border-bottom:1px solid #3A3D42;display:flex;justify-content:space-between;align-items:center">
+          <div style="font-size:15px;font-weight:700;color:#fff">📄 Export PDF Options</div>
+          <button onclick="document.getElementById('asm-export-modal').remove()" style="background:none;border:none;color:#7A7D82;font-size:20px;cursor:pointer">&#10005;</button>
+        </div>
+        <div style="padding:16px 20px">
+          ${row('eo-logo','Company Logo','Your logo from My Profile', false, !hf('pdfLogoHeader')||!gp.logo)}
+          ${row('eo-company','Company Name','Business name from My Profile', false, !hf('pdfCompanyName')||!gp.biz)}
+          <div style="padding:12px 0;border-bottom:1px solid #2A2D31">
+            <div style="font-size:13px;color:#E8E8E8;margin-bottom:6px">Client Name</div>
+            <input type="text" id="eo-client-text" value="${(currentClientName||'').replace(/"/g,'&quot;')}" placeholder="Type client name" style="width:100%;padding:8px 10px;background:#222529;border:1px solid #3A3D42;border-radius:6px;color:#fff;font-size:13px;box-sizing:border-box">
+          </div>
+          ${row('eo-outer','Print Outer Details','Input values grid atop each item', true, false)}
+          ${row('eo-summary','Panel Summary','Components / panels line per item', true, false)}
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0 4px">
+            <div><div style="font-size:13px;color:#E8E8E8">W×H×Qty×Material font (pt)</div>
+            <div style="font-size:11px;color:#7A7D82">Component table text size</div></div>
+            <input type="number" id="eo-font" value="14" min="8" max="24" style="width:60px;padding:6px 8px;background:#222529;border:1px solid #3A3D42;border-radius:6px;color:#fff;font-size:13px;text-align:center">
+          </div>
+        </div>
+        <div style="padding:12px 20px;background:#222529;border-top:1px solid #3A3D42;display:flex;justify-content:flex-end;gap:8px">
+          <button onclick="document.getElementById('asm-export-modal').remove()" style="padding:8px 16px;background:#3A3D42;border:none;border-radius:6px;color:#ABABAD;font-size:13px;cursor:pointer">Cancel</button>
+          <button onclick="ASMModule._runExport()" style="padding:8px 16px;background:#ECB22E;border:none;border-radius:6px;color:#1A1D21;font-weight:700;font-size:13px;cursor:pointer">Export PDF</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+  }
+
   function _runExport() {
-    if (!window.ASMPdf) { showToast('PDF module not loaded', 'error'); return; }
-    ASMPdf.runExport(_pdfCtx());
+    const gp = (typeof profile!=='undefined' && profile) ? profile : {};
+    const modalEl = document.getElementById('asm-export-modal');
+    const opt = {
+      logo:    document.getElementById('eo-logo')?.checked && gp.logo,
+      company: document.getElementById('eo-company')?.checked && gp.biz,
+      phone:   document.getElementById('eo-company')?.checked && gp.phone,
+      client:  (document.getElementById('eo-client-text')?.value || '').trim(),
+      outer:   document.getElementById('eo-outer')?.checked,
+      summary: document.getElementById('eo-summary')?.checked,
+      font:    parseInt(document.getElementById('eo-font')?.value) || 14,
+      biz: gp.biz, logoSrc: gp.logo, phoneNum: gp.phone
+    };
+    document.getElementById('asm-export-modal')?.remove();
+    _doExportPDF(opt);
   }
+
+  function _doExportPDF(opt) {
+    opt = opt || {};
+    const fs = opt.font || 14;
+    let html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+      <title>EasyCutList ASM - Size Sheet</title>
+      <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: Arial, sans-serif; font-size: 11px; color: #333; padding: 15px; }
+        .header { text-align: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #333; }
+        .header h1 { font-size: 16px; margin-bottom: 3px; }
+        .header p { font-size: 10px; color: #666; }
+        .item { margin-bottom: 18px; }
+        .item-table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+        .item-table:first-of-type { margin-top: 0; }
+        /* Title row (was .item-title) */
+        .it-title-row td { background: #333; color: #fff; padding: 6px 10px; font-size: 13px; font-weight: bold; }
+        /* Input rows (was .item-inputs) */
+        .it-input-row td { background: #f5f5f5; padding: 3px 8px; font-size: 9px; color: #555; border: 1px solid #ddd; }
+        .it-input-pad { background: #f5f5f5 !important; border: 1px solid #ddd; }
+        /* Column-header row */
+        .it-colhead th { background: #eee; padding: 4px 6px; text-align: left; font-size: ${fs}px; border: 1px solid #ccc; font-weight: 700; }
+        /* Only keep the title row from being stranded alone at the very bottom
+           of a page. Everything else (inputs, header, size rows) flows freely
+           and fills the page — items continue immediately after one another. */
+        .it-title-row { break-after: avoid; }
+        .run-header { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #333; padding-bottom: 8px; position: running(hdr); width: 100%; }
+        @page { margin: 34mm 12mm 16mm 12mm; @top-center { content: element(hdr); } @bottom-left { content: "Generated by EasyCutList ASM"; font-size: 9px; color: #999; } @bottom-right { content: "Page " counter(page) " of " counter(pages); font-size: 9px; color: #999; } }
+        table { width: 100%; border-collapse: collapse; }
+        tr { break-inside: avoid; }
+        th { background: #eee; padding: 4px 6px; text-align: left; font-size: ${fs}px; border: 1px solid #ccc; font-weight: 700; }
+        td { padding: 4px 6px; border: 1px solid #ccc; font-size: ${fs}px; }
+        td.num { text-align: right; font-weight: 600; }
+        .summary { font-size: 10px; color: #666; text-align: right; padding: 4px; }
+        .footer { margin-top: 20px; text-align: left; font-size: 12px; color: #666; border-top: 1px solid #ccc; padding-top: 8px; }
+        @media print { body { padding: 10px; } tr { page-break-inside: avoid; } }
+      </style>
+    </head><body>`;
+
+    const escH = s => String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+    if (opt.logo || opt.company || opt.client) {
+      const center = [];
+      if (opt.company && opt.biz) center.push(`<div style="font-weight:900;font-size:16px">${escH(opt.biz)}</div>`);
+      if (opt.phone && opt.phoneNum) center.push(`<div style="font-size:11px;color:#666">${escH(opt.phoneNum)}</div>`);
+      const logoImg = (opt.logo && opt.logoSrc) ? `<img src="${opt.logoSrc}" style="max-height:40px;max-width:90px;object-fit:contain">` : '';
+      const clientHtml = opt.client ? `<div style="font-size:15px;font-weight:700;color:#c0392b;margin-top:2px">${escH(opt.client)}</div>` : '';
+      html += `<div class="run-header">
+        <div style="flex:1;display:flex;align-items:center;gap:12px">${logoImg}${clientHtml}</div>
+        <div style="flex:1;text-align:center">${center.join('')}</div>
+        <div style="flex:1;text-align:right;font-size:9px;color:#aaa">${new Date().toLocaleDateString('en-IN')}<div style="font-size:8px;color:#bbb">Generated by EasyCutList ASM</div></div>
+      </div>`;
+    } else {
+      html += `<div class="header">
+        <h1>EasyCutList - Auto Size Module (ASM)</h1>
+        <p>Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}</p>
+      </div>`;
+    }
+
+    let grandTotalPanels = 0;
+    let globalSrNo = 0;
+
+    readyItems.forEach((it, idx) => {
+      const inp = it.inputs;
+      const _w = inp.width || inp.w || inp.W;
+      const _h = inp.ht || inp.h || inp.H || inp.height;
+      const _d = inp.depth || inp.d || inp.D;
+      const w = _w != null ? UNITS.fromMM(_w) : '?';
+      const h = _h != null ? UNITS.fromMM(_h) : '?';
+      const d = _d != null ? UNITS.fromMM(_d) : '?';
+      const _uLbl = (UNITS.MODES[UNITS.get()] || {}).label || '';
+      const dims = w + ' x ' + h + ' x ' + d + ' (' + _uLbl + ')';
+      const totalPanels = it.outputs.reduce((a, o) => a + (o.qty || 0), 0);
+      grandTotalPanels += totalPanels;
+
+      // Input summary as clean table
+      const inputRows = Object.entries(it.inputs)
+        .filter(([k, v]) => v !== '' && v !== null && v !== undefined)
+        .map(([k, v]) => {
+          let dv = v;
+          if (typeof v === 'number' && !UNITS.isCountKey(k)) dv = UNITS.fromMM(v);
+          return '<td style="padding:2px 8px;border:1px solid #ddd;font-weight:600;background:#f9f9f9;font-size:9px">' + k + '</td><td style="padding:2px 8px;border:1px solid #ddd;font-size:9px">' + dv + '</td>';
+        })
+      
+      // Show inputs in rows of 4 pairs each
+      let inputTable = '<table style="width:100%;border-collapse:collapse;margin:2px 0"><tr>';
+      inputRows.forEach((cell, i) => {
+        inputTable += cell;
+        if ((i + 1) % 4 === 0 && i < inputRows.length - 1) inputTable += '</tr><tr>';
+      });
+      inputTable += '</tr></table>';
+
+      const roomPrefix = it.roomName ? (String(it.roomName).trim() + ' — ') : '';
+      const _uAbbr = { generic:'', mm:' (mm)', cm:' (cm)', m:' (m)', in:' (in)', in_frac:' (in)', ft_in:' (ft-in)', ft_in_frac:' (ft-in)' }[UNITS.get()] || '';
+
+      // ONE continuous table per item: title row + input rows + column-header row
+      // + size rows. paged.js flows this row-by-row, filling each page and
+      // splitting between rows — no block-then-table gap.
+      html += '<table class="item-table"><tbody>';
+
+      // Title row (full width, spans all 8 columns)
+      html += '<tr class="it-title-row"><td colspan="8">' + (idx + 1) + '. ' + roomPrefix + it.itemName + '  |  ' + dims + '  |  Qty: ' + (inp.qty || inp.Qty || 1) + '</td></tr>';
+
+      // Input rows (each pair label/value; pack 4 pairs per row → 8 cells)
+      if (opt.outer && inputRows.length) {
+        for (let i = 0; i < inputRows.length; i += 4) {
+          const chunk = inputRows.slice(i, i + 4).join('');
+          // pad to 8 cells so colspan lines up
+          const cellsInChunk = Math.min(4, inputRows.length - i) * 2;
+          const pad = cellsInChunk < 8 ? '<td colspan="' + (8 - cellsInChunk) + '" class="it-input-pad"></td>' : '';
+          html += '<tr class="it-input-row">' + chunk + pad + '</tr>';
+        }
+      }
+
+      // Column header row (does not repeat across pages — acceptable per spec)
+      html += '<tr class="it-colhead"><th>Sr</th><th>Component</th><th>W' + _uAbbr + '</th><th>H' + _uAbbr + '</th><th>Qty</th><th>Color</th><th>Remark</th><th>Box No</th></tr>';
+
+      it.outputs.forEach((o) => {
+        globalSrNo++;
+        let color = String(o.color || '-');
+        let remark = String(o.remark || '-');
+        if (color.includes('===') || color.includes('?') || color.includes('||')) color = '-';
+        if (remark.includes('===') || remark.includes('?') || remark.includes('||')) remark = '-';
+        color = color.replace(/^["']|["']$/g, '');
+        remark = remark.replace(/^["']|["']$/g, '');
+
+        html += '<tr>';
+        html += '<td>' + globalSrNo + '</td>';
+        html += '<td>' + (o.component || '-') + '</td>';
+        html += '<td class="num">' + UNITS.fromMM(o.w || 0) + '</td>';
+        html += '<td class="num">' + UNITS.fromMM(o.h || 0) + '</td>';
+        html += '<td class="num">' + (o.qty || 0) + '</td>';
+        html += '<td>' + color + '</td>';
+        html += '<td>' + remark + '</td>';
+        html += '<td></td>';
+        html += '</tr>';
+      });
+
+      html += '</tbody></table>';
+      if (opt.summary) html += '<div class="summary">' + it.outputs.length + ' components | ' + totalPanels + ' panels</div>';
+    });
+
+    html += '<div class="footer">Total: ' + readyItems.length + ' items | ' + grandTotalPanels + ' panels<br>Generated and calculated with EasyCutList ASM</div>';
+    html += '<script src="https://unpkg.com/pagedjs/dist/paged.polyfill.js"><\/script>';
+    html += '<script>window.PagedConfig={auto:true,after:()=>{setTimeout(()=>window.print(),200);}};<\/script>';
+    html += '</body></html>';
+
+    // Open print window
+    const printWin = window.open('', '_blank');
+    if (!printWin) { showToast('Allow popups to export PDF', 'error'); return; }
+    printWin.document.write(html);
+    printWin.document.close();
+    printWin.focus();
+  }
+
+  // ========================================================================
+  // ASM PLAN & PRICING
+  // ========================================================================
 
   async function checkASMPlan() {
     const token = getAuthToken();
@@ -2305,218 +2775,6 @@ const ASMModule = (() => {
   // TOAST NOTIFICATIONS
   // ========================================================================
 
-  // ── image compression: File -> data URL (JPEG, max 1600px, q0.7) ──
-  function compressImage(file) {
-    return new Promise((resolve, reject) => {
-      if (!/^image\/(jpeg|png)$/.test(file.type)) { reject(new Error('Only JPG/PNG')); return; }
-      const img = new Image();
-      const reader = new FileReader();
-      reader.onload = e => { img.src = e.target.result; };
-      reader.onerror = () => reject(new Error('read failed'));
-      img.onload = () => {
-        const MAX = 1600;
-        let { width: w, height: h } = img;
-        if (w > MAX || h > MAX) { const s = Math.min(MAX / w, MAX / h); w = Math.round(w * s); h = Math.round(h * s); }
-        const c = document.createElement('canvas');
-        c.width = w; c.height = h;
-        c.getContext('2d').drawImage(img, 0, 0, w, h);
-        resolve(c.toDataURL('image/jpeg', 0.7));
-      };
-      img.onerror = () => reject(new Error('bad image'));
-      reader.readAsDataURL(file);
-    });
-  }
-
-  // shared: build an attach control that collects compressed data URLs into `store` array
-  function buildAttachUI(store, previewId) {
-    return '<div style="margin-top:10px">' +
-      '<label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#9A9DA2;cursor:pointer">' +
-        '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>' +
-        'Attach screenshots' +
-        '<input type="file" accept="image/png,image/jpeg" multiple style="display:none" ' +
-          'onchange="ASMModule._onAttach(event,\''+previewId+'\')"></label>' +
-      '<div id="'+previewId+'" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px"></div></div>';
-  }
-
-  // global registry so inline onchange can reach the right store
-  var _attachStores = {};
-  async function _onAttach(ev, previewId) {
-    const files = Array.from(ev.target.files || []);
-    const prev = document.getElementById(previewId);
-    const store = _attachStores[previewId] = _attachStores[previewId] || [];
-    for (const f of files) {
-      if (store.length >= 6) { showToast('Max 6 images', 'error'); break; }
-      try {
-        const durl = await compressImage(f);
-        store.push(durl);
-        const wrap = document.createElement('div');
-        wrap.style.cssText = 'position:relative;width:52px;height:52px';
-        const idx = store.length - 1;
-        wrap.innerHTML = '<img src="'+durl+'" style="width:52px;height:52px;object-fit:cover;border-radius:6px;border:1px solid #3A3D42">' +
-          '<span style="position:absolute;top:-6px;right:-6px;background:#E01E5A;color:#fff;border-radius:50%;width:16px;height:16px;font-size:11px;line-height:16px;text-align:center;cursor:pointer" '+
-          'onclick="ASMModule._rmAttach(\''+previewId+'\','+idx+',this)">×</span>';
-        prev.appendChild(wrap);
-      } catch (e) { showToast(e.message, 'error'); }
-    }
-    ev.target.value = '';
-  }
-  function _rmAttach(previewId, idx, el) {
-    const store = _attachStores[previewId];
-    if (store && store[idx] !== undefined) store[idx] = null; // tombstone (keep indices)
-    if (el && el.parentElement) el.parentElement.remove();
-  }
-  function _collectAttachments(previewId) {
-    return (_attachStores[previewId] || []).filter(Boolean);
-  }
-  function _clearAttachments(previewId) { delete _attachStores[previewId]; }
-
-  // render attachments inside a thread bubble
-  function renderAttachments(atts) {
-    if (!atts || !atts.length) return '';
-    return '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px">' +
-      atts.map(u => '<a href="'+u+'" target="_blank" rel="noopener"><img src="'+u+'" style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid #3A3D42"></a>').join('') +
-      '</div>';
-  }
-
-  function reportProblem(instanceId) {
-    const inst = sbsItems.find(i => i.instanceId === instanceId);
-    const itemName = inst ? (inst.itemName || 'Item') : 'Item';
-    const ov = document.createElement('div');
-    ov.className = 'asm-review-overlay';
-    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:100000';
-    ov.innerHTML =
-      '<div style="background:#1E2124;border:1px solid #3A3D42;border-radius:12px;padding:24px;max-width:480px;width:92%">' +
-        '<div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:4px">Report a problem</div>' +
-        '<div style="font-size:13px;color:#9A9DA2;margin-bottom:14px">Item: <b style="color:#ECB22E">' + itemName.replace(/</g,"&lt;") + '</b></div>' +
-        '<textarea id="rpBody" rows="5" placeholder="Describe the problem…" style="width:100%;box-sizing:border-box;background:#14161A;border:1px solid #3A3D42;color:#fff;border-radius:8px;padding:10px;font-family:inherit;font-size:13px;resize:vertical"></textarea>' +
-        buildAttachUI(null, 'rpAttach') +
-        '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">' +
-          '<button class="asm-btn asm-btn-ghost" id="rpCancel">Cancel</button>' +
-          '<button class="asm-btn" style="background:#E01E5A;color:#fff" id="rpSend">Send</button>' +
-        '</div>' +
-        '<div id="rpStatus" style="font-size:12px;margin-top:8px"></div>' +
-      '</div>';
-    document.body.appendChild(ov);
-    const close = () => ov.remove();
-    ov.querySelector('#rpCancel').onclick = close;
-    ov.onclick = e => { if (e.target === ov) close(); };
-    ov.querySelector('#rpSend').onclick = async () => {
-      const body = ov.querySelector('#rpBody').value.trim();
-      const st = ov.querySelector('#rpStatus');
-      if (!body) { st.textContent = 'Please type a message.'; st.style.color = '#E01E5A'; return; }
-      st.textContent = 'Sending…'; st.style.color = '#9A9DA2';
-      try {
-        const images = _collectAttachments('rpAttach');
-        if (!body && !images.length) { st.textContent = 'Add a message or image.'; st.style.color = '#E01E5A'; return; }
-        const res = await fetch(apiBase() + '/asm/problem', {
-          method: 'POST',
-          headers: Object.assign({ 'Content-Type': 'application/json' }, authH()),
-          body: JSON.stringify({ itemName: itemName, body: body, images: images })
-        });
-        const d = await res.json();
-        if (d.success) { _clearAttachments('rpAttach'); showToast('Problem reported — we will reply soon', 'success'); close(); }
-        else { st.textContent = d.error || 'Failed to send'; st.style.color = '#E01E5A'; }
-      } catch (e) { st.textContent = e.message; st.style.color = '#E01E5A'; }
-    };
-  }
-
-  async function refreshMyProblemsBadge() {
-    try {
-      const res = await fetch(apiBase() + '/asm/my-problems', { headers: authH() });
-      const d = await res.json();
-      const probs = d.problems || [];
-      const unread = probs.filter(p => p.unread_user).length;
-      const badge = document.getElementById('asm-msgs-badge');
-      if (badge) {
-        if (unread > 0) { badge.textContent = unread; badge.style.display = 'flex'; }
-        else badge.style.display = 'none';
-      }
-      return probs;
-    } catch (e) { return []; }
-  }
-
-  async function openMyProblems() {
-    const probs = await refreshMyProblemsBadge();
-    const ov = document.createElement('div');
-    ov.className = 'asm-review-overlay';
-    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:100000';
-    const esc = x => String(x==null?'':x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-    const fmt = iso => { if(!iso) return ''; const d=new Date(iso); return isNaN(d)?'':d.toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}); };
-
-    function threadHtml(p) {
-      return (p.messages||[]).map(m => {
-        const mine = m.sender === 'user';
-        return '<div style="margin:6px 0;display:flex;' + (mine?'justify-content:flex-end':'') + '">' +
-          '<div style="max-width:80%;background:' + (mine?'#2B5C43':'#26282C') + ';color:#eee;padding:8px 11px;border-radius:9px;font-size:13px">' +
-            '<div style="font-size:10px;color:#9A9DA2;margin-bottom:2px">' + (mine?'You':'Support') + ' · ' + fmt(m.created_at) + '</div>' +
-            (m.body ? esc(m.body) : '') + renderAttachments(m.attachments) + '</div></div>';
-      }).join('');
-    }
-
-    const body = probs.length ? probs.map(p =>
-      '<div style="background:#1A1D21;border:1px solid #2A2D31;border-radius:10px;padding:14px;margin-bottom:12px">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
-          '<div style="font-size:13px;color:#ECB22E;font-weight:700">' + esc(p.item_name || 'Item') + (p.status==='closed'?' <span style="background:#555;color:#fff;font-size:9px;padding:1px 6px;border-radius:8px">CLOSED</span>':'') + '</div>' +
-          '<div style="font-size:11px;color:#9A9DA2">' + fmt(p.created_at) + '</div>' +
-        '</div>' +
-        '<div style="max-height:220px;overflow-y:auto;margin-bottom:8px">' + threadHtml(p) + '</div>' +
-        (p.status==='closed' ? '<div style="font-size:12px;color:#9A9DA2">This thread is closed.</div>' :
-          '<div style="display:flex;gap:6px">' +
-            '<input id="myreply-' + p.id + '" placeholder="Reply…" style="flex:1;background:#111;border:1px solid #3A3D42;color:#fff;border-radius:6px;padding:7px;font-size:13px;font-family:inherit">' +
-            '<button class="asm-btn asm-btn-primary" onclick="ASMModule.replyMyProblem(' + p.id + ')">Send</button>' +
-          '</div>' + buildAttachUI(null, 'myAttach-' + p.id)) +
-        '<div id="myrepstatus-' + p.id + '" style="font-size:11px;margin-top:4px"></div>' +
-      '</div>'
-    ).join('') : '<div style="color:#9A9DA2;font-size:13px;text-align:center;padding:20px">No messages yet. Use "Report Problem" on an item to start.</div>';
-
-    ov.innerHTML =
-      '<div style="background:#1E2124;border:1px solid #3A3D42;border-radius:12px;padding:22px;max-width:560px;width:94%;max-height:82vh;overflow-y:auto">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
-          '<div style="font-size:16px;font-weight:700;color:#fff">My Messages</div>' +
-          '<button class="asm-btn asm-btn-ghost" id="myMsgClose">Close</button>' +
-        '</div>' + body +
-      '</div>';
-    document.body.appendChild(ov);
-    ov.querySelector('#myMsgClose').onclick = () => ov.remove();
-    ov.onclick = e => { if (e.target === ov) ov.remove(); };
-    ov._probs = probs;
-    _myProblemsOverlay = ov;
-
-    // mark replies as read (server side) — clears the badge
-    try {
-      for (const p of probs) {
-        if (p.unread_user) {
-          await fetch(apiBase() + '/asm/problem/mark-read', {
-            method: 'POST', headers: Object.assign({ 'Content-Type':'application/json' }, authH()),
-            body: JSON.stringify({ problem_id: p.id })
-          });
-        }
-      }
-      refreshMyProblemsBadge();
-    } catch (e) {}
-  }
-
-  async function replyMyProblem(id) {
-    const inp = document.getElementById('myreply-' + id);
-    const st = document.getElementById('myrepstatus-' + id);
-    const body = (inp.value || '').trim();
-    st.textContent = 'Sending…'; st.style.color = '#9A9DA2';
-    try {
-      const images = _collectAttachments('myAttach-' + id);
-      if (!body && !images.length) { st.textContent = 'Add text or image.'; st.style.color = '#E01E5A'; return; }
-      const res = await fetch(apiBase() + '/asm/problem/reply', {
-        method: 'POST', headers: Object.assign({ 'Content-Type':'application/json' }, authH()),
-        body: JSON.stringify({ problem_id: id, body: body, images: images })
-      });
-      const d = await res.json();
-      if (d.success) {
-        _clearAttachments('myAttach-' + id);
-        if (_myProblemsOverlay) _myProblemsOverlay.remove();
-        openMyProblems();  // reload thread
-      } else { st.textContent = d.error || 'Failed'; st.style.color = '#E01E5A'; }
-    } catch (e) { st.textContent = e.message; st.style.color = '#E01E5A'; }
-  }
-
   function showToast(msg, type = 'info') {
     const toast = document.createElement('div');
     toast.className = `asm-toast asm-toast-${type}`;
@@ -2537,7 +2795,7 @@ const ASMModule = (() => {
     if (document.getElementById('asm-fullpage-styles')) return;
     const style = document.createElement('style');
     style.id = 'asm-fullpage-styles';
-    style.textContent = window.ASM_CSS;
+    style.textContent = ASM_CSS;
     document.head.appendChild(style);
   }
 
@@ -2720,7 +2978,6 @@ const ASMModule = (() => {
   function makeQuotation() {
     if (typeof window !== 'undefined' && window.ASMQuote) {
       if (!readyItems || !readyItems.length) { showToast('No items in Ready Items — build and save first', 'error'); return; }
-      trackAsm('make_quotation');
       window.ASMQuote.open(readyItems);
     } else { showToast('Quotation module not loaded', 'error'); }
   }
@@ -2730,7 +2987,7 @@ const ASMModule = (() => {
     showImportModal, downloadSample, doImport,
     filterCatalogue, addToSBS, removeFromSBS,
     updateInput, setRoomName, editOutput, deleteOutputRow, saveToReady, reviewCheck, setRisSort, asmLogin, asmLogout,
-    reopenReady, removeReady, duplicateReady, clearReady, exportReady, exportToPDF, _runExport, sbsFont, setUnit, switchCatalogue, showCategoryGallery, exitGallery, addManualRow, addManualRowsPrompt, deleteManualRow, editManualRow, addSBSRows, adjustEBand, reportProblem, openMyProblems, replyMyProblem, _onAttach, _rmAttach,
+    reopenReady, removeReady, duplicateReady, clearReady, exportReady, exportToPDF, _runExport, sbsFont, setUnit, switchCatalogue, showCategoryGallery, exitGallery, addManualRow, addManualRowsPrompt, deleteManualRow, editManualRow, addSBSRows, adjustEBand,
     saveProject, showProjects, loadProject, deleteProject,
     showPricing, startASMPayment,
     toggleNotifications, openShare,
@@ -2740,3 +2997,446 @@ const ASMModule = (() => {
 
 document.addEventListener('DOMContentLoaded', () => ASMModule.init());
 
+// ============================================================================
+// CSS (injected on first open)
+// ============================================================================
+const ASM_CSS = `
+#asm-fullpage {
+  position: fixed; inset: 0; z-index: 9999;
+  background: #1A1D21;
+  display: none; flex-direction: column;
+  font-family: 'Lato', -apple-system, sans-serif;
+  color: #D1D2D3;
+}
+
+.asm-topbar {
+  height: 56px; flex-shrink: 0;
+  background: #350D36;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 0 20px; color: #fff;
+  box-shadow: 0 2px 8px rgba(0,0,0,.3);
+}
+.asm-logo-svg { flex-shrink: 0; }
+.asm-title { font-size: 18px; font-weight: 900; letter-spacing: .5px; display: flex; align-items: center; gap: 10px; }
+.asm-topbar-actions { display: flex; align-items: center; gap: 8px; }
+.asm-top-btn { background: rgba(255,255,255,.1); border: none; color: #fff; padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background .2s; font-family: inherit; }
+.asm-top-btn:hover { background: rgba(255,255,255,.2); }
+.asm-save-btn { background: rgba(236,178,46,.2); color: #ECB22E; }
+.asm-save-btn:hover { background: rgba(236,178,46,.3); }
+.asm-close {
+  background: rgba(255,255,255,.12); border: none; color: #fff;
+  width: 34px; height: 34px; border-radius: 6px; font-size: 18px; cursor: pointer;
+  transition: background .2s;
+}
+.asm-close:hover { background: rgba(255,255,255,.25); }
+
+.asm-body {
+  flex: 1; display: grid;
+  grid-template-columns: 240px 1fr 300px;
+  gap: 1px; background: #2C2D30; overflow: hidden;
+}
+
+.asm-col { background: #1A1D21; display: flex; flex-direction: column; overflow: hidden; }
+.asm-col-head {
+  padding: 12px 16px; font-size: 12px; font-weight: 800; letter-spacing: .8px;
+  color: #ECB22E; background: #222529; border-bottom: 2px solid #4A154B; flex-shrink: 0;
+}
+
+/* CATALOGUE (left) */
+.asm-search {
+  margin: 10px 12px; padding: 8px 12px; border-radius: 6px;
+  border: 1px solid #3A3D42; background: #222529; color: #D1D2D3; font-size: 13px;
+}
+.asm-search:focus { outline: none; border-color: #ECB22E; }
+.asm-cat-list { flex: 1; overflow-y: auto; padding: 0 8px 12px; }
+.asm-cat-group-label {
+  font-size: 10px; font-weight: 800; color: #7A7D82; letter-spacing: 1px;
+  padding: 12px 8px 6px; text-transform: uppercase;
+}
+.asm-cat-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 9px 12px; margin: 2px 0; border-radius: 6px; cursor: pointer;
+  font-size: 13px; transition: background .15s;
+  border-left: 3px solid transparent;
+}
+.asm-cat-item:hover { background: #2C2D30; border-left-color: #ECB22E; }
+.asm-cat-locked { opacity: .5; }
+.asm-cat-locked:hover { border-left-color: #E01E5A; }
+.asm-cat-locked .asm-cat-item-name { color: #7A7D82; }
+.asm-cat-item-name { color: #D1D2D3; }
+.asm-cat-item-add {
+  width: 20px; height: 20px; border-radius: 4px; background: #4A154B; color: #fff;
+  display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700;
+  opacity: 0; transition: opacity .15s;
+}
+.asm-cat-item:hover .asm-cat-item-add { opacity: 1; }
+
+/* SBS (middle) */
+.asm-sbs-body { flex: 1; overflow-y: auto; padding: 16px; }
+.asm-sbs-body .asm-out-table, .asm-sbs-body .asm-out-table input { font-size: var(--sbs-font, 14px); }
+.asm-sbs-empty {
+  height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  color: #5A5D62; text-align: center; gap: 12px; font-size: 14px;
+}
+.asm-sbs-empty-icon { font-size: 48px; opacity: .4; }
+
+.asm-sbs-item {
+  background: #222529; border: 1px solid #3A3D42; border-radius: 10px;
+  margin-bottom: 18px; overflow: hidden;
+}
+.asm-sbs-item-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px; background: #2C2D30; border-bottom: 1px solid #3A3D42;
+}
+.asm-sbs-item-title { font-size: 15px; font-weight: 800; color: #fff; }
+.asm-sbs-item-remove {
+  background: none; border: none; color: #7A7D82; cursor: pointer; font-size: 16px;
+  width: 28px; height: 28px; border-radius: 5px; transition: all .15s;
+}
+.asm-sbs-item-remove:hover { background: rgba(224,30,90,.15); color: #E01E5A; }
+
+.asm-sbs-item-inputs {
+  padding: 14px 16px;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px 18px;
+  background: #1E2125;
+}
+.asm-input-row { display: flex; align-items: center; gap: 10px; }
+.asm-input-row label { flex: 1; font-size: 12px; color: #ABABAD; }
+.asm-input-row input[type=number], .asm-input-row select {
+  width: 90px; padding: 6px 8px; border-radius: 5px;
+  border: 1px solid #3A3D42; background: #14161A; color: #fff; font-size: 13px; text-align: right;
+}
+.asm-input-row select { width: 130px; text-align: left; }
+.asm-input-row input:focus, .asm-input-row select:focus { outline: none; border-color: #ECB22E; }
+
+/* toggle switch */
+.asm-switch { position: relative; display: inline-block; width: 40px; height: 22px; }
+.asm-switch input { opacity: 0; width: 0; height: 0; }
+.asm-slider {
+  position: absolute; inset: 0; cursor: pointer; background: #3A3D42;
+  border-radius: 22px; transition: .2s;
+}
+.asm-slider:before {
+  content: ""; position: absolute; height: 16px; width: 16px; left: 3px; bottom: 3px;
+  background: #fff; border-radius: 50%; transition: .2s;
+}
+.asm-switch input:checked + .asm-slider { background: #ECB22E; }
+.asm-switch input:checked + .asm-slider:before { transform: translateX(18px); }
+
+.asm-sbs-item-outputs { padding: 0 16px 14px; }
+
+.asm-sbs-item-diagram-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 12px 16px;
+  background: #1A1D21;
+  border-bottom: 1px solid #292B2F;
+  align-items: stretch;
+}
+
+.asm-ref-images {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  justify-content: center;
+  padding: 12px;
+  background: rgba(0,0,0,.2);
+  border-radius: 6px;
+}
+
+.asm-ref-image-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: all .2s;
+}
+
+.asm-ref-image-item:hover {
+  opacity: .85;
+  transform: scale(1.04);
+}
+
+.asm-ref-image-item img {
+  width: 280px;
+  height: 220px;
+  object-fit: contain;
+  border-radius: 6px;
+  border: 1px solid #3A3D42;
+  background: #14161A;
+  padding: 4px;
+  cursor: pointer;
+}
+
+.asm-ref-label {
+  font-size: 11px;
+  color: #7A7D82;
+  text-align: center;
+  max-width: 280px;
+  word-break: break-word;
+  font-weight: 600;
+}
+
+.asm-sbs-item-diagram {
+  width: 100%;
+  text-align: center;
+  padding: 16px;
+  min-height: 300px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,.2);
+  border: 1px solid #3A3D42;
+  border-radius: 6px;
+}
+
+.asm-modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.85);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 10000; opacity: 0; visibility: hidden; transition: all .3s;
+}
+.asm-modal-overlay.show { opacity: 1; visibility: visible; }
+.asm-modal-content {
+  position: relative; background: #1A1D21; border-radius: 8px;
+  max-width: 90vw; max-height: 90vh; overflow: auto;
+  box-shadow: 0 8px 32px rgba(0,0,0,.6);
+}
+.asm-modal-image {
+  width: auto; height: auto; display: block;
+  max-width: 90vw; max-height: 85vh; object-fit: contain;
+}
+.asm-modal-close {
+  position: absolute; top: 12px; right: 12px; width: 32px; height: 32px;
+  background: rgba(0,0,0,.6); border: none; border-radius: 4px; color: #fff;
+  font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  z-index: 10001; transition: all .2s;
+}
+.asm-modal-close:hover { background: rgba(0,0,0,.9); }
+
+.asm-out-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.asm-out-table th {
+  text-align: left; padding: 8px 10px; color: #7A7D82; font-weight: 700;
+  border-bottom: 1px solid #3A3D42; font-size: 11px; text-transform: uppercase; letter-spacing: .5px;
+}
+.asm-out-table td { padding: 7px 10px; border-bottom: 1px solid #292B2F; }
+.asm-out-name { font-weight: 700; color: #D1D2D3; }
+.asm-out-num { text-align: right; font-family: 'Inconsolata', monospace; color: #ECB22E; font-weight: 600; }
+.asm-out-remark { color: #8A8D92; font-size: 11px; }
+
+/* editable output cells */
+.asm-row-del {
+  background: transparent; border: 1px solid #3A3D42; color: #E01E5A;
+  width: 24px; height: 24px; border-radius: 5px; cursor: pointer;
+  font-size: 12px; line-height: 1; padding: 0;
+}
+.asm-row-del:hover { background: rgba(224,30,90,.15); border-color: #E01E5A; }
+.asm-cell {
+  background: #222529; border: 1px solid #3A3D42; color: inherit; font: inherit;
+  padding: 4px 6px; width: 100%; border-radius: 4px; box-sizing: border-box;
+}
+.asm-cell:hover { border-color: #3A3D42; }
+.asm-cell:focus { outline: none; border-color: #ECB22E; background: #14161A; }
+.asm-cell-num { text-align: right; width: 70px; color: #ECB22E; font-family: 'Inconsolata', monospace; font-weight: 600; }
+/* Remove the tiny up/down stepper arrows on all ASM number inputs */
+.asm-cell[type=number]::-webkit-outer-spin-button,
+.asm-cell[type=number]::-webkit-inner-spin-button,
+.asm-input-row input[type=number]::-webkit-outer-spin-button,
+.asm-input-row input[type=number]::-webkit-inner-spin-button {
+  -webkit-appearance: none; appearance: none; margin: 0;
+}
+.asm-cell[type=number], .asm-input-row input[type=number] {
+  -moz-appearance: textfield; appearance: textfield;
+}
+.asm-cell-remark { color: #8A8D92; font-size: 11px; }
+td .asm-cell { font-weight: 700; color: #D1D2D3; }
+td .asm-cell-num { font-weight: 600; color: #ECB22E; }
+.asm-out-conditional { background: rgba(74,21,75,.18); }
+.asm-out-empty { text-align: center; color: #5A5D62; padding: 16px; font-style: italic; }
+.asm-sbs-item-summary { margin-top: 10px; font-size: 11px; color: #7A7D82; text-align: right; }
+
+.asm-sbs-item-actions {
+  display: flex; gap: 8px; justify-content: flex-end;
+  padding: 12px 16px; background: #1E2125; border-top: 1px solid #3A3D42;
+}
+
+/* RIS (right) */
+.asm-ris-list { flex: 1; overflow-y: auto; padding: 12px; }
+.asm-ris-item {
+  background: #222529; border: 1px solid #3A3D42; border-radius: 8px;
+  padding: 10px 12px; margin-bottom: 8px;
+}
+.asm-ris-item-head { display: flex; align-items: center; gap: 8px; }
+.asm-ris-num {
+  width: 22px; height: 22px; border-radius: 50%; background: #4A154B; color: #fff;
+  display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0;
+}
+.asm-ris-name { flex: 1; font-size: 13px; font-weight: 700; color: #fff; }
+.asm-ris-remove {
+  background: none; border: none; color: #7A7D82; cursor: pointer; font-size: 14px;
+  width: 24px; height: 24px; border-radius: 4px;
+}
+.asm-ris-remove:hover { background: rgba(224,30,90,.15); color: #E01E5A; }
+.asm-ris-meta { font-size: 11px; color: #7A7D82; margin-top: 5px; padding-left: 30px; }
+.asm-ris-foot {
+  flex-shrink: 0; padding: 12px; border-top: 1px solid #3A3D42;
+  display: flex; flex-direction: column; gap: 8px;
+}
+
+.asm-empty { text-align: center; color: #5A5D62; padding: 30px 16px; font-size: 13px; line-height: 1.6; }
+
+/* buttons */
+.asm-btn {
+  padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 700;
+  cursor: pointer; border: none; transition: all .15s; font-family: inherit;
+}
+.asm-btn-primary { background: #ECB22E; color: #1A1D21; }
+.asm-btn-primary:hover { background: #f5c044; }
+.asm-btn-secondary { background: #4A154B; color: #fff; }
+.asm-btn-secondary:hover { background: #611f64; }
+.asm-btn-ghost { background: transparent; color: #ABABAD; border: 1px solid #3A3D42; }
+.asm-btn-ghost:hover { background: #2C2D30; color: #fff; }
+
+/* toast */
+.asm-toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
+  padding: 12px 22px; border-radius: 8px; font-size: 13px; font-weight: 600;
+  z-index: 10001; opacity: 0; transition: all .3s; color: #fff;
+  box-shadow: 0 4px 16px rgba(0,0,0,.4);
+}
+.asm-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.asm-toast-success { background: #2EB67D; }
+.asm-toast-error { background: #E01E5A; }
+.asm-toast-info { background: #36C5F0; color: #1A1D21; }
+
+/* responsive */
+.asm-drawer-btn { display: none; }
+.asm-scrim { display: none; }
+
+@media (max-width: 900px) {
+  .asm-drawer-btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 5px; cursor: pointer;
+    background: rgba(255,255,255,.12); border: none; color: #fff;
+    height: 32px; padding: 0 10px; border-radius: 6px; font-size: 15px;
+    flex: 0 0 auto;
+  }
+  .asm-drawer-cs { margin-right: 8px; }
+  .asm-drawer-ris { background: rgba(236,178,46,.2); color: #ECB22E; font-size: 13px; }
+  #asm-ris-badge { font-weight: 700; }
+
+  /* Topbar: CS + title on the left, actions (incl. RIS) pinned hard right */
+  .asm-topbar { gap: 6px; padding: 0 10px; }
+  .asm-title {
+    min-width: 0; overflow: hidden; flex: 1 1 auto; gap: 6px;
+    font-size: 14px;
+  }
+  .asm-title > img, .asm-logo-svg { display: none; }   /* logo eats room on mobile */
+  .asm-topbar-actions { flex: 0 0 auto; margin-left: auto; gap: 6px; }
+  /* RIS is the rightmost control on mobile */
+  .asm-drawer-ris { order: 99; margin-left: 4px; }
+  .asm-title > span:first-of-type {
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-size: 14px; max-width: 120px;
+  }
+  #asm-project-name { display: none; } /* project name hidden on mobile to save room */
+
+  /* Hide desktop-only topbar buttons on mobile; keep Save, New Project, Login/Logout */
+  .asm-topbar-actions .asm-top-btn:not(.asm-save-btn):not(#asm-upgrade-btn):not(.asm-newproj-btn):not(#asm-login-btn):not(#asm-logout-btn) { display: none; }
+  .asm-topbar-actions .asm-top-btn { padding: 5px 8px; font-size: 11px; }
+  .asm-topbar-actions #asm-user-email, .asm-topbar-actions #asm-plan-badge { display: none; }
+
+  /* SBS full-width; CS + RIS become slide-over drawers */
+  .asm-body { display: block; position: relative; overflow: hidden; }
+  .asm-col.asm-catalogue, .asm-col.asm-ris {
+    position: absolute; top: 0; bottom: 0; z-index: 60;
+    width: 84%; max-width: 330px; max-height: none;
+    transition: transform .25s ease;
+    background: #1A1D21;
+  }
+  .asm-catalogue { left: 0; transform: translateX(-100%); border-right: 1px solid rgba(255,255,255,.1); }
+  .asm-ris { right: 0; transform: translateX(100%); border-left: 1px solid rgba(255,255,255,.1); }
+  .asm-catalogue.drawer-open, .asm-ris.drawer-open { transform: translateX(0); }
+  .asm-sbs { width: 100%; height: 100%; }
+
+  .asm-scrim {
+    display: block; position: absolute; inset: 0; z-index: 50;
+    background: rgba(0,0,0,.5); opacity: 0; pointer-events: none;
+    transition: opacity .25s;
+  }
+  .asm-scrim.show { opacity: 1; pointer-events: auto; }
+
+  .asm-sbs-item-inputs { grid-template-columns: 1fr 1fr; }
+
+  /* Catalogue name banner not needed on mobile — reclaim the vertical space */
+  #asm-cat-banner { display: none !important; }
+
+  /* ── Formula output as compact cards (mobile only) — R3, explicit grid ── */
+  .asm-out-cards, .asm-out-cards tbody { display: block; width: 100%; }
+  .asm-out-cards thead { display: none; }
+
+  /* 12-col grid. Row 1: name | W | H | del.  Row 2: qty | color | remark. */
+  .asm-out-cards tr {
+    display: grid;
+    grid-template-columns: repeat(12, 1fr);
+    grid-template-rows: auto auto;
+    align-items: center;
+    column-gap: 4px; row-gap: 4px;
+    position: relative;
+    background: #161619; border: 1px solid #262629; border-radius: 10px;
+    padding: 8px 11px; margin: 0 0 6px;
+  }
+  .asm-out-cards tr.asm-out-conditional { border-color: #4A3D1A; }
+
+  /* Sub-item header (colspan) — full-width band, revert grid */
+  .asm-out-cards tr:has(> td[colspan]) {
+    display: block; background: transparent; border: none; padding: 8px 0 2px; margin: 0;
+  }
+  .asm-out-cards tr > td[colspan] { display: block; border: none; background: transparent; padding: 0; }
+
+  .asm-out-cards td { border: none; padding: 0; white-space: nowrap; display: flex; align-items: center; min-width: 0; }
+  .asm-out-cards td::before { display: none; }
+  .asm-out-cards td input { background: transparent; border: 1px solid transparent; border-radius: 5px; padding: 2px 3px; min-width: 0; }
+  .asm-out-cards td input:focus { outline: none; border-color: #ECB22E; background: #26292E; }
+
+  /* Explicit placement (DOM order unchanged → patch logic safe). 12-col grid. */
+  .asm-out-cards td:nth-child(1) { grid-column: 1 / 6; grid-row: 1; }           /* Component */
+  .asm-out-cards td:nth-child(1) input { font-weight: 700; font-size: 15px; color: #fff; text-align: left; width: 100%; }
+
+  .asm-out-cards td:nth-child(2) { grid-column: 8 / 10; grid-row: 1; justify-content: flex-end; }   /* W */
+  .asm-out-cards td:nth-child(3) { grid-column: 10 / 12; grid-row: 1; justify-content: flex-start; }  /* H */
+  .asm-out-cards td:nth-child(2) input { color: #F0A020; font-weight: 800; font-size: 15px; text-align: right; width: 100%; }
+  .asm-out-cards td:nth-child(3) input { color: #F0A020; font-weight: 800; font-size: 15px; text-align: left; width: 100%; }
+  .asm-out-cards td:nth-child(3)::before { display: inline; content: "\\00D7"; color: #6A6A6E; font-size: 13px; margin: 0 4px 0 0; flex: 0 0 auto; }
+
+  .asm-out-cards td:nth-child(7) { grid-column: 12 / 13; grid-row: 1; justify-content: flex-end; }  /* delete */
+  .asm-out-cards td:nth-child(7) .asm-row-del {
+    width: 26px; height: 26px; font-size: 13px; padding: 0; line-height: 1;
+    background: rgba(224,30,90,.15); border: 1px solid rgba(224,30,90,.55);
+    color: #FF5C85; border-radius: 6px;
+  }
+  .asm-out-cards td:nth-child(7) .asm-row-del:hover {
+    background: rgba(224,30,90,.28); color: #fff;
+  }
+
+  /* Row 2 — Qty | Color | Remark on 12-col grid, no collisions */
+  .asm-out-cards td:nth-child(4) { grid-column: 1 / 3; grid-row: 2; justify-self: start;
+    background: #232327; border-radius: 6px; padding: 2px 8px; gap: 3px; }        /* Qty */
+  .asm-out-cards td:nth-child(5) { grid-column: 3 / 7; grid-row: 2; justify-self: start;
+    background: #232327; border-radius: 6px; padding: 2px 8px; gap: 3px; max-width: 100%; }  /* Color */
+  .asm-out-cards td:nth-child(6) { grid-column: 7 / 13; grid-row: 2; justify-self: stretch; min-width: 0; overflow: hidden; }  /* Remark */
+  .asm-out-cards td:nth-child(4)::before { display: inline; content: "QTY"; color: #7A7D82; font-size: 10px; flex: 0 0 auto; }
+  .asm-out-cards td:nth-child(5)::before { display: inline; content: "COL"; color: #7A7D82; font-size: 10px; flex: 0 0 auto; }
+  .asm-out-cards td:nth-child(4) input { color: #F0A020; font-weight: 700; font-size: 12px; text-align: left; width: 28px; }
+  .asm-out-cards td:nth-child(5) input { color: #C9A7FF; font-size: 12px; text-align: left; width: 100%; min-width: 0; }
+  .asm-out-cards td:nth-child(6) input { color: #8A8D92; font-size: 12px; text-align: left; width: 100%; min-width: 0; text-overflow: ellipsis; }
+  .asm-out-cards td:nth-child(6) input::placeholder { color: #3A3D42; }
+
+  .asm-out-empty { display: block; text-align: center; padding: 20px; }
+
+  /* Modals full-width on mobile, tables scroll horizontally */
+  #quote-overlay .q-modal { width: 96vw; }
+  .q-body, .asm-modal-body { overflow-x: auto; }
+}
+`;

@@ -284,46 +284,11 @@ function openProfile(){
   document.getElementById('pf-phone').value=p.phone||'';
   document.getElementById('pf-currency').value=p.currency||'₹';
   document.getElementById('pf-kerf').value=p.kerf||3;
-  document.getElementById('pf-sw').value=p.defaultSheetW||1220;
-  document.getElementById('pf-sh').value=p.defaultSheetH||2440;
+  document.getElementById('pf-sw').value=p.defaultSheetW||1210;
+  document.getElementById('pf-sh').value=p.defaultSheetH||2430;
   const prev=document.getElementById('pf-logo-preview');
   prev.innerHTML=p.logo?`<img src="${p.logo}" style="max-height:50px;border-radius:4px;border:1px solid var(--sl-border2)">`:'' ;
   document.getElementById('profile-modal').style.display='flex';
-  loadProfilePlans();
-}
-
-// Fill "YOUR PLANS" section with current Optimizer + ASM plan & expiry.
-async function loadProfilePlans(){
-  const box = document.getElementById('pf-plans');
-  if(!box) return;
-  const fmtDate = d => d ? new Date(d).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}) : '';
-  const line = (label, name, expiry, active) => {
-    const paid = active && name && name.toLowerCase() !== 'free';
-    const disp = paid ? name : 'Free';
-    const exp = (paid && expiry) ? ' · expires ' + fmtDate(expiry) : '';
-    const color = paid ? 'var(--sl-green,#2e9e4e)' : 'var(--sl-text2)';
-    return `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--sl-border2)">
-      <span style="font-size:13px;color:var(--sl-text)">${label}</span>
-      <span style="font-size:13px;font-weight:700;color:${color}">${esc(disp)}${exp}</span></div>`;
-  };
-  let optHtml = line('Optimizer','Free',null,false);
-  let asmHtml = line('ASM Module','Free',null,false);
-  try {
-    const r = await fetch(`${API_URL}/my-plan`, { headers: authHeader() });
-    if(r.ok){
-      const d = await r.json();
-      let tierName = 'Pro';
-      if(d.plan && d.plan !== 'free' && d.planId){
-        try { const tr = await fetch(`${API_URL}/tiers`); if(tr.ok){ const td = await tr.json(); const t=(td.tiers||[]).find(x=>x.tier_id===d.planId); if(t) tierName=t.name; } } catch(e){}
-      }
-      optHtml = line('Optimizer', (d.plan && d.plan!=='free')?tierName:'Free', d.planExpiresAt, d.plan && d.plan!=='free');
-    }
-  } catch(e){}
-  try {
-    const r = await fetch(`${API_URL}/asm/payments/status`, { headers: authHeader() });
-    if(r.ok){ const d = await r.json(); asmHtml = line('ASM Module', d.active?'Pro':'Free', d.expiresAt, d.active); }
-  } catch(e){}
-  box.innerHTML = optHtml + asmHtml;
 }
 function closeProfile(){document.getElementById('profile-modal').style.display='none'}
 function loadLogo(e){
@@ -367,7 +332,7 @@ function switchSaveTab(tab){
 }
 
 function openSaveProject(){
-  if(!hasFeature('projects')){ showUpgrade('Save Projects'); return; }
+  if(!hasFeature('saveProjects')){ showUpgrade('Save Projects'); return; }
   document.getElementById('sp-client').value = _resultClientName || '';
   document.getElementById('sp-status').value='draft';
   document.getElementById('sp-notes').value='';
@@ -384,7 +349,7 @@ function openSaveProject(){
 function closeSaveProject(){document.getElementById('save-proj-modal').style.display='none'}
 
 function saveProject(){
-  if(!hasFeature('projects')){ showUpgrade('Save Projects'); return; }
+  if(!hasFeature('saveProjects')){ showUpgrade('Save Projects'); return; }
   const cutlistData = {
     id: Date.now(),
     name: '',
