@@ -981,6 +981,7 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
     <button class="mob-nav-item" onclick="openProfile();toggleMobNav()">👤 My Profile</button>
     <button class="mob-nav-item" onclick="ASMModule.openASM();toggleMobNav()" style="color:var(--sl-yellow)">🔧 ASM Module</button>
     <button class="mob-nav-item" onclick="newProject();toggleMobNav()">➕ New Project</button>
+        <button class="mob-nav-item" onclick="openFAQ();toggleMobNav()">❓ FAQs</button>
     <div style="height:1px;background:rgba(255,255,255,.1);margin:8px 0"></div>
     <button class="mob-nav-item" id="mob-signin-btn" onclick="signInGoogle();toggleMobNav()" style="display:none">🔐 Sign In</button>
     <button class="mob-nav-item" id="mob-signout-btn" onclick="signOut();toggleMobNav()" style="display:none">🚪 Sign Out</button>
@@ -1614,7 +1615,9 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
 <script src="js/asm-pdf-export.js"></script>
 <script src="js/asm-diagrams.js"></script>   <!-- optional, dead code -->
 <script src="js/asm-css.js"></script>
+<script src="js/export-files.js"></script>
 <script src="js/app-asm.js"></script>
+<script src="js/faq.js"></script>
 <script src="js/asm-quotation.js"></script>
 <!-- Pricing / Upgrade Modal -->
 <div class="upgrade-overlay" id="pricing-modal" style="display:none" onclick="if(event.target===this)closePricing()">

@@ -210,7 +210,7 @@ const ASMModule = (() => {
           <div id="asm-ris-list" class="asm-ris-list"></div>
           <div class="asm-ris-foot">
             <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
-              <button class="asm-btn asm-btn-secondary" style="font-size:12px;padding:8px 4px" onclick="ASMModule.exportToPDF()">Export PDF</button>
+              <button class="asm-btn asm-btn-secondary" style="font-size:12px;padding:8px 4px" onclick="ASMModule.exportFilesRIS()">Export Files</button>
               <button class="asm-btn asm-btn-primary" style="font-size:12px;padding:8px 4px" onclick="ASMModule.exportReady()">Export Optimizer</button>
               <button class="asm-btn asm-btn-ghost" style="font-size:12px;padding:8px 4px" onclick="ASMModule.clearReady()">Clear</button>
               <button class="asm-btn" style="background:#2EB67D;color:#fff;font-weight:700;font-size:12px;padding:8px 4px" onclick="ASMModule.makeQuotation()">Make Quotation</button>
@@ -2378,6 +2378,33 @@ const ASMModule = (() => {
       '</div>';
   }
 
+  // Unified "Export Files" — collects RIS panels, opens ExportFiles modal
+  function exportFilesRIS() {
+    if (!readyItems || !readyItems.length) { showToast('No items in Ready — build and save first', 'error'); return; }
+    if (!window.ExportFiles) { showToast('Export module not loaded', 'error'); return; }
+    const panels = [];
+    readyItems.forEach(it => {
+      (it.outputs || []).forEach(o => {
+        if (o.w > 0 && o.h > 0 && o.qty > 0) {
+          const b = o.band || {};
+          panels.push({
+            label: o.component || o.remark || 'Panel',
+            length: o.w, width: o.h, qty: o.qty,
+            material: o.material || o.color || 'DW',
+            grain: !!o.grainLocked,
+            ebL: b.l || '', ebR: b.r || '', ebT: b.t || '', ebB: b.b || ''
+          });
+        }
+      });
+    });
+    window.ExportFiles.open({
+      title: (readyItems[0] && readyItems[0].roomName) || 'ASM_Export',
+      panels: panels,
+      stock: [],
+      onPdf: function(){ exportToPDF(); }
+    });
+  }
+
   function reportProblem(instanceId) {
     const inst = sbsItems.find(i => i.instanceId === instanceId);
     const itemName = inst ? (inst.itemName || 'Item') : 'Item';
@@ -2730,7 +2757,7 @@ const ASMModule = (() => {
     showImportModal, downloadSample, doImport,
     filterCatalogue, addToSBS, removeFromSBS,
     updateInput, setRoomName, editOutput, deleteOutputRow, saveToReady, reviewCheck, setRisSort, asmLogin, asmLogout,
-    reopenReady, removeReady, duplicateReady, clearReady, exportReady, exportToPDF, _runExport, sbsFont, setUnit, switchCatalogue, showCategoryGallery, exitGallery, addManualRow, addManualRowsPrompt, deleteManualRow, editManualRow, addSBSRows, adjustEBand, reportProblem, openMyProblems, replyMyProblem, _onAttach, _rmAttach,
+    reopenReady, removeReady, duplicateReady, clearReady, exportReady, exportToPDF, _runExport, sbsFont, setUnit, switchCatalogue, showCategoryGallery, exitGallery, addManualRow, addManualRowsPrompt, deleteManualRow, editManualRow, addSBSRows, adjustEBand, reportProblem, exportFilesRIS, openMyProblems, replyMyProblem, _onAttach, _rmAttach,
     saveProject, showProjects, loadProject, deleteProject,
     showPricing, startASMPayment,
     toggleNotifications, openShare,
