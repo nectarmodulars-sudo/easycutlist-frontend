@@ -9,6 +9,7 @@ const ASMModule = (() => {
   const API_BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
     ? 'http://localhost:3001/asm'
     : 'https://api.easycutlist.com/asm';
+  function fillCells(html){ const n=(html.match(/class="asm-input-row"/g)||[]).length; const need=(4-(n%4))%4; let f=''; for(let i=0;i<need;i++) f+='<div class="asm-input-row asm-input-fill"></div>'; return f; }
 
   // ── State ──
   let catalogue = [];          // All available items (left panel)
@@ -56,12 +57,30 @@ const ASMModule = (() => {
   // OPEN / CLOSE
   // ========================================================================
 
+
+  async function applyUiSettings() {
+    try {
+      const res = await fetch(apiBase() + '/asm/ui-settings');
+      const j = await res.json();
+      const s = (j && j.settings) || {};
+      const root = document.getElementById('asm-fullpage'); if (!root) return;
+      const P = { title:'--asm-title', sect:'--asm-sect', inlabel:'--asm-inlabel', inbox:'--asm-inbox', outlabel:'--asm-outlabel', outbox:'--asm-outbox' };
+      Object.keys(P).forEach(k => {
+        const g = s[k]; if (!g) return; const pre = P[k];
+        if (g.size   != null) root.style.setProperty(pre + '-size', g.size + 'px');
+        if (g.color)          root.style.setProperty(pre + '-color', g.color);
+        if (g.weight != null) root.style.setProperty(pre + '-weight', g.weight);
+      });
+    } catch (e) { /* non-blocking */ }
+  }
+
   async function openASM() {
     let container = document.getElementById('asm-fullpage');
     if (!container) {
       container = buildPageShell();
       document.body.appendChild(container);
       injectStyles();
+      applyUiSettings();
     }
     container.style.display = 'flex';
     document.body.style.overflow = 'hidden';
@@ -533,10 +552,10 @@ const ASMModule = (() => {
           <button class="asm-sbs-item-remove" onclick="ASMModule.removeFromSBS('${inst.instanceId}')">&#10005;</button>
         </div>
         <div class="asm-sbs-item-diagram-section" id="diagram_${inst.instanceId}">${imagesHtml}</div>
-        <div style="margin:10px 16px"><label style="font-size:12px;color:#9A9DA2;margin-right:8px">Room Name (optional)</label><input type="text" value="${inst.roomName ? String(inst.roomName).replace(/"/g,'&quot;') : ''}" placeholder="e.g. Master Bedroom" oninput="ASMModule.setRoomName('${inst.instanceId}',this.value)" style="background:#2A2D31;border:1px solid #3A3D42;color:#E8E8E8;border-radius:6px;padding:6px 10px;font-size:13px;width:240px"></div>
+        <div class="asm-input-zone"><div class="asm-zone-title">Input Area</div><div style="margin:10px 16px"><label style="font-size:12px;color:#9A9DA2;margin-right:8px">Room Name (optional)</label><input type="text" value="${inst.roomName ? String(inst.roomName).replace(/"/g,'&quot;') : ''}" placeholder="e.g. Master Bedroom" oninput="ASMModule.setRoomName('${inst.instanceId}',this.value)" style="background:#2A2D31;border:1px solid #3A3D42;color:#E8E8E8;border-radius:6px;padding:6px 10px;font-size:13px;width:240px"></div>
         ${schema.notes ? `<div style="margin:10px 16px;padding:10px 12px;background:rgba(236,178,46,.1);border-left:3px solid #ECB22E;border-radius:4px;font-size:13px;color:#E8E8E8"><strong style="color:#ECB22E">Note:</strong> ${schema.notes}</div>` : ''}
-        <div class="asm-sbs-item-inputs">${inputsHtml}</div>
-        <div class="asm-sbs-item-outputs">
+        <div class="asm-sbs-item-inputs">${inputsHtml}${fillCells(inputsHtml)}</div>
+        </div><div class="asm-out-head">Output Area</div><div class="asm-sbs-item-outputs">
           <table class="asm-out-table" id="manual_tbody_wrap_${inst.instanceId}">
             <thead><tr><th>Sr</th><th>W</th><th>H</th><th>Qty</th><th>Material</th><th>Remark</th><th></th></tr></thead>
             <tbody id="manual_tbody_${inst.instanceId}">${rowsHtml}</tbody>
@@ -729,15 +748,15 @@ const ASMModule = (() => {
           ${imagesHtml}
         </div>
 
-        <div style="margin:10px 16px"><label style="font-size:12px;color:#9A9DA2;margin-right:8px">Room Name (optional)</label><input type="text" value="${inst.roomName ? String(inst.roomName).replace(/"/g,'&quot;') : ''}" placeholder="e.g. Master Bedroom" oninput="ASMModule.setRoomName('${inst.instanceId}',this.value)" style="background:#2A2D31;border:1px solid #3A3D42;color:#E8E8E8;border-radius:6px;padding:6px 10px;font-size:13px;width:240px"></div>
+        <div class="asm-input-zone"><div class="asm-zone-title">Input Area</div><div style="margin:10px 16px"><label style="font-size:12px;color:#9A9DA2;margin-right:8px">Room Name (optional)</label><input type="text" value="${inst.roomName ? String(inst.roomName).replace(/"/g,'&quot;') : ''}" placeholder="e.g. Master Bedroom" oninput="ASMModule.setRoomName('${inst.instanceId}',this.value)" style="background:#2A2D31;border:1px solid #3A3D42;color:#E8E8E8;border-radius:6px;padding:6px 10px;font-size:13px;width:240px"></div>
 
         ${schema.notes ? `<div style="margin:10px 16px;padding:10px 12px;background:rgba(236,178,46,.1);border-left:3px solid #ECB22E;border-radius:4px;font-size:13px;color:#E8E8E8"><strong style="color:#ECB22E">Note:</strong> ${schema.notes}</div>` : ''}
 
         <div class="asm-sbs-item-inputs">
-          ${inputsHtml}
+          ${inputsHtml}${fillCells(inputsHtml)}
         </div>
 
-        <div class="asm-sbs-item-outputs">
+        </div><div class="asm-out-head">Output Area</div><div class="asm-sbs-item-outputs">
           <table class="asm-out-table asm-out-cards">
             <thead>
               <tr>
@@ -2766,4 +2785,3 @@ const ASMModule = (() => {
 })();
 
 document.addEventListener('DOMContentLoaded', () => ASMModule.init());
-

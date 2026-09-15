@@ -440,4 +440,86 @@ td .asm-cell-num { font-weight: 600; color: #ECB22E; }
   #quote-overlay .q-modal { width: 96vw; }
   .q-body, .asm-modal-body { overflow-x: auto; }
 }
+/* --- SBS input zone (brand purple) + section titles --- */
+.asm-input-zone {
+  background: #4A154B;
+  border: 1px solid rgba(180,100,180,.35);
+  border-radius: 10px;
+  margin: 10px 16px 0;
+  overflow: hidden;
+}
+.asm-zone-title {
+  font-size: 13px; font-weight: 800; letter-spacing: .6px;
+  color: #fff; text-transform: uppercase;
+  padding: 11px 16px 2px;
+}
+.asm-input-zone .asm-sbs-item-inputs { background: transparent; }
+.asm-out-head {
+  font-size: 13px; font-weight: 800; letter-spacing: .6px;
+  color: #ECB22E; text-transform: uppercase;
+  padding: 10px 16px 2px; margin-top: 14px;
+  border-top: 2px solid rgba(224,30,90,.55);
+}
+
+/* --- tighten input grid: label hugs its field, less dead space --- */
+.asm-sbs-item-inputs {
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 8px 14px;
+  padding: 12px 16px;
+}
+.asm-input-row { gap: 8px; align-items: center; }
+.asm-input-row label { flex: 0 0 92px; line-height: 1.2; }
+.asm-input-row input[type=number] { width: 82px; }
+.asm-input-row select { width: 116px; }
+
+/* --- thin red grid lines across the input cells --- */
+.asm-sbs-item-inputs {
+  gap: 0;
+  border-top: 1px solid rgba(224,30,90,.45);
+  border-left: 1px solid rgba(224,30,90,.45);
+}
+.asm-input-row {
+  border-right: 1px solid rgba(224,30,90,.45);
+  border-bottom: 1px solid rgba(224,30,90,.45);
+  padding: 9px 10px;
+  margin: 0;
+}
+
+/* --- fixed 4-col grid on desktop so filler cells complete every line --- */
+@media (min-width: 901px) {
+  .asm-sbs-item-inputs { grid-template-columns: repeat(4, 1fr); }
+}
+
+/* ===== Font controls (admin Fonts tab) — vars fall back to current values ===== */
+#asm-fullpage .asm-sbs-item-title {
+  font-size: var(--asm-title-size, 15px); font-weight: var(--asm-title-weight, 800); color: var(--asm-title-color, #fff);
+}
+#asm-fullpage .asm-zone-title {
+  font-size: var(--asm-sect-size, 13px); font-weight: var(--asm-sect-weight, 800); color: var(--asm-sect-color, #fff);
+}
+#asm-fullpage .asm-out-head {
+  font-size: var(--asm-sect-size, 13px); font-weight: var(--asm-sect-weight, 800); color: var(--asm-sect-color, #ECB22E);
+}
+#asm-fullpage .asm-input-row label {
+  font-size: var(--asm-inlabel-size, 12px); font-weight: var(--asm-inlabel-weight, 400); color: var(--asm-inlabel-color, #ABABAD);
+}
+#asm-fullpage .asm-input-row input, #asm-fullpage .asm-input-row select {
+  font-size: var(--asm-inbox-size, 13px); font-weight: var(--asm-inbox-weight, 400); color: var(--asm-inbox-color, #fff);
+}
+#asm-fullpage .asm-out-name,
+#asm-fullpage .asm-out-table tbody td:first-child .asm-cell {
+  font-size: var(--asm-outlabel-size, 12px); font-weight: var(--asm-outlabel-weight, 700); color: var(--asm-outlabel-color, #D1D2D3);
+}
+/* output value boxes: numbers keep amber default, text keeps grey default until overridden */
+#asm-fullpage .asm-out-table tbody td:not(:first-child) .asm-cell,
+#asm-fullpage .asm-out-num, #asm-fullpage .asm-out-remark {
+  font-size: var(--asm-outbox-size, 12px); font-weight: var(--asm-outbox-weight, 600);
+}
+#asm-fullpage .asm-cell-num, #asm-fullpage .asm-out-num {
+  color: var(--asm-outbox-color, #ECB22E);
+}
+#asm-fullpage .asm-out-table tbody td:not(:first-child) .asm-cell:not(.asm-cell-num) {
+  color: var(--asm-outbox-color, #D1D2D3);
+}
+
 `;
