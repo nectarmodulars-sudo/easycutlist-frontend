@@ -51,7 +51,7 @@ window.ASM_CSS = `
 .asm-search:focus { outline: none; border-color: #ECB22E; }
 .asm-cat-list { flex: 1; overflow-y: auto; padding: 0 8px 12px; }
 .asm-cat-group-label {
-  font-size: 10px; font-weight: 800; color: #7A7D82; letter-spacing: 1px;
+  font-size: 13px; font-weight: 800; color: #ECB22E; letter-spacing: .6px;
   padding: 12px 8px 6px; text-transform: uppercase;
 }
 .asm-cat-item {
@@ -521,5 +521,9 @@ td .asm-cell-num { font-weight: 600; color: #ECB22E; }
 #asm-fullpage .asm-out-table tbody td:not(:first-child) .asm-cell:not(.asm-cell-num) {
   color: var(--asm-outbox-color, #D1D2D3);
 }
+
+.asm-cat-explore { font-size: 10px; font-weight: 700; color: #ECB22E; letter-spacing: .3px; margin-left: 6px; text-transform: none; }
+.asm-cat-group-label:hover { color: #ECB22E; }
+.asm-cat-group-label:hover .asm-cat-explore { text-decoration: underline; }
 
 `;

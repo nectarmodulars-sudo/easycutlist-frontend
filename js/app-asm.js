@@ -343,7 +343,7 @@ const ASMModule = (() => {
     // Group items by category
     const groups = {};
     catalogue
-      .filter(it => !filter || it.name.toLowerCase().includes(filter.toLowerCase()))
+      .filter(it => { const f = (filter||'').toLowerCase(); return !f || it.name.toLowerCase().includes(f) || (it.category||'').toLowerCase().includes(f); })
       .forEach(it => {
         const cat = (it.category || 'other').toUpperCase();
         if (!groups[cat]) groups[cat] = [];
@@ -385,15 +385,16 @@ const ASMModule = (() => {
     const items = catalogue.filter(it => (it.category || 'other').toUpperCase() === cat);
     if (!items.length) { body.innerHTML = '<div class="asm-sbs-empty">No items in ' + cat + '</div>'; return; }
     let html = '<div style="padding:16px"><div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><button onclick="ASMModule.exitGallery()" style="background:#2A2D31;border:1px solid #3A3D42;color:#fff;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer">← Back</button><span style="font-size:14px;font-weight:700;color:#ECB22E">' + cat + '</span></div>';
-    html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px">';
+    html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">';
     items.forEach(it => {
       const isLocked = asmPlan !== 'pro' && !it.is_free;
       const t = thumbnails[it.id];
-      const thumb = (t && t.base64)
-        ? `<img src="${t.base64}" style="width:100%;height:110px;object-fit:contain;background:#fff;border-radius:6px">`
-        : (it.hasImage
-            ? `<div class="asm-thumb-ph" data-item="${it.id}" style="width:100%;height:110px;display:flex;align-items:center;justify-content:center;background:#222529;border-radius:6px;color:#555;font-size:13px">loading…</div>`
-            : `<div style="width:100%;height:110px;display:flex;align-items:center;justify-content:center;background:#222529;border-radius:6px;color:#555;font-size:30px">📦</div>`);
+      let mainImg = null;
+      if (it.mainImage) mainImg = (typeof it.mainImage === 'string') ? it.mainImage : (it.mainImage.base64 || null);
+      const src = (t && t.base64) ? t.base64 : mainImg;
+      const thumb = src
+        ? `<img src="${src}" style="width:100%;height:190px;object-fit:contain;background:#fff;border-radius:6px" onerror="this.style.display='none'">`
+        : `<div class="asm-thumb-ph" data-item="${it.id}" style="width:100%;height:190px;display:flex;align-items:center;justify-content:center;background:#222529;border-radius:6px;color:#555;font-size:30px">📦</div>`;
       html += `<div onclick="ASMModule.addToSBS('${it.id}')" style="cursor:pointer;background:#1e2024;border:1px solid #2A2D31;border-radius:8px;padding:10px;transition:border-color .15s" onmouseover="this.style.borderColor='#ECB22E'" onmouseout="this.style.borderColor='#2A2D31'">
         ${thumb}
         <div style="margin-top:8px;font-size:13px;color:#E8E8E8;text-align:center">${isLocked ? '🔒 ' : ''}${it.name}</div>
@@ -412,7 +413,7 @@ const ASMModule = (() => {
       if (t && t.base64) {
         const img = document.createElement('img');
         img.src = t.base64;
-        img.style.cssText = 'width:100%;height:110px;object-fit:contain;background:#fff;border-radius:6px';
+        img.style.cssText = 'width:100%;height:190px;object-fit:contain;background:#fff;border-radius:6px';
         ph.replaceWith(img);
       }
     });
