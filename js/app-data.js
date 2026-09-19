@@ -38,9 +38,26 @@ function setOptUnit(u){
   }
 }
 // keep dropdown in sync if ASM changes the unit
+// ── W×H / H×W display order (shared with ASM via localStorage 'asm_dim_order') ──
+function optDimOrder(){ try{ return localStorage.getItem('asm_dim_order')==='hw'?'hw':'wh'; }catch(e){ return 'wh'; } }
+function setOptDimHeaders(){
+  var w=document.getElementById('ph-w'), h=document.getElementById('ph-h');
+  if(w&&h){ var hw=optDimOrder()==='hw'; w.textContent=hw?'H':'W'; h.textContent=hw?'W':'H'; }
+  var v=document.getElementById('opt-dimord-val'); if(v) v.textContent=optDimOrder()==='hw'?'H×W':'W×H';
+}
+function toggleOptDimOrder(){
+  var n=optDimOrder()==='hw'?'wh':'hw';
+  try{ localStorage.setItem('asm_dim_order',n); }catch(e){}
+  setOptDimHeaders();
+  if(typeof renderPanels==='function') renderPanels();
+  if(typeof _lastSheets!=='undefined' && _lastSheets && _lastSheets.length && typeof renderResults==='function'){
+    var sc=+document.getElementById('scale')?.value||1;
+    renderResults(_lastSheets,_lastUnfitted||[],sc);
+  }
+}
 if(typeof window!=='undefined'){
   window.addEventListener('ecl-unit-change',()=>{ populateOptUnits(); if(typeof renderPanels==='function'){renderPanels();renderStock();} });
-  document.addEventListener('DOMContentLoaded',populateOptUnits);
+  document.addEventListener('DOMContentLoaded',()=>{ populateOptUnits(); setOptDimHeaders(); });
 }
 
 // ══ CLEAR ══
@@ -107,8 +124,8 @@ function renderPanels(){
   document.getElementById('panels-tbody').innerHTML=panelRows.map((r,i)=>`<tr>
     <td style="text-align:center;color:rgba(255,255,255,.4);font-family:var(--mono);font-size:10px;user-select:none">${i+1}</td>
     <td><input type="text" value="${esc(r.component||'')}" placeholder="Component" oninput="updatePanel(${r.id},'component',this.value)"></td>
-    <td><input type="number" value="${mm2d(r.l)}" min="1" oninput="updatePanel(${r.id},'l',this.value)"></td>
-    <td><input type="number" value="${mm2d(r.w)}" min="1" oninput="updatePanel(${r.id},'w',this.value)"></td>
+    <td><input type="number" value="${mm2d(optDimOrder()==='hw'?r.w:r.l)}" min="1" oninput="updatePanel(${r.id},'${optDimOrder()==='hw'?'w':'l'}',this.value)"></td>
+    <td><input type="number" value="${mm2d(optDimOrder()==='hw'?r.l:r.w)}" min="1" oninput="updatePanel(${r.id},'${optDimOrder()==='hw'?'l':'w'}',this.value)"></td>
     <td><input type="number" value="${r.qty}" min="1" max="999" oninput="updatePanel(${r.id},'qty',this.value)"></td>
     <td>${matSel(r.material,`updatePanel(${r.id},'material',this.value)`,'matlist_p'+r.id)}</td>
     <td><input type="text" value="${esc(r.remark||'')}" placeholder="Remark" oninput="updatePanel(${r.id},'remark',this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();addPanel();const rows=document.querySelectorAll('#panels-tbody tr');const lastRow=rows[rows.length-1];if(lastRow)lastRow.querySelectorAll('input[type=number]')[0]?.focus()}"></td>
@@ -324,4 +341,3 @@ function downloadSampleCSV(){
     URL.revokeObjectURL(a.href);
   }
 }
-

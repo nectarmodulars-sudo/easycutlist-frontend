@@ -487,8 +487,10 @@ td .asm-cell-num { font-weight: 600; color: #ECB22E; }
 
 /* --- fixed 4-col grid on desktop so filler cells complete every line --- */
 @media (min-width: 901px) {
-  .asm-sbs-item-inputs { grid-template-columns: repeat(4, 1fr); }
+  .asm-sbs-item-inputs { grid-template-columns: repeat(4, minmax(150px, 1fr)); }
 }
+/* let the input grid scroll horizontally instead of clipping at high zoom */
+#asm-fullpage .asm-sbs-item-inputs { overflow-x: auto; }
 
 /* ===== Font controls (admin Fonts tab) — vars fall back to current values ===== */
 #asm-fullpage .asm-sbs-item-title {

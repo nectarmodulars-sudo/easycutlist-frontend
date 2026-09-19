@@ -204,6 +204,9 @@ const ASMModule = (() => {
                 <span id="asm-sbs-font-val" style="min-width:20px;text-align:center;color:#ECB22E;font-weight:700">14</span>
                 <button onclick="ASMModule.sbsFont(1)" style="width:22px;height:22px;background:#2A2D31;border:1px solid #3A3D42;border-radius:4px;color:#fff;cursor:pointer">+</button>
               </span>
+              <span style="display:flex;align-items:center;gap:5px">format
+                <button id="asm-dimord-btn" onclick="ASMModule.toggleDimOrder()" title="Swap size display: W×H / H×W (display only)" style="background:#2A2D31;border:1px solid #3A3D42;color:#ECB22E;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer"><span id="asm-dimord-val">${dimOrder === 'hw' ? 'H×W' : 'W×H'}</span></button>
+              </span>
             </span>
           </div>
           <div id="asm-cat-banner" style="padding:14px 16px;border-bottom:1px solid #2A2D31;display:none;align-items:center;gap:14px;flex-wrap:wrap">
@@ -357,7 +360,7 @@ const ASMModule = (() => {
 
     let html = '';
     for (const [cat, items] of Object.entries(groups)) {
-      html += `<div class="asm-cat-group-label" style="cursor:pointer" onclick="ASMModule.showCategoryGallery('${cat.replace(/'/g,"")}')" title="Click to view all ${cat}">${cat} <span style="font-size:10px;color:#7A7D82">▦</span></div>`;
+      html += `<div class="asm-cat-group-label" style="cursor:pointer" onclick="ASMModule.showCategoryGallery('${cat.replace(/'/g,"")}')" title="Click to explore all ${cat}">${cat} <span class="asm-cat-explore">Explore ▦</span></div>`;
       items.forEach(it => {
         const isFree = !!it.is_free;
         const isLocked = asmPlan !== 'pro' && !isFree;
@@ -521,8 +524,10 @@ const ASMModule = (() => {
   }
 
   function renderManualItem(inst, schema) {
+    const SC = sizeCols();
+    const catObj = catalogue.find(x => x.id === inst.itemId) || {};
     if (!inst.manualRows) inst.manualRows = Array.from({ length: 15 }, () => ({ w:'', h:'', qty:'', material:'', remark:'' }));
-    const inputsHtml = schema.inputs.filter(inp => { const _l=String(inp.label||'').trim().toLowerCase(); return _l && _l !== 'mm'; }).map(inp => {
+    const inputsHtml = schema.inputs.filter(inp => { const _l=String(inp.label||'').trim().toLowerCase(); return _l && _l !== 'mm' && !inp.textFor; }).map(inp => {
       const val = inst.inputs[inp.key];
       let control;
       if (inp.type === 'number') {
@@ -538,8 +543,8 @@ const ASMModule = (() => {
     const rowsHtml = inst.manualRows.map((row, idx) => `
       <tr>
         <td style="text-align:center;color:#7A7D82">${idx+1}</td>
-        <td><input class="asm-cell asm-cell-num" type="number" value="${row.w === '' ? '' : UNITS.fromMMNum(row.w)}" onchange="ASMModule.editManualRow('${inst.instanceId}',${idx},'w',this.value)"></td>
-        <td><input class="asm-cell asm-cell-num" type="number" value="${row.h === '' ? '' : UNITS.fromMMNum(row.h)}" onchange="ASMModule.editManualRow('${inst.instanceId}',${idx},'h',this.value)"></td>
+        <td><input class="asm-cell asm-cell-num" type="number" value="${row[SC[0].f] === '' ? '' : UNITS.fromMMNum(row[SC[0].f])}" onchange="ASMModule.editManualRow('${inst.instanceId}',${idx},'${SC[0].f}',this.value)"></td>
+        <td><input class="asm-cell asm-cell-num" type="number" value="${row[SC[1].f] === '' ? '' : UNITS.fromMMNum(row[SC[1].f])}" onchange="ASMModule.editManualRow('${inst.instanceId}',${idx},'${SC[1].f}',this.value)"></td>
         <td><input class="asm-cell asm-cell-num" type="number" value="${row.qty}" onchange="ASMModule.editManualRow('${inst.instanceId}',${idx},'qty',this.value)"></td>
         <td><input class="asm-cell" value="${row.material||''}" onchange="ASMModule.editManualRow('${inst.instanceId}',${idx},'material',this.value)"></td>
         <td><input class="asm-cell asm-cell-remark" value="${row.remark||''}" onchange="ASMModule.editManualRow('${inst.instanceId}',${idx},'remark',this.value)"></td>
@@ -549,7 +554,7 @@ const ASMModule = (() => {
     return `
       <div class="asm-sbs-item" id="${inst.instanceId}">
         <div class="asm-sbs-item-head">
-          <span class="asm-sbs-item-title">${inst.itemName}</span>
+          <div class="asm-item-switch" style="position:relative;flex:1;min-width:0"><div style="font-size:10px;font-weight:800;letter-spacing:.06em;color:#ECB22E;text-transform:uppercase">${(catObj.category||'').toUpperCase()}</div><button onclick="ASMModule.toggleItemSwitch('${inst.instanceId}')" style="background:none;border:none;color:#fff;cursor:pointer;display:flex;align-items:center;gap:8px;padding:0;font-size:15px;font-weight:800;max-width:100%" title="Switch item in this category"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${inst.itemName}</span><span style="color:#ECB22E;font-size:22px;line-height:1;flex:0 0 auto">\u25be</span></button><div id="switch_${inst.instanceId}" class="asm-item-switch-list" style="display:none;position:absolute;top:100%;left:0;z-index:200;background:#1E2124;border:1px solid #3A3D42;border-radius:8px;margin-top:4px;max-height:340px;overflow:auto;min-width:280px;box-shadow:0 8px 24px rgba(0,0,0,.5)"></div></div>
           <button class="asm-sbs-item-remove" onclick="ASMModule.removeFromSBS('${inst.instanceId}')">&#10005;</button>
         </div>
         <div class="asm-sbs-item-diagram-section" id="diagram_${inst.instanceId}">${imagesHtml}</div>
@@ -558,7 +563,7 @@ const ASMModule = (() => {
         <div class="asm-sbs-item-inputs">${inputsHtml}${fillCells(inputsHtml)}</div>
         </div><div class="asm-out-head">Output Area</div><div class="asm-sbs-item-outputs">
           <table class="asm-out-table" id="manual_tbody_wrap_${inst.instanceId}">
-            <thead><tr><th>Sr</th><th>W</th><th>H</th><th>Qty</th><th>Material</th><th>Remark</th><th></th></tr></thead>
+            <thead><tr><th>Sr</th><th>${SC[0].l}</th><th>${SC[1].l}</th><th>Qty</th><th>Material</th><th>Remark</th><th></th></tr></thead>
             <tbody id="manual_tbody_${inst.instanceId}">${rowsHtml}</tbody>
           </table>
           <button onclick="ASMModule.addManualRow('${inst.instanceId}')" style="margin:10px 8px 10px 0;background:#2A2D31;border:1px solid #3A3D42;color:#ECB22E;border-radius:6px;padding:6px 14px;font-size:12px;cursor:pointer">+ Add Row</button>
@@ -661,13 +666,74 @@ const ASMModule = (() => {
     renderSBS();
   }
 
+  // ---- W×H / H×W display order (display-only; packer keeps true w/h) ----
+  let dimOrder = 'wh';
+  try { if (localStorage.getItem('asm_dim_order') === 'hw') dimOrder = 'hw'; } catch (e) {}
+  function sizeCols() { return dimOrder === 'hw' ? [{ f: 'h', l: 'H' }, { f: 'w', l: 'W' }] : [{ f: 'w', l: 'W' }, { f: 'h', l: 'H' }]; }
+  function setDimOrder(o) {
+    dimOrder = (o === 'hw') ? 'hw' : 'wh';
+    try { localStorage.setItem('asm_dim_order', dimOrder); } catch (e) {}
+    const v = document.getElementById('asm-dimord-val'); if (v) v.textContent = dimOrder === 'hw' ? 'H×W' : 'W×H';
+    if (typeof renderSBS === 'function') renderSBS();
+  }
+  function toggleDimOrder() { setDimOrder(dimOrder === 'hw' ? 'wh' : 'hw'); }
+
+  // ---- Category item switcher (thumbnail dropdown; swap item in place, reset inputs) ----
+  if (typeof window !== 'undefined' && !window._asmSwitchClose) {
+    window._asmSwitchClose = true;
+    document.addEventListener('click', function (e) {
+      if (!e.target.closest || !e.target.closest('.asm-item-switch'))
+        document.querySelectorAll('.asm-item-switch-list').forEach(function (el) { el.style.display = 'none'; });
+    });
+  }
+  function toggleItemSwitch(instanceId) {
+    const box = document.getElementById('switch_' + instanceId); if (!box) return;
+    if (box.style.display !== 'none') { box.style.display = 'none'; return; }
+    document.querySelectorAll('.asm-item-switch-list').forEach(function (el) { el.style.display = 'none'; });
+    const inst = sbsItems.find(i => i.instanceId === instanceId); if (!inst) return;
+    const cat = ((catalogue.find(x => x.id === inst.itemId) || {}).category || '').toUpperCase();
+    const items = catalogue.filter(it => (it.category || '').toUpperCase() === cat);
+    box.innerHTML = items.map(function (it) {
+      let mainImg = null; if (it.mainImage) mainImg = (typeof it.mainImage === 'string') ? it.mainImage : (it.mainImage.base64 || null);
+      const t = thumbnails[it.id]; const src = (t && t.base64) ? t.base64 : mainImg;
+      const thumb = src
+        ? '<img src="' + src + '" style="width:40px;height:40px;object-fit:contain;background:#fff;border-radius:4px;flex:0 0 auto" onerror="this.style.display=\'none\'">'
+        : '<div style="width:40px;height:40px;display:flex;align-items:center;justify-content:center;background:#222529;border-radius:4px;flex:0 0 auto;font-size:18px">📦</div>';
+      const cur = it.id === inst.itemId;
+      return '<div onclick="ASMModule.switchSBSItem(\'' + instanceId + '\',\'' + it.id + '\')" style="display:flex;align-items:center;gap:10px;padding:7px 10px;cursor:pointer;border-bottom:1px solid #2A2D31;' + (cur ? 'background:#2A2D31' : '') + '" onmouseover="this.style.background=\'#2A2D31\'" onmouseout="this.style.background=\'' + (cur ? '#2A2D31' : '') + '\'">' + thumb + '<span style="font-size:13px;color:#E8E8E8">' + (cur ? '\u2713 ' : '') + escapeHtml(it.name) + '</span></div>';
+    }).join('');
+    box.style.display = 'block';
+  }
+  async function switchSBSItem(instanceId, newItemId) {
+    const idx = sbsItems.findIndex(i => i.instanceId === instanceId); if (idx < 0) return;
+    const box = document.getElementById('switch_' + instanceId); if (box) box.style.display = 'none';
+    if (sbsItems[idx].itemId === newItemId) return;
+    const catItem = catalogue.find(x => x.id === newItemId);
+    if (asmPlan !== 'pro' && !(catItem && catItem.is_free)) { showPricing(); return; }
+    if (!activeItemSchemas[newItemId]) {
+      try {
+        const res = await fetch(`${API_BASE}/item/${newItemId}?catalogue=${encodeURIComponent(currentCatalogue)}`, { headers: authH() });
+        if (res.status === 403) { showPricing(); return; }
+        const data = await res.json();
+        if (!data.success) { showToast('Failed to load item', 'error'); return; }
+        activeItemSchemas[newItemId] = data;
+      } catch (e) { showToast('Cannot load item', 'error'); return; }
+    }
+    const schema = activeItemSchemas[newItemId];
+    const inputs = {}; schema.inputs.forEach(inp => { inputs[inp.key] = inp.default; });
+    sbsItems[idx] = { instanceId: 'sbs_' + Date.now() + '_' + Math.floor(Math.random() * 1000), itemId: newItemId, itemName: schema.name, catalogueKey: currentCatalogue, inputs, outputs: [] };
+    renderSBS();
+  }
+
   function renderSBSItem(inst) {
+    const SC = sizeCols();
+    const catObj = catalogue.find(x => x.id === inst.itemId) || {};
     const schema = activeItemSchemas[inst.itemId];
     if (!schema) return '';
     if (schema.manualEntry) return renderManualItem(inst, schema);
 
     // Build input fields
-    const inputsHtml = schema.inputs.filter(inp => { const _l=String(inp.label||'').trim().toLowerCase(); return _l && _l !== 'mm'; }).map(inp => {
+    const inputsHtml = schema.inputs.filter(inp => { const _l=String(inp.label||'').trim().toLowerCase(); return _l && _l !== 'mm' && !inp.textFor; }).map(inp => {
       const val = inst.inputs[inp.key];
       let control = '';
 
@@ -677,9 +743,11 @@ const ASMModule = (() => {
           min="${inp.min ?? ''}" max="${inp.max ?? ''}"
           oninput="ASMModule.updateInput('${inst.instanceId}','${inp.key}',this.value,'number')">`;
       } else if (inp.type === 'select') {
+        const _tb = Array.isArray(inp.textbOptions) && inp.textbOptions.indexOf(val) !== -1;
+        const _tv = inst.inputs[inp.key + '_txt'];
         control = `<select onchange="ASMModule.updateInput('${inst.instanceId}','${inp.key}',this.value,'select')">
           ${inp.options.map(o => `<option value="${o}" ${o === val ? 'selected' : ''}>${o}</option>`).join('')}
-        </select>`;
+        </select>` + (_tb ? `<input type="number" value="${(_tv != null && _tv !== '') ? UNITS.fromMMNum(_tv) : ''}" placeholder="value" oninput="ASMModule.updateInput('${inst.instanceId}','${inp.key}_txt',this.value,'number')" style="width:80px;margin-left:6px">` : '');
       } else if (inp.type === 'boolean') {
         control = `<label class="asm-switch">
           <input type="checkbox" ${val ? 'checked' : ''}
@@ -718,8 +786,8 @@ const ASMModule = (() => {
           return headerRow + `
           <tr class="${o.conditional ? 'asm-out-conditional' : ''}">
             <td class="asm-out-name" data-label="Component"><input class="asm-cell" value="${o.component}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'component',this.value)"></td>
-            <td class="asm-out-num" data-label="W"><input class="asm-cell asm-cell-num" type="number" value="${UNITS.fromMMNum(o.w)}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'w',this.value)"></td>
-            <td class="asm-out-num" data-label="H"><input class="asm-cell asm-cell-num" type="number" value="${UNITS.fromMMNum(o.h)}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'h',this.value)"></td>
+            <td class="asm-out-num" data-label="${SC[0].l}"><input class="asm-cell asm-cell-num" type="number" value="${UNITS.fromMMNum(o[SC[0].f])}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'${SC[0].f}',this.value)"></td>
+            <td class="asm-out-num" data-label="${SC[1].l}"><input class="asm-cell asm-cell-num" type="number" value="${UNITS.fromMMNum(o[SC[1].f])}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'${SC[1].f}',this.value)"></td>
             <td class="asm-out-num" data-label="Qty" data-short="QTY"><input class="asm-cell asm-cell-num" type="number" value="${o.qty}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'qty',this.value)"></td>
             <td data-label="Color" data-short="COL"><input class="asm-cell" value="${o.color || ''}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'color',this.value)"></td>
             <td class="asm-out-remark" data-label="Remark"><input class="asm-cell asm-cell-remark" value="${o.remark || ''}" placeholder="remark" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'remark',this.value)"></td>
@@ -741,7 +809,7 @@ const ASMModule = (() => {
     return `
       <div class="asm-sbs-item" id="${inst.instanceId}">
         <div class="asm-sbs-item-head">
-          <span class="asm-sbs-item-title">${inst.itemName}</span>
+          <div class="asm-item-switch" style="position:relative;flex:1;min-width:0"><div style="font-size:10px;font-weight:800;letter-spacing:.06em;color:#ECB22E;text-transform:uppercase">${(catObj.category||'').toUpperCase()}</div><button onclick="ASMModule.toggleItemSwitch('${inst.instanceId}')" style="background:none;border:none;color:#fff;cursor:pointer;display:flex;align-items:center;gap:8px;padding:0;font-size:15px;font-weight:800;max-width:100%" title="Switch item in this category"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${inst.itemName}</span><span style="color:#ECB22E;font-size:22px;line-height:1;flex:0 0 auto">\u25be</span></button><div id="switch_${inst.instanceId}" class="asm-item-switch-list" style="display:none;position:absolute;top:100%;left:0;z-index:200;background:#1E2124;border:1px solid #3A3D42;border-radius:8px;margin-top:4px;max-height:340px;overflow:auto;min-width:280px;box-shadow:0 8px 24px rgba(0,0,0,.5)"></div></div>
           <button class="asm-sbs-item-remove" onclick="ASMModule.removeFromSBS('${inst.instanceId}')" title="Remove">&#10005;</button>
         </div>
 
@@ -761,7 +829,7 @@ const ASMModule = (() => {
           <table class="asm-out-table asm-out-cards">
             <thead>
               <tr>
-                <th>Component</th><th>W</th><th>H</th><th>Qty</th><th>Color</th><th>Remark</th><th></th>
+                <th>Component</th><th>${SC[0].l}</th><th>${SC[1].l}</th><th>Qty</th><th>Color</th><th>Remark</th><th></th>
               </tr>
             </thead>
             <tbody>${outputsHtml}</tbody>
@@ -805,6 +873,13 @@ const ASMModule = (() => {
     if (type === 'boolean') value = !!value;
 
     inst.inputs[key] = value;
+
+    if (type === 'select') {
+      renderSBS();
+      clearTimeout(recalcTimers[instanceId]);
+      recalcTimers[instanceId] = setTimeout(() => recalc(instanceId), 150);
+      return;
+    }
 
     // Manual-entry items have no formula outputs — recalc would wipe the manual table.
     const mSchema = activeItemSchemas[inst.itemId];
@@ -888,6 +963,7 @@ const ASMModule = (() => {
 
   // Update only the output table (don't re-render whole item — keeps focus in inputs)
   function updateSBSItemOutputs(inst) {
+    const SC = sizeCols();
     // Manual-entry items own their table (manualRows). This function would
     // overwrite it with the formula-output rendering — never run it for them.
     const uSchema = activeItemSchemas[inst.itemId];
@@ -916,8 +992,8 @@ const ASMModule = (() => {
             return hr + `
             <tr class="${o.conditional ? 'asm-out-conditional' : ''}">
               <td class="asm-out-name"><input class="asm-cell" value="${o.component}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'component',this.value)"></td>
-              <td class="asm-out-num"><input class="asm-cell asm-cell-num" type="number" value="${UNITS.fromMMNum(o.w)}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'w',this.value)"></td>
-              <td class="asm-out-num"><input class="asm-cell asm-cell-num" type="number" value="${UNITS.fromMMNum(o.h)}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'h',this.value)"></td>
+              <td class="asm-out-num"><input class="asm-cell asm-cell-num" type="number" value="${UNITS.fromMMNum(o[SC[0].f])}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'${SC[0].f}',this.value)"></td>
+              <td class="asm-out-num"><input class="asm-cell asm-cell-num" type="number" value="${UNITS.fromMMNum(o[SC[1].f])}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'${SC[1].f}',this.value)"></td>
               <td class="asm-out-num"><input class="asm-cell asm-cell-num" type="number" value="${o.qty}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'qty',this.value)"></td>
               <td><input class="asm-cell" value="${o.color || ''}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'color',this.value)"></td>
               <td class="asm-out-remark"><input class="asm-cell asm-cell-remark" value="${o.remark || ''}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'remark',this.value)"></td>
@@ -1026,7 +1102,7 @@ const ASMModule = (() => {
       if (!tr) return;
       const inputs = tr.querySelectorAll('input');
       // column order: [component, w, h, qty, color, remark]
-      const colMap = { component: 0, w: 1, h: 2, qty: 3, color: 4, remark: 5 };
+      const _sc = sizeCols(); const colMap = { component: 0, qty: 3, color: 4, remark: 5 }; colMap[_sc[0].f] = 1; colMap[_sc[1].f] = 2;
       const ci = colMap[ch.field];
       if (ci == null || !inputs[ci]) return;
       const active = document.activeElement;
@@ -1319,7 +1395,7 @@ const ASMModule = (() => {
             <button class="asm-ris-remove" onclick="ASMModule.removeReady('${it.readyId}')" title="Remove">&#10005;</button>
           </div>
           <div class="asm-ris-meta">
-            ${it.imported ? 'Imported file' : (() => { const i = it.inputs; const w = i.width || i.w || i.W || '?'; const h = i.ht || i.h || i.H || i.height || '?'; const d = i.depth || i.d || i.D || '?'; return w + '×' + h + '×' + d + 'mm'; })()}
+            ${it.imported ? 'Imported file' : (() => { const i = it.inputs; const w = i.width || i.w || i.W || '?'; const h = i.ht || i.h || i.H || i.height || '?'; const d = i.depth || i.d || i.D || '?'; return (dimOrder==='hw' ? (h + '×' + w) : (w + '×' + h)) + '×' + d + 'mm'; })()}
             · ${it.outputs.length} parts · ${totalPanels} panels
           </div>
         </div>`;
@@ -1411,8 +1487,8 @@ const ASMModule = (() => {
         <td style="padding:8px 10px;color:#9A9DA2">${origIdx + 1}</td>
         <td style="padding:8px 10px;color:${it.roomName ? '#ECB22E' : '#666'}">${room}</td>
         <td style="padding:8px 10px;color:#fff">${it.itemName}</td>
-        <td style="padding:8px 10px;text-align:right;color:#E8E8E8">${w}</td>
-        <td style="padding:8px 10px;text-align:right;color:#E8E8E8">${h}</td>
+        <td style="padding:8px 10px;text-align:right;color:#E8E8E8">${dimOrder==='hw'?h:w}</td>
+        <td style="padding:8px 10px;text-align:right;color:#E8E8E8">${dimOrder==='hw'?w:h}</td>
         <td style="padding:8px 10px;text-align:right;color:#E8E8E8">${d}</td>
         <td style="padding:8px 10px;text-align:right;color:#E8E8E8">${q}</td>
       </tr>`;
@@ -1435,8 +1511,8 @@ const ASMModule = (() => {
                 <th style="padding:10px;text-align:left;color:#9A9DA2;font-weight:600">#</th>
                 <th onclick="this.closest('.asm-review-overlay').remove();ASMModule.reviewCheck('room')" style="padding:10px;text-align:left;color:#9A9DA2;font-weight:600;cursor:pointer;user-select:none">Room${arrow('room')}</th>
                 <th onclick="this.closest('.asm-review-overlay').remove();ASMModule.reviewCheck('item')" style="padding:10px;text-align:left;color:#9A9DA2;font-weight:600;cursor:pointer;user-select:none">Item${arrow('item')}</th>
-                <th style="padding:10px;text-align:right;color:#9A9DA2;font-weight:600">W</th>
-                <th style="padding:10px;text-align:right;color:#9A9DA2;font-weight:600">H</th>
+                <th style="padding:10px;text-align:right;color:#9A9DA2;font-weight:600">${dimOrder==='hw'?'H':'W'}</th>
+                <th style="padding:10px;text-align:right;color:#9A9DA2;font-weight:600">${dimOrder==='hw'?'W':'H'}</th>
                 <th style="padding:10px;text-align:right;color:#9A9DA2;font-weight:600">D</th>
                 <th style="padding:10px;text-align:right;color:#9A9DA2;font-weight:600">Qty</th>
               </tr>
@@ -2780,6 +2856,8 @@ const ASMModule = (() => {
     reopenReady, removeReady, duplicateReady, clearReady, exportReady, exportToPDF, _runExport, sbsFont, setUnit, switchCatalogue, showCategoryGallery, exitGallery, addManualRow, addManualRowsPrompt, deleteManualRow, editManualRow, addSBSRows, adjustEBand, reportProblem, exportFilesRIS, openMyProblems, replyMyProblem, _onAttach, _rmAttach,
     saveProject, showProjects, loadProject, deleteProject,
     showPricing, startASMPayment,
+    setDimOrder, toggleDimOrder,
+    toggleItemSwitch, switchSBSItem,
     toggleNotifications, openShare,
     openImageModal, closeImageModal, modalNav
   };

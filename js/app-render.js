@@ -4,6 +4,8 @@ function _ru(){ return (window.UNITS?UNITS.get():'mm'); }
 function _ud(mm){ return (window.UNITS?UNITS.fromMMNum(mm):Math.round(mm)); }         // number in display unit
 function _uSuffix(){ return {mm:'mm',cm:'cm',m:'m',in:'in',generic:''}[_ru()]||''; }
 function _dim(w,h){ return _ud(w)+' × '+_ud(h); }                                       // "1200 × 600"
+function _dordR(){ try{ return localStorage.getItem('asm_dim_order')==='hw'?'hw':'wh'; }catch(e){ return 'wh'; } }
+function _dimP(w,h){ return _dordR()==='hw' ? (_ud(h)+' × '+_ud(w)) : (_ud(w)+' × '+_ud(h)); }   // panel size, honors flip
 function renderResults(sheets,unfitted,scale){
   _lastSheets=sheets; _lastUnfitted=unfitted; // save for export
   document.getElementById('empty-state').style.display='none';
@@ -185,7 +187,7 @@ function renderResults(sheets,unfitted,scale){
     <div class="mat-rows" ${isPro()?'':`style="filter:blur(5px);pointer-events:none;user-select:none"`}>${matRowsHtml}</div>
   </div>
   ${!isPro()?'<div class="no-print" style="text-align:center;margin:-8px 0 12px;font-size:12px">⭐ <a href="#" onclick="showUpgrade(\'Material Summary\');return false" style="color:#ECB22E;text-decoration:none;font-weight:700">Upgrade to Pro</a> to view details</div>':''}`;
-  if(unfitted.length)html+=`<div class="unfitted-box"><div class="unfitted-title">⚠ ${unfitted.length} piece(s) could not be placed</div>${unfitted.map(p=>`<div class="unfitted-item">${esc(p.label)} — ${_dim(p.l,p.w)} ${_uSuffix()} · ${esc(p.material)}</div>`).join('')}</div>`;
+  if(unfitted.length)html+=`<div class="unfitted-box"><div class="unfitted-title">⚠ ${unfitted.length} piece(s) could not be placed</div>${unfitted.map(p=>`<div class="unfitted-item">${esc(p.label)} — ${_dimP(p.l,p.w)} ${_uSuffix()} · ${esc(p.material)}</div>`).join('')}</div>`;
 
   let si=0;
   for(const s of sheets){
@@ -208,7 +210,7 @@ function renderResults(sheets,unfitted,scale){
       // Cut size (entered − band) via shared module. See eband-deduct.js.
       var _cd = (typeof EBandDeduct !== 'undefined') ? EBandDeduct.labelSize(crMatch, p.pw, p.ph) : { w:p.pw, h:p.ph };
       let cw=_cd.w, ch=_cd.h;
-      return `<tr><td><span class="piece-dot" style="background:${PRINT_STROKES[p.piece.colorIdx%PRINT_STROKES.length]};-webkit-print-color-adjust:exact;print-color-adjust:exact"></span><strong>#${crSrDisplay}</strong></td><td>${_dim(cw,ch)}</td><td>${esc(s.material)}</td><td>${esc(crRemark)}</td></tr>`;
+      return `<tr><td><span class="piece-dot" style="background:${PRINT_STROKES[p.piece.colorIdx%PRINT_STROKES.length]};-webkit-print-color-adjust:exact;print-color-adjust:exact"></span><strong>#${crSrDisplay}</strong></td><td>${_dimP(cw,ch)}</td><td>${esc(s.material)}</td><td>${esc(crRemark)}</td></tr>`;
     }).join('');
 
     // Cut sequence section — numbers on diagram FREE, detailed table PRO only
@@ -246,7 +248,7 @@ function renderResults(sheets,unfitted,scale){
       let plw=_pld.w, plh=_pld.h;
       return '<tr style="background:'+bg+'">'
         + '<td style="'+cellStyle+';border-right:1px solid #ddd;font-weight:700;color:#3F0E40;font-family:monospace;white-space:nowrap">#'+srDisplay+'</td>'
-        + '<td style="'+cellStyle+';border-right:1px solid #ddd;font-family:monospace;white-space:nowrap;font-size:7.5pt">'+_dim(plw,plh)+'</td>'
+        + '<td style="'+cellStyle+';border-right:1px solid #ddd;font-family:monospace;white-space:nowrap;font-size:7.5pt">'+_dimP(plw,plh)+'</td>'
         + '<td style="'+cellStyle+';word-break:break-word;white-space:normal;font-size:7.5pt;line-height:1.4">'+(remark?esc(remark):'')+'</td>'
         + '</tr>';
     }).join('');
@@ -280,7 +282,7 @@ function renderResults(sheets,unfitted,scale){
             </colgroup>
             <thead><tr style="background:#f0e8f0">
               <th style="padding:3px 5px;text-align:left;font-size:7pt;color:#3F0E40;font-weight:700;border-bottom:1px solid #ccc;border-right:1px solid #ddd;white-space:nowrap">#</th>
-              <th style="padding:3px 5px;text-align:left;font-size:7pt;color:#3F0E40;font-weight:700;border-bottom:1px solid #ccc;border-right:1px solid #ddd;white-space:nowrap">W × H mm</th>
+              <th style="padding:3px 5px;text-align:left;font-size:7pt;color:#3F0E40;font-weight:700;border-bottom:1px solid #ccc;border-right:1px solid #ddd;white-space:nowrap">${_dordR()==='hw'?'H × W':'W × H'} mm</th>
               <th style="padding:3px 5px;text-align:left;font-size:7pt;color:#3F0E40;font-weight:700;border-bottom:1px solid #ccc;">Remark</th>
             </tr></thead>
             <tbody>${panelListRows}</tbody>
@@ -299,4 +301,3 @@ function renderResults(sheets,unfitted,scale){
   renderTrialBar();
   setTimeout(updateInnerLamTotal, 50);
 }
-

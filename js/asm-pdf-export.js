@@ -13,6 +13,7 @@
 
 window.ASMPdf = (function () {
   let _ctx = {};   // set by entry points (exportToPDF / runExport)
+  function _dord() { try { return localStorage.getItem('asm_dim_order') === 'hw' ? 'hw' : 'wh'; } catch (e) { return 'wh'; } }
   function exportToPDF(ctx) {
     _ctx = ctx || _ctx;
     if (_ctx.readyItems.length === 0) { _ctx.showToast('No items to export', 'error'); return; }
@@ -158,7 +159,7 @@ window.ASMPdf = (function () {
       const h = _h != null ? UNITS.fromMM(_h) : '?';
       const d = _d != null ? UNITS.fromMM(_d) : '?';
       const _uLbl = (UNITS.MODES[UNITS.get()] || {}).label || '';
-      const dims = w + ' x ' + h + ' x ' + d + ' (' + _uLbl + ')';
+      const dims = (_dord() === 'hw' ? (h + ' x ' + w) : (w + ' x ' + h)) + ' x ' + d + ' (' + _uLbl + ')';
       const totalPanels = it.outputs.reduce((a, o) => a + (o.qty || 0), 0);
       grandTotalPanels += totalPanels;
 
@@ -202,7 +203,10 @@ window.ASMPdf = (function () {
       }
 
       // Column header row (does not repeat across pages — acceptable per spec)
-      html += '<tr class="it-colhead"><th>Sr</th><th>Component</th><th>W' + _uAbbr + '</th><th>H' + _uAbbr + '</th><th>Qty</th><th>Color</th><th>Remark</th><th>Box No</th></tr>';
+      var _wh = _dord() === 'hw'
+        ? ('<th>H' + _uAbbr + '</th><th>W' + _uAbbr + '</th>')
+        : ('<th>W' + _uAbbr + '</th><th>H' + _uAbbr + '</th>');
+      html += '<tr class="it-colhead"><th>Sr</th><th>Component</th>' + _wh + '<th>Qty</th><th>Color</th><th>Remark</th><th>Box No</th></tr>';
 
       it.outputs.forEach((o) => {
         globalSrNo++;
@@ -216,8 +220,13 @@ window.ASMPdf = (function () {
         html += '<tr>';
         html += '<td>' + globalSrNo + '</td>';
         html += '<td>' + (o.component || '-') + '</td>';
-        html += '<td class="num">' + UNITS.fromMM(o.w || 0) + '</td>';
-        html += '<td class="num">' + UNITS.fromMM(o.h || 0) + '</td>';
+        if (_dord() === 'hw') {
+          html += '<td class="num">' + UNITS.fromMM(o.h || 0) + '</td>';
+          html += '<td class="num">' + UNITS.fromMM(o.w || 0) + '</td>';
+        } else {
+          html += '<td class="num">' + UNITS.fromMM(o.w || 0) + '</td>';
+          html += '<td class="num">' + UNITS.fromMM(o.h || 0) + '</td>';
+        }
         html += '<td class="num">' + (o.qty || 0) + '</td>';
         html += '<td>' + color + '</td>';
         html += '<td>' + remark + '</td>';

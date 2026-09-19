@@ -948,6 +948,9 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
     <span style="display:flex;align-items:center;gap:5px;color:rgba(255,255,255,.65);font-size:11px">units
       <select id="opt-units-select" onchange="setOptUnit(this.value)" title="Display units — all calculations run in mm" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#fff;border-radius:5px;padding:4px 6px;font-size:11px;cursor:pointer;max-width:150px"></select>
     </span>
+    <span style="display:flex;align-items:center;gap:5px;color:rgba(255,255,255,.65);font-size:11px">format
+      <button onclick="toggleOptDimOrder()" title="Swap size display: W×H / H×W (display only)" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#ECB22E;border-radius:5px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer"><span id="opt-dimord-val">W×H</span></button>
+    </span>
     <!-- Auth buttons -->
     <button class="hdr-btn" onclick="signInGoogle()" id="hdr-signin-btn">
       <svg width="13" height="13" viewBox="0 0 48 48" style="background:#fff;border-radius:2px;padding:1px">
@@ -1027,8 +1030,8 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
         <thead><tr>
           <th style="width:6%">#</th>
           <th style="width:15%">Component</th>
-          <th style="width:11%">W</th>
-          <th style="width:11%">H</th>
+          <th style="width:11%" id="ph-w">W</th>
+          <th style="width:11%" id="ph-h">H</th>
           <th style="width:8%">Qty</th>
           <th style="width:24%">Material</th>
           <th style="width:18%">Remark</th>

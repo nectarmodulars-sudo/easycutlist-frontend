@@ -30,6 +30,8 @@
   function money(n) { return '₹' + round2(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
   function dimShow(mm) { return (global.UNITS ? UNITS.fromMMNum(mm) : Math.round(mm)); }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); }
+  function _dord() { try { return localStorage.getItem('asm_dim_order') === 'hw' ? 'hw' : 'wh'; } catch (e) { return 'wh'; } }
+  function _flip(o) { if (_dord() !== 'hw') return o; var sw = function (a) { var t = a[2]; a[2] = a[3]; a[3] = t; return a; }; sw(o.header); o.data.forEach(sw); return o; }
 
   var _ready = [];
   function getReady() { return _ready; }
@@ -97,12 +99,12 @@
     var total = rows.reduce(function (a, r) { return a + r.amount; }, 0);
     var au = areaLabel();
     var h = '<table class="q-table"><thead><tr>' +
-      '<th>Item</th><th>Room</th><th>W</th><th>H</th><th>D</th><th>Qty</th>' +
+      '<th>Item</th><th>Room</th>' + (_dord()==='hw'?'<th>H</th><th>W</th>':'<th>W</th><th>H</th>') + '<th>D</th><th>Qty</th>' +
       '<th>' + au + '</th><th>Rate/' + au + '</th><th>Amount</th></tr></thead><tbody>';
     rows.forEach(function (r) {
       h += '<tr>' +
         '<td>' + esc(r.name) + '</td><td>' + esc(r.room) + '</td>' +
-        '<td>' + dimShow(r.w) + '</td><td>' + dimShow(r.h) + '</td><td>' + (r.d ? dimShow(r.d) : '—') + '</td>' +
+        '<td>' + dimShow(_dord()==='hw'?r.h:r.w) + '</td><td>' + dimShow(_dord()==='hw'?r.w:r.h) + '</td><td>' + (r.d ? dimShow(r.d) : '—') + '</td>' +
         '<td>' + r.qty + '</td><td>' + r.area + '</td>' +
         '<td><input type="number" min="0" step="1" value="' + (r.rate || '') + '" data-itemrate="' + esc(r.key) + '" oninput="ASMQuote._setItemRate(this)" style="width:80px"></td>' +
         '<td class="q-amt">' + money(r.amount) + '</td></tr>';
@@ -124,12 +126,12 @@
     var total = rows.reduce(function (a, r) { return a + r.amount; }, 0);
     var au = areaLabel();
     h += '<table class="q-table"><thead><tr>' +
-      '<th>Item</th><th>Panel</th><th>W</th><th>H</th><th>Qty</th><th>Material</th>' +
+      '<th>Item</th><th>Panel</th>' + (_dord()==='hw'?'<th>H</th><th>W</th>':'<th>W</th><th>H</th>') + '<th>Qty</th><th>Material</th>' +
       '<th>' + au + '</th><th>Rate</th><th>Amount</th></tr></thead><tbody>';
     rows.forEach(function (r) {
       h += '<tr>' +
         '<td>' + esc(r.item) + '</td><td>' + esc(r.panel) + '</td>' +
-        '<td>' + dimShow(r.w) + '</td><td>' + dimShow(r.h) + '</td><td>' + r.qty + '</td>' +
+        '<td>' + dimShow(_dord()==='hw'?r.h:r.w) + '</td><td>' + dimShow(_dord()==='hw'?r.w:r.h) + '</td><td>' + r.qty + '</td>' +
         '<td>' + esc(r.material) + '</td><td>' + r.area + '</td>' +
         '<td>' + (r.rate ? money(r.rate) : '—') + '</td>' +
         '<td class="q-amt">' + money(r.amount) + '</td></tr>';
@@ -282,13 +284,13 @@
       var header = ['Item', 'Room', 'W', 'H', 'D', 'Qty', au, 'Rate/' + au, 'Amount'];
       var data = rows.map(function (r) { return [r.name, r.room, r.w, r.h, r.d, r.qty, r.area, r.rate, r.amount]; });
       var total = rows.reduce(function (a, r) { return a + r.amount; }, 0);
-      return { header: header, data: data, total: round2(total), title: 'Item-wise Quotation' };
+      return _flip({ header: header, data: data, total: round2(total), title: 'Item-wise Quotation' });
     } else {
       var prows = panelRows();
       var pheader = ['Item', 'Panel', 'W', 'H', 'Qty', 'Material', au, 'Rate', 'Amount'];
       var pdata = prows.map(function (r) { return [r.item, r.panel, r.w, r.h, r.qty, r.material, r.area, r.rate, r.amount]; });
       var ptotal = prows.reduce(function (a, r) { return a + r.amount; }, 0);
-      return { header: pheader, data: pdata, total: round2(ptotal), title: 'Panel-wise Quotation' };
+      return _flip({ header: pheader, data: pdata, total: round2(ptotal), title: 'Panel-wise Quotation' });
     }
   }
 

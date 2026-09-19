@@ -949,6 +949,7 @@ function autoParseItem(wb, ws, rangeInfo) {  const rangeRef = XLSX.utils.decode_
   // (Legacy D-label/E-value second column removed — D is now the unit marker.)
   const inputMappings = [];
   const cellMap = {};
+  const markerGroups = {};   // group -> controlling input key (marker/hide feature)
 
   for (let r = startRow; r < headerRow; r++) {
     const valueCols = [
@@ -991,6 +992,28 @@ function autoParseItem(wb, ws, rangeInfo) {  const rangeRef = XLSX.utils.decode_
         def = parseFloat(def) || 0;
       }
 
+      // Dropdown (select) input:
+      //   Explicit: write "dd" in col F (index 5) of the input row.
+      //   Options come from col B, e.g. "Full/Partial(textb)/small/VeryBig(textb)".
+      //   Fallback: col B contains "/" even without the dd tag.
+      const ddCell = ws[XLSX.utils.encode_cell({ r, c: 5 })];
+      const isDD = ddCell && String(ddCell.v || '').trim().toLowerCase() === 'dd';
+      let selOptions = null, selTextb = null;
+      const ddSrc = (def === '' && cell && cell.v != null) ? String(cell.v) : def;
+      if ((isDD || (typeof ddSrc === 'string' && ddSrc.indexOf('/') !== -1)) && typeof ddSrc === 'string') {
+        def = ddSrc;
+        const parts = def.split('/').map(function (x) { return x.trim(); }).filter(Boolean);
+        const opts = [], tb = [];
+        parts.forEach(function (pt) {
+          const mm = pt.match(/^(.*?)\s*\(textb\)\s*$/i);
+          const lbl = (mm ? mm[1] : pt).trim();
+          if (!lbl) return;
+          opts.push(lbl);
+          if (mm) tb.push(lbl);
+        });
+        if (opts.length >= 2) { type = 'select'; selOptions = opts; selTextb = tb; def = opts[0]; }
+      }
+
       // Avoid duplicate keys
       let uniqueKey = key;
       let counter = 2;
@@ -1009,10 +1032,23 @@ function autoParseItem(wb, ws, rangeInfo) {  const rangeRef = XLSX.utils.decode_
       };
       // Tag dimension inputs so production converts only these when units change.
       if (unit === 'mm') mapping.unit = 'mm';
+      if (type === 'select') { mapping.options = selOptions; mapping.textbOptions = selTextb; }
 
       inputMappings.push(mapping);
+      // Companion numeric input for the dropdown's text-box options (referenced as <key>_txt)
+      if (type === 'select' && selTextb && selTextb.length) {
+        inputMappings.push({ key: uniqueKey + '_txt', label: label + ' (value)', cellRef: null, type: 'number', default: 0, required: false, unit: 'mm', textFor: uniqueKey });
+      }
 
       cellMap[cellRef] = uniqueKey;
+
+      // marker tag (cols E..G) links this input to a hide-group
+      for (let mc = 4; mc <= 6; mc++) {
+        const mcell = ws[XLSX.utils.encode_cell({ r, c: mc })];
+        const mtxt = mcell ? String(mcell.v || '').trim() : '';
+        const mm = mtxt.match(/^marker\s*[:_-]?\s*([a-z0-9]*)$/i);
+        if (mm) { markerGroups[(mm[1] || '').toLowerCase()] = uniqueKey; break; }
+      }
     }
   }
 
@@ -1155,10 +1191,19 @@ function autoParseItem(wb, ws, rangeInfo) {  const rangeRef = XLSX.utils.decode_
       remarkFormula = convertFormula(remarkCell, cellMap, ws, allCellFormulas, allCellValues) || '';
     }
 
+    // hide tag (cols G..I) -> this output only shows when its marker input is provided
+    let showIf;
+    for (let hc = 6; hc <= 8; hc++) {
+      const hcell = ws[XLSX.utils.encode_cell({ r, c: hc })];
+      const htxt = hcell ? String(hcell.v || '').trim() : '';
+      const hm = htxt.match(/^hide\s*[:_-]?\s*([a-z0-9]*)$/i);
+      if (hm) { showIf = markerGroups[(hm[1] || '').toLowerCase()] || '__hidden__'; break; }
+    }
+
     if (wFormula && hFormula && qFormula) {
       const wRef = 'B' + (r + 1), hRef = 'C' + (r + 1), qRef = 'D' + (r + 1);
       outputs.push({
-        component, subItem: currentSubItem || null, widthFormula: wFormula, heightFormula: hFormula, qtyFormula: qFormula,
+        component, subItem: currentSubItem || null, showIf, widthFormula: wFormula, heightFormula: hFormula, qtyFormula: qFormula,
         colorField, remarkTemplate, remarkFormula,
         cellRefs: { w: wRef, h: hRef, q: qRef },
         depW: convertFormulaDep(wCell, cellMap, allCellFormulas, allCellValues),
@@ -1182,6 +1227,7 @@ function autoParseItem(wb, ws, rangeInfo) {  const rangeRef = XLSX.utils.decode_
       key: m.key, label: m.label, cellRef: m.cellRef, type: m.type,
       default: m.default, required: m.required,
       unit: m.unit,
+      options: m.options, textbOptions: m.textbOptions, textFor: m.textFor,
       min: m.type === 'number' ? 0 : undefined,
       max: m.type === 'number' ? 10000 : undefined
     })),
@@ -1815,39 +1861,16 @@ router.get('/problems', async (req, res) => {
   } catch (e) { res.status(500).json({ success:false, error: e.message }); }
 });
 
-// ─── admin image upload helper ───
-async function uploadAdminProblemImages(images) {
-  const urls = [];
-  if (!Array.isArray(images) || !images.length || !_sb) return urls;
-  for (const img of images.slice(0, 6)) {
-    try {
-      const m = /^data:(image\/(?:jpeg|png));base64,(.+)$/.exec(String(img || ''));
-      if (!m) continue;
-      const ext = m[1] === 'image/png' ? 'png' : 'jpg';
-      const buf = Buffer.from(m[2], 'base64');
-      if (buf.length > 3 * 1024 * 1024) continue;
-      const name = 'a_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8) + '.' + ext;
-      const { error } = await _sb.storage.from('problem-attachments')
-        .upload(name, buf, { contentType: m[1], upsert: false });
-      if (error) { console.error('[admin upload]', error.message); continue; }
-      const { data } = _sb.storage.from('problem-attachments').getPublicUrl(name);
-      if (data && data.publicUrl) urls.push(data.publicUrl);
-    } catch (e) { console.error('[admin upload]', e.message); }
-  }
-  return urls;
-}
-
-router.post('/problems/reply', express.json({ limit:'12mb' }), async (req, res) => {
+router.post('/problems/reply', express.json({ limit:'1mb' }), async (req, res) => {
   try {
     if (!_sb) throw new Error('Supabase not configured');
     const b = req.body || {};
     const problem_id = Number(b.problem_id);
     const body = String(b.body || '').trim();
-    if (!problem_id || (!body && !(Array.isArray(req.body.images) && req.body.images.length))) throw new Error('problem_id and body/image required');
+    if (!problem_id || !body) throw new Error('problem_id and body required');
 
-    const attachments = await uploadAdminProblemImages(req.body.images);
     const { error: mErr } = await _sb.from('asm_problem_messages')
-      .insert({ problem_id, sender: 'admin', body, attachments });
+      .insert({ problem_id, sender: 'admin', body });
     if (mErr) throw mErr;
 
     // mark thread: admin has read it, user has an unread reply
@@ -1888,6 +1911,102 @@ router.post('/problems/close', express.json({ limit:'256kb' }), async (req, res)
     await _sb.from('asm_problems').update({ status: 'closed' }).eq('id', problem_id);
     res.json({ success:true });
   } catch (e) { res.status(500).json({ success:false, error: e.message }); }
+});
+
+/* ============================================================
+   FAQ ADMIN ROUTES
+   Paste this block into asm-admin.js immediately BEFORE the final
+   line:  module.exports = router;   (currently line 1870)
+   Top-level router.* calls — not nested inside any other route.
+   ============================================================ */
+
+// GET /faqs — all FAQs (admin view), grouped by category then order
+router.get('/faqs', async (req, res) => {
+  try {
+    if (!_sb) return res.status(500).json({ error: 'Supabase not configured' });
+    const { data, error } = await _sb.from('faqs')
+      .select('*').order('category', { ascending: true }).order('sort_order', { ascending: true });
+    if (error) throw error;
+    res.json({ success: true, faqs: data || [] });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /faqs/save — insert (no id) or update (with id)
+router.post('/faqs/save', express.json({ limit: '256kb' }), async (req, res) => {
+  try {
+    if (!_sb) return res.status(500).json({ error: 'Supabase not configured' });
+    const b = req.body || {};
+    const question = String(b.question || '').trim();
+    const answer   = String(b.answer || '').trim();
+    if (!question || !answer) return res.status(400).json({ error: 'question and answer required' });
+    const row = {
+      category: String(b.category || 'general'),
+      question, answer,
+      sort_order: Number(b.sort_order) || 0
+    };
+    let q;
+    if (b.id) q = _sb.from('faqs').update(row).eq('id', b.id).select().single();
+    else      q = _sb.from('faqs').insert(row).select().single();
+    const { data, error } = await q;
+    if (error) throw error;
+    res.json({ success: true, faq: data });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /faqs/delete
+router.post('/faqs/delete', express.json({ limit: '64kb' }), async (req, res) => {
+  try {
+    if (!_sb) return res.status(500).json({ error: 'Supabase not configured' });
+    const id = (req.body || {}).id;
+    if (!id) return res.status(400).json({ error: 'id required' });
+    const { error } = await _sb.from('faqs').delete().eq('id', id);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /faqs/toggle — show/hide
+router.post('/faqs/toggle', express.json({ limit: '64kb' }), async (req, res) => {
+  try {
+    if (!_sb) return res.status(500).json({ error: 'Supabase not configured' });
+    const { id, active } = req.body || {};
+    if (!id) return res.status(400).json({ error: 'id required' });
+    const { error } = await _sb.from('faqs').update({ active: !!active }).eq('id', id);
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /faqs/reorder — body: { items: [{id, sort_order}, ...] }
+router.post('/faqs/reorder', express.json({ limit: '256kb' }), async (req, res) => {
+  try {
+    if (!_sb) return res.status(500).json({ error: 'Supabase not configured' });
+    const items = (req.body || {}).items || [];
+    for (const it of items) {
+      await _sb.from('faqs').update({ sort_order: Number(it.sort_order) || 0 }).eq('id', it.id);
+    }
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ---- Fonts / UI settings ----
+router.get('/ui-settings', async (req, res) => {
+  try {
+    if (!_sb) return res.status(500).json({ error: 'Supabase not configured' });
+    const { data, error } = await _sb.from('asm_ui_settings').select('settings').eq('id', 'default').single();
+    if (error && error.code !== 'PGRST116') throw error;
+    res.json({ success: true, settings: (data && data.settings) || {} });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+router.post('/ui-settings/save', express.json({ limit: '256kb' }), async (req, res) => {
+  try {
+    if (!_sb) return res.status(500).json({ error: 'Supabase not configured' });
+    const settings = (req.body && req.body.settings) || {};
+    const { error } = await _sb.from('asm_ui_settings')
+      .upsert({ id: 'default', settings, updated_at: new Date().toISOString() });
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 module.exports = router;
