@@ -9,6 +9,7 @@ const ASMModule = (() => {
   const API_BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1')
     ? 'http://localhost:3001/asm'
     : 'https://api.easycutlist.com/asm';
+  function fillCells(html){ const n=(html.match(/class="asm-input-row"/g)||[]).length; const need=(4-(n%4))%4; let f=''; for(let i=0;i<need;i++) f+='<div class="asm-input-row asm-input-fill"></div>'; return f; }
 
   // ── State ──
   let catalogue = [];          // All available items (left panel)
@@ -32,6 +33,7 @@ const ASMModule = (() => {
     renderReadyItems();
   }
   let activeItemSchemas = {};  // Cache of item schemas by id
+  let _videoLabel = 'Video';   // global label for the per-item Video button (admin-editable)
   let currentProjectId = null;
   let currentProjectName = '';
   let currentClientName = '';
@@ -56,15 +58,156 @@ const ASMModule = (() => {
   // OPEN / CLOSE
   // ========================================================================
 
+
+  async function applyUiSettings() {
+    try {
+      const res = await fetch(apiBase() + '/asm/ui-settings');
+      const j = await res.json();
+      const s = (j && j.settings) || {};
+      const root = document.getElementById('asm-fullpage'); if (!root) return;
+      const P = { title:'--asm-title', sect:'--asm-sect', inlabel:'--asm-inlabel', inbox:'--asm-inbox', outlabel:'--asm-outlabel', outbox:'--asm-outbox' };
+      Object.keys(P).forEach(k => {
+        const g = s[k]; if (!g) return; const pre = P[k];
+        if (g.size   != null) root.style.setProperty(pre + '-size', g.size + 'px');
+        if (g.color)          root.style.setProperty(pre + '-color', g.color);
+        if (g.weight != null) root.style.setProperty(pre + '-weight', g.weight);
+      });
+      if (typeof s.videoLabel === 'string' && s.videoLabel.trim()) _videoLabel = s.videoLabel.trim();
+    } catch (e) { /* non-blocking */ }
+  }
+
+  // === Per-item Video button (YouTube embed popup) ========================
+  function ytVideoId(url) {
+    if (!url) return '';
+    const s = String(url).trim();
+    const m = s.match(/(?:youtube\.com\/(?:watch\?[^#]*\bv=|embed\/|shorts\/|live\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+    if (m) return m[1];
+    if (/^[A-Za-z0-9_-]{11}$/.test(s)) return s;   // bare 11-char id
+    return '';   // channel / playlist / anything not embeddable -> no button
+  }
+  function buildVideoBtn(schema) {
+    const id = schema ? ytVideoId(schema.video) : '';
+    if (!id) return '';
+    return '<div class="asm-video-cta"><button class="asm-video-btn" onclick="ASMModule.openVideo(\'' + id + '\')"><span class="asm-video-play">&#9658;</span>' + escapeHtml(_videoLabel) + '</button></div>';
+  }
+  function openVideo(id) {
+    if (!id) return;
+    const old = document.getElementById('asm-video-modal'); if (old) old.remove();
+    const m = document.createElement('div');
+    m.id = 'asm-video-modal';
+    m.className = 'asm-video-overlay';
+    m.onclick = e => { if (e.target === m) closeVideo(); };
+    m.innerHTML =
+      '<div class="asm-video-box">' +
+        '<button class="asm-video-close" onclick="ASMModule.closeVideo()" title="Close">&#10005;</button>' +
+        '<div class="asm-video-frame">' +
+          '<iframe src="https://www.youtube.com/embed/' + id + '?autoplay=1&rel=0&modestbranding=1" title="Video" frameborder="0" allow="autoplay; encrypted-media; picture-in-picture" allowfullscreen></iframe>' +
+        '</div>' +
+      '</div>';
+    document.body.appendChild(m);
+    document.body.style.overflow = 'hidden';
+  }
+  function closeVideo() {
+    const m = document.getElementById('asm-video-modal');
+    if (m) m.remove();   // removing the iframe stops playback
+    document.body.style.overflow = document.getElementById('asm-fullpage') ? 'hidden' : '';
+  }
+
+
+  // === Live 3D view (rule-engine driven) ==================================
+  // One WebGL context is shared by the whole page, so exactly one item can
+  // show its 3D model at a time. Everything else keeps the image view.
+  let _active3d = null;                    // instanceId currently showing 3D
+
+  function has3D(schema) {
+    return !!(schema && schema.ruleCode && window.ASM3D && ASM3D.available(schema.ruleCode));
+  }
+
+  // Diagram section contents: plain images when the item has no rule code,
+  // tabbed Image | 3D when it has one.
+  function buildDiagramBody(inst, schema, imagesHtml) {
+    const imgPane = imagesHtml + buildVideoBtn(schema);
+    if (!has3D(schema)) return imgPane;
+    const id = inst.instanceId, on = (_active3d === id);
+    return '<div class="asm-view-tabs">' +
+        '<button class="asm-view-tab' + (on ? '' : ' on') + '" id="tabimg_' + id + '" ' +
+          'onclick="ASMModule.showImageView(\'' + id + '\')"><span class="dot"></span>Image</button>' +
+        '<button class="asm-view-tab' + (on ? ' on' : '') + '" id="tab3d_' + id + '" ' +
+          'onclick="ASMModule.show3DView(\'' + id + '\')"><span class="dot"></span>3D View</button>' +
+      '</div>' +
+      '<div class="asm-view-pane" id="paneimg_' + id + '"' + (on ? ' style="display:none"' : '') + '>' + imgPane + '</div>' +
+      '<div class="asm-view-pane asm3d-mount" id="pane3d_' + id + '"' + (on ? '' : ' style="display:none"') + '></div>';
+  }
+
+  function setViewTabs(instanceId, mode) {
+    const t1 = document.getElementById('tabimg_' + instanceId);
+    const t2 = document.getElementById('tab3d_' + instanceId);
+    const p1 = document.getElementById('paneimg_' + instanceId);
+    const p2 = document.getElementById('pane3d_' + instanceId);
+    if (t1) t1.classList.toggle('on', mode === 'img');
+    if (t2) t2.classList.toggle('on', mode === '3d');
+    if (p1) p1.style.display = (mode === 'img') ? '' : 'none';
+    if (p2) p2.style.display = (mode === '3d') ? '' : 'none';
+  }
+
+  function showImageView(instanceId) {
+    if (_active3d === instanceId) { try { ASM3D.close(); } catch (e) {} _active3d = null; }
+    setViewTabs(instanceId, 'img');
+  }
+
+  function show3DView(instanceId) {
+    const inst = sbsItems.find(i => i.instanceId === instanceId);
+    if (!inst) return;
+    const schema = activeItemSchemas[inst.itemId];
+    if (!has3D(schema)) { showToast('No 3D rule set for this item', 'error'); return; }
+    // only one live WebGL view at a time
+    if (_active3d && _active3d !== instanceId) {
+      try { ASM3D.close(); } catch (e) {}
+      setViewTabs(_active3d, 'img');
+    }
+    const mount = document.getElementById('pane3d_' + instanceId);
+    if (!mount) return;
+    _active3d = instanceId;
+    setViewTabs(instanceId, '3d');
+    ASM3D.open(mount, { ruleCode: schema.ruleCode, inputs: inst.inputs, item: inst.itemName })
+      .then(function (ok) { if (!ok) { _active3d = null; } });
+  }
+
+  // Called after any full re-render, which throws the canvas away with the DOM.
+  function remount3D() {
+    if (!_active3d) return;
+    const id = _active3d;
+    if (!sbsItems.some(i => i.instanceId === id)) {   // the item is gone
+      try { ASM3D.close(); } catch (e) {}
+      _active3d = null;
+      return;
+    }
+    _active3d = null;
+    show3DView(id);
+  }
+
+  // Push new SBS values into the open model. No rebuild of the DOM, so the
+  // user's camera angle and any dragged shelf positions survive.
+  function push3D(instanceId) {
+    if (_active3d !== instanceId || !window.ASM3D) return;
+    const inst = sbsItems.find(i => i.instanceId === instanceId);
+    if (inst) { try { ASM3D.update(inst.inputs); } catch (e) {} }
+  }
+
+
+
+
   async function openASM() {
     let container = document.getElementById('asm-fullpage');
     if (!container) {
       container = buildPageShell();
       document.body.appendChild(container);
       injectStyles();
+      applyUiSettings();
     }
     container.style.display = 'flex';
     document.body.style.overflow = 'hidden';
+    applyCSState();
 
     // Backup binding for Review Check (in case inline handler is stripped/cached)
     if (!container._reviewBound) {
@@ -96,10 +239,16 @@ const ASMModule = (() => {
     if (emailEl) emailEl.textContent = loggedIn ? (CURRENT_USER.email || '') : '';
     if (loginBtn) loginBtn.style.display = loggedIn ? 'none' : '';
     if (logoutBtn) logoutBtn.style.display = loggedIn ? '' : 'none';
+    const bell = document.getElementById('asm-bell-btn');
+    if (bell) bell.style.display = 'none';   // notifications retired — messaging replaces it
+    const msgsBtn = document.getElementById('asm-msgs-btn');
+    if (msgsBtn) msgsBtn.style.display = loggedIn ? '' : 'none';
+    if (loggedIn) { refreshMyProblemsBadge(); }
   }
 
   function asmLogin() {
-    // Reuse the main app's Google login. Try known globals.
+    // Reuse the main app's Google login.
+    if (typeof signInGoogle === 'function') return signInGoogle();
     if (typeof signInWithGoogle === 'function') return signInWithGoogle();
     if (typeof handleGoogleLogin === 'function') return handleGoogleLogin();
     if (typeof login === 'function') return login();
@@ -131,28 +280,40 @@ const ASMModule = (() => {
     el.innerHTML = `
       <div class="asm-topbar">
         <div class="asm-title">
+          <button class="asm-drawer-btn asm-drawer-cs" onclick="ASMModule.toggleDrawer('cs')" aria-label="Catalogue">☰</button>
           <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABwAAAAcCAIAAAD9b0jDAAAD1UlEQVR42o1Vz2sdVRg95947P/KDvhTTSjCSFlNLhBbtsquCrkQ3iiiImyIIuhFcKbhxIV2IO7sQseBWBKH+Da5KF6UQxJ9Nk0pTheQlTWbezHzHxbyZN/OShcMsZu7c79zvO9/5zvDy4AqOXAQA6Lh1/Y9tbrwoSQLU7FOzVZ0b6iOoh6h2LUAAAZLjsDodEhgvHVMDxnn0cp2UEer1GqgJlCeqipX1UabgCe+lcVHs4ob6SU0WjsoLjnIOTpjzqnM+ltyywnDo40RJLLO2SAIKHVrkiCzn6VPl+1f/vfhcFrljG1QHozTcWU+vf/vEw+2QJjJNqAjtbhJlycGJ6vq1rZW1DI/9pBFsodoVAVw+l184n139cHlv34cgjXHh6i6BcA77B+71V4Yra1n2KCpyliXhML494AjWr6pKV4x4uO2fPp+98eru4wM6TjoZevpyeubMSIVzDlGMssRfGzGP6FPC8lIRxTKjCrd6duRcj6fQp40QKDiv3X330adLd9bTNBnXpbrNDnnuLqxlX362NZeKAkCyJ5LQ5b7tRJixWz/Pr/+W3PzuXpqYGQRCAuEd8hFfu7py6/bciy8Na3GrkZU6oGMtsCNCE+MIt+/OkJAQRQBQjEBHQFHUjhzR5CmIYFs+p0dYCEG7Q3f9xkkz0mH7UQBw+lQpg3PYHfrgNVUhm5fQh2qPV1Hg1GL5440NEm6h+uTjpyB9fu2B7XgAL799ZlRw7Bzqh6sHSk7OZf3ZDHRwxqoCABis7syxg4u6bQrd8e5bDgGaSIPZOMoqmE1z1Z7Q0MHQgevtFBC8kkSAkJhzAORSxZlAed9Vrbr4agxl6kgACNTO0N27H0eR/H51mBHgw8242vOlcXfPe9dlalqnmuaIKA/cpRcOVs+O3npvOU0ksCwB4M13zpDIc6yezS89f1geuDBr6vCndkwbYajxblUVTg7s6y+2NjajmhZ2dkhcWS6SGY0yqCuZRpqh03GY4c/7MWPIWOQIQeeezY+4qUBUuStymJEx/rgXVTaxMAJu4qbi3Kz98NNg89ckXSyiWN4BBVACJVG2D0RB7xVFSheLB78n398czM2a1TZQp3x5cIUTl8JhxqUniw/e/efiWh5c56d15CqNd39JvvpmcfPvaCY1M06S7YKOTWjEYsSFhcr7CV8iWHtKo5yqws6OjyIkicy6Hs7Q0acImiGOlMbKM07aKjUC6elvft4kNqPRaL2dqPbHV/fPBOenpkutttsQGTt/YrWDGto0NGWrmqJzgqgjHsxmCOsI1/oe+wHHVNCxJDV2qinfkAT8B++6/aS1MZ2hAAAAAElFTkSuQmCC" width="28" height="28" style="border-radius:6px">
-          <span>Easy<span style="color:#ECB22E">CutList</span> AUTO SIZE MODULE (ASM)</span>
+          <span>Easy<span style="color:#ECB22E">CutList</span> SIZE BUILDER</span>
           <span id="asm-project-name" style="margin-left:14px;padding-left:14px;border-left:1px solid rgba(255,255,255,.2);font-size:13px;font-weight:500;color:rgba(255,255,255,.75)">Untitled</span>
         </div>
         <div class="asm-topbar-actions">
+          <button class="asm-drawer-btn asm-drawer-ris" onclick="ASMModule.toggleDrawer('ris')" aria-label="Ready items">▤ <span id="asm-ris-badge">0</span></button>
           <span id="asm-user-email" style="font-size:11px;color:rgba(255,255,255,.5);margin-right:8px"></span>
           <span id="asm-plan-badge" style="font-size:10px;padding:2px 8px;border-radius:3px;font-weight:700;margin-right:4px"></span>
           <button class="asm-top-btn" id="asm-login-btn" onclick="ASMModule.asmLogin()" style="display:none;background:rgba(66,133,244,.25);color:#8AB4F8">Login</button>
           <button class="asm-top-btn" id="asm-logout-btn" onclick="ASMModule.asmLogout()" style="display:none">Logout</button>
+          
+          <button class="asm-top-btn" id="asm-msgs-btn" onclick="ASMModule.openMyProblems()" title="My messages" style="position:relative;display:none"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg><span id="asm-msgs-badge" style="position:absolute;top:-4px;right:-4px;background:#E01E5A;color:#fff;font-size:9px;font-weight:800;min-width:15px;height:15px;border-radius:8px;display:none;align-items:center;justify-content:center;padding:0 3px">0</span></button>
           <button class="asm-top-btn" onclick="ASMModule.closeASM()">← Optimizer</button>
+          <button class="asm-top-btn asm-newproj-btn" onclick="ASMModule.newProject()">+ New Project</button>
           <button class="asm-top-btn" onclick="ASMModule.showProjects()">My ASM Projects</button>
           <button class="asm-top-btn asm-save-btn" onclick="ASMModule.saveProject()">Save</button>
           <button class="asm-top-btn" id="asm-upgrade-btn" onclick="ASMModule.showPricing()" style="background:rgba(236,178,46,.3);color:#ECB22E">UPGRADE</button>
-          <button class="asm-close" onclick="ASMModule.closeASM()" title="Close">✕</button>
+          <button class="asm-close" onclick="ASMModule.closeASM()" title="Close">&#10005;</button>
         </div>
       </div>
 
+      <div class="asm-scrim" id="asm-scrim" onclick="ASMModule.closeDrawers()"></div>
       <div class="asm-body">
         <!-- LEFT: Catalogue -->
         <div class="asm-col asm-catalogue">
+          <div class="asm-cs-rail" onclick="ASMModule.toggleCS()" title="Show catalogue (hover to peek)">
+            <span class="ico">&#9654;</span><span class="txt">Catalogue</span>
+          </div>
           <div class="asm-col-head" style="display:block">
-            <div style="margin-bottom:6px">CATALOGUE SPACE (CS)</div>
+            <div style="margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;gap:8px">
+              <span>CATALOGUE SPACE (CS)</span>
+              <button class="asm-cs-toggle" onclick="ASMModule.toggleCS()" title="Collapse catalogue">&#10094;</button>
+            </div>
             <select id="asm-cat-select" onchange="ASMModule.switchCatalogue(this.value)" style="width:100%;background:#222529;border:0.5px solid #3A3D42;border-radius:8px;color:#fff;font-size:13px;font-family:inherit;padding:8px 10px;box-sizing:border-box;cursor:pointer"></select>
           </div>
           <input type="text" id="asm-cat-search" class="asm-search"
@@ -162,12 +323,20 @@ const ASMModule = (() => {
 
         <!-- MIDDLE: Size Building Space -->
         <div class="asm-col asm-sbs">
-          <div class="asm-col-head" style="display:flex;align-items:center;justify-content:space-between">
+          <div class="asm-col-head" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
             <span>SIZE BUILDING SPACE (SBS)</span>
-            <span style="display:flex;align-items:center;gap:6px;font-size:11px;color:#7A7D82">font
-              <button onclick="ASMModule.sbsFont(-1)" style="width:22px;height:22px;background:#2A2D31;border:1px solid #3A3D42;border-radius:4px;color:#fff;cursor:pointer">−</button>
-              <span id="asm-sbs-font-val" style="min-width:20px;text-align:center;color:#ECB22E;font-weight:700">14</span>
-              <button onclick="ASMModule.sbsFont(1)" style="width:22px;height:22px;background:#2A2D31;border:1px solid #3A3D42;border-radius:4px;color:#fff;cursor:pointer">+</button>
+            <span style="display:flex;align-items:center;gap:10px;font-size:11px;color:#7A7D82">
+              <span style="display:flex;align-items:center;gap:5px">units
+                <select id="asm-units-select" onchange="ASMModule.setUnit(this.value)" title="Display units — all calculations stay in mm" style="background:#2A2D31;border:1px solid #3A3D42;color:#E8E8E8;border-radius:6px;padding:3px 6px;font-size:11px;cursor:pointer;max-width:150px"></select>
+              </span>
+              <span style="display:flex;align-items:center;gap:6px">font
+                <button onclick="ASMModule.sbsFont(-1)" style="width:22px;height:22px;background:#2A2D31;border:1px solid #3A3D42;border-radius:4px;color:#fff;cursor:pointer">−</button>
+                <span id="asm-sbs-font-val" style="min-width:20px;text-align:center;color:#ECB22E;font-weight:700">14</span>
+                <button onclick="ASMModule.sbsFont(1)" style="width:22px;height:22px;background:#2A2D31;border:1px solid #3A3D42;border-radius:4px;color:#fff;cursor:pointer">+</button>
+              </span>
+              <span style="display:flex;align-items:center;gap:5px">format
+                <button id="asm-dimord-btn" onclick="ASMModule.toggleDimOrder()" title="Swap size display: W×H / H×W (display only)" style="background:#2A2D31;border:1px solid #3A3D42;color:#ECB22E;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer"><span id="asm-dimord-val">${dimOrder === 'hw' ? 'H×W' : 'W×H'}</span></button>
+              </span>
             </span>
           </div>
           <div id="asm-cat-banner" style="padding:14px 16px;border-bottom:1px solid #2A2D31;display:none;align-items:center;gap:14px;flex-wrap:wrap">
@@ -179,9 +348,14 @@ const ASMModule = (() => {
 
         <!-- RIGHT: Ready Items -->
         <div class="asm-col asm-ris">
+          <div class="asm-ris-rail" onclick="ASMModule.toggleRIS()" title="Show ready items (hover to peek)">
+            <span class="ico">&#9664;</span><span class="txt">Ready Items</span>
+            <span class="cnt" id="asm-ris-rail-count">0</span>
+          </div>
           <div class="asm-col-head" style="display:flex;align-items:center;justify-content:space-between">
             <span>READY ITEMS SPACE (RIS)</span>
             <span style="display:flex;align-items:center;gap:6px">
+              <button class="asm-cs-toggle" onclick="ASMModule.toggleRIS()" title="Collapse ready items">&#10095;</button>
               <select id="asm-ris-sort" onchange="ASMModule.setRisSort(this.value)" title="Sort" style="background:#2A2D31;border:1px solid #3A3D42;color:#E8E8E8;border-radius:6px;padding:3px 6px;font-size:11px;cursor:pointer">
                 <option value="none">Sort</option>
                 <option value="room">Room</option>
@@ -192,10 +366,14 @@ const ASMModule = (() => {
           </div>
           <div id="asm-ris-list" class="asm-ris-list"></div>
           <div class="asm-ris-foot">
-            <button class="asm-btn" data-review-check style="background:#ECB22E;color:#111;font-weight:700;transition:background .15s" onmouseover="this.style.background='#F5C443'" onmouseout="this.style.background='#ECB22E'" onclick="ASMModule.reviewCheck()">Review Check</button>
-            <button class="asm-btn asm-btn-ghost" onclick="ASMModule.clearReady()">Clear</button>
-            <button class="asm-btn asm-btn-secondary" onclick="ASMModule.exportToPDF()">Export to PDF</button>
-            <button class="asm-btn asm-btn-primary" onclick="ASMModule.exportReady()">Export to Optimizer</button>
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
+              <button class="asm-btn asm-btn-secondary" style="font-size:12px;padding:8px 4px" onclick="ASMModule.exportFilesRIS()">Export Files</button>
+              <button class="asm-btn asm-btn-primary" style="font-size:12px;padding:8px 4px" onclick="ASMModule.exportReady()">Export Optimizer</button>
+              <button class="asm-btn asm-btn-ghost" style="font-size:12px;padding:8px 4px" onclick="ASMModule.clearReady()">Clear</button>
+              <button class="asm-btn" style="background:#2EB67D;color:#fff;font-weight:700;font-size:12px;padding:8px 4px" onclick="ASMModule.makeQuotation()">Make Quotation</button>
+              <button class="asm-btn" data-review-check style="background:#ECB22E;color:#111;font-weight:700;font-size:12px;padding:8px 4px;transition:background .15s" onmouseover="this.style.background='#F5C443'" onmouseout="this.style.background='#ECB22E'" onclick="ASMModule.reviewCheck()">Review</button>
+              <button class="asm-btn asm-btn-ghost" style="font-size:12px;padding:8px 4px" onclick="ASMModule.openShare()" title="Share saved projects with another Pro user">🔗 Share</button>
+            </div>
           </div>
         </div>
       </div>
@@ -203,7 +381,7 @@ const ASMModule = (() => {
       <!-- Image Modal -->
       <div class="asm-modal-overlay" id="asm-modal" onclick="if(event.target===this)ASMModule.closeImageModal()">
         <div class="asm-modal-content">
-          <button class="asm-modal-close" onclick="ASMModule.closeImageModal()">✕</button>
+          <button class="asm-modal-close" onclick="ASMModule.closeImageModal()">&#10005;</button>
           <button id="asm-modal-prev" onclick="ASMModule.modalNav(-1)" style="display:none;position:absolute;left:10px;top:50%;transform:translateY(-50%);width:44px;height:44px;border-radius:50%;background:rgba(0,0,0,.5);color:#fff;border:none;font-size:22px;cursor:pointer;align-items:center;justify-content:center;z-index:2">‹</button>
           <button id="asm-modal-next" onclick="ASMModule.modalNav(1)" style="display:none;position:absolute;right:10px;top:50%;transform:translateY(-50%);width:44px;height:44px;border-radius:50%;background:rgba(0,0,0,.5);color:#fff;border:none;font-size:22px;cursor:pointer;align-items:center;justify-content:center;z-index:2">›</button>
           <img id="asm-modal-image" class="asm-modal-image" src="" alt="Reference">
@@ -303,7 +481,7 @@ const ASMModule = (() => {
     // Group items by category
     const groups = {};
     catalogue
-      .filter(it => !filter || it.name.toLowerCase().includes(filter.toLowerCase()))
+      .filter(it => { const f = (filter||'').toLowerCase(); return !f || it.name.toLowerCase().includes(f) || (it.category||'').toLowerCase().includes(f); })
       .forEach(it => {
         const cat = (it.category || 'other').toUpperCase();
         if (!groups[cat]) groups[cat] = [];
@@ -317,7 +495,7 @@ const ASMModule = (() => {
 
     let html = '';
     for (const [cat, items] of Object.entries(groups)) {
-      html += `<div class="asm-cat-group-label" style="cursor:pointer" onclick="ASMModule.showCategoryGallery('${cat.replace(/'/g,"")}')" title="Click to view all ${cat}">${cat} <span style="font-size:10px;color:#7A7D82">▦</span></div>`;
+      html += `<div class="asm-cat-group-label" style="cursor:pointer" onclick="ASMModule.showCategoryGallery('${cat.replace(/'/g,"")}')" title="Click to explore all ${cat}">${cat} <span class="asm-cat-explore">Explore ▦</span></div>`;
       items.forEach(it => {
         const isFree = !!it.is_free;
         const isLocked = asmPlan !== 'pro' && !isFree;
@@ -345,15 +523,16 @@ const ASMModule = (() => {
     const items = catalogue.filter(it => (it.category || 'other').toUpperCase() === cat);
     if (!items.length) { body.innerHTML = '<div class="asm-sbs-empty">No items in ' + cat + '</div>'; return; }
     let html = '<div style="padding:16px"><div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><button onclick="ASMModule.exitGallery()" style="background:#2A2D31;border:1px solid #3A3D42;color:#fff;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer">← Back</button><span style="font-size:14px;font-weight:700;color:#ECB22E">' + cat + '</span></div>';
-    html += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px">';
+    html += '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">';
     items.forEach(it => {
       const isLocked = asmPlan !== 'pro' && !it.is_free;
       const t = thumbnails[it.id];
-      const thumb = (t && t.base64)
-        ? `<img src="${t.base64}" style="width:100%;height:110px;object-fit:contain;background:#fff;border-radius:6px">`
-        : (it.hasImage
-            ? `<div class="asm-thumb-ph" data-item="${it.id}" style="width:100%;height:110px;display:flex;align-items:center;justify-content:center;background:#222529;border-radius:6px;color:#555;font-size:13px">loading…</div>`
-            : `<div style="width:100%;height:110px;display:flex;align-items:center;justify-content:center;background:#222529;border-radius:6px;color:#555;font-size:30px">📦</div>`);
+      let mainImg = null;
+      if (it.mainImage) mainImg = (typeof it.mainImage === 'string') ? it.mainImage : (it.mainImage.base64 || null);
+      const src = (t && t.base64) ? t.base64 : mainImg;
+      const thumb = src
+        ? `<img src="${src}" style="width:100%;height:190px;object-fit:contain;background:#fff;border-radius:6px" onerror="this.style.display='none'">`
+        : `<div class="asm-thumb-ph" data-item="${it.id}" style="width:100%;height:190px;display:flex;align-items:center;justify-content:center;background:#222529;border-radius:6px;color:#555;font-size:30px">📦</div>`;
       html += `<div onclick="ASMModule.addToSBS('${it.id}')" style="cursor:pointer;background:#1e2024;border:1px solid #2A2D31;border-radius:8px;padding:10px;transition:border-color .15s" onmouseover="this.style.borderColor='#ECB22E'" onmouseout="this.style.borderColor='#2A2D31'">
         ${thumb}
         <div style="margin-top:8px;font-size:13px;color:#E8E8E8;text-align:center">${isLocked ? '🔒 ' : ''}${it.name}</div>
@@ -372,7 +551,7 @@ const ASMModule = (() => {
       if (t && t.base64) {
         const img = document.createElement('img');
         img.src = t.base64;
-        img.style.cssText = 'width:100%;height:110px;object-fit:contain;background:#fff;border-radius:6px';
+        img.style.cssText = 'width:100%;height:190px;object-fit:contain;background:#fff;border-radius:6px';
         ph.replaceWith(img);
       }
     });
@@ -443,7 +622,20 @@ const ASMModule = (() => {
     if (v) v.textContent = _sbsFont;
   }
 
+  function setUnit(mode) {
+    UNITS.set(mode);
+    // Re-render everything so inputs/outputs show in the new unit.
+    renderSBS();
+    if (typeof renderReadyItems === 'function') renderReadyItems();
+  }
+
+  function populateUnitSelect() {
+    const sel = document.getElementById('asm-units-select');
+    if (sel) sel.innerHTML = UNITS.optionsHTML(UNITS.get());
+  }
+
   function renderSBS() {
+    populateUnitSelect();
     const body = document.getElementById('asm-sbs-body');
     if (!body) return;
 
@@ -464,49 +656,49 @@ const ASMModule = (() => {
       const s = activeItemSchemas[inst.itemId];
       if (s && s.manualEntry) refreshManualRows(inst.instanceId);
     });
+
+    // renderSBS replaces the whole panel, so any mounted 3D canvas went with
+    // it. Put it back on the same item.
+    remount3D();
   }
 
   function renderManualItem(inst, schema) {
+    const SC = sizeCols();
+    const catObj = catalogue.find(x => x.id === inst.itemId) || {};
     if (!inst.manualRows) inst.manualRows = Array.from({ length: 15 }, () => ({ w:'', h:'', qty:'', material:'', remark:'' }));
-    const inputsHtml = schema.inputs.map(inp => {
-      const val = inst.inputs[inp.key];
-      let control;
-      if (inp.type === 'number') control = `<input type="number" value="${val}" oninput="ASMModule.updateInput('${inst.instanceId}','${inp.key}',this.value,'number')">`;
-      else control = `<input type="text" value="${val == null ? '' : val}" oninput="ASMModule.updateInput('${inst.instanceId}','${inp.key}',this.value,'text')">`;
-      return `<div class="asm-input-row"><label>${inp.label}</label>${control}</div>`;
-    }).join('');
-
     const imagesHtml = schema.referenceImages && schema.referenceImages.length > 0
       ? `<div class="asm-ref-images">${schema.referenceImages.map((img, ii) => `<div class="asm-ref-image-item" onclick="ASMModule.openImageModal('${inst.instanceId}',${ii})"><img src="${img.base64}"><div class="asm-ref-label">${img.label}</div></div>`).join('')}</div>` : '';
 
     const rowsHtml = inst.manualRows.map((row, idx) => `
       <tr>
         <td style="text-align:center;color:#7A7D82">${idx+1}</td>
-        <td><input class="asm-cell asm-cell-num" type="number" value="${row.w}" onchange="ASMModule.editManualRow('${inst.instanceId}',${idx},'w',this.value)"></td>
-        <td><input class="asm-cell asm-cell-num" type="number" value="${row.h}" onchange="ASMModule.editManualRow('${inst.instanceId}',${idx},'h',this.value)"></td>
+        <td><input class="asm-cell asm-cell-num" type="number" value="${row[SC[0].f] === '' ? '' : UNITS.fromMMNum(row[SC[0].f])}" onchange="ASMModule.editManualRow('${inst.instanceId}',${idx},'${SC[0].f}',this.value)"></td>
+        <td><input class="asm-cell asm-cell-num" type="number" value="${row[SC[1].f] === '' ? '' : UNITS.fromMMNum(row[SC[1].f])}" onchange="ASMModule.editManualRow('${inst.instanceId}',${idx},'${SC[1].f}',this.value)"></td>
         <td><input class="asm-cell asm-cell-num" type="number" value="${row.qty}" onchange="ASMModule.editManualRow('${inst.instanceId}',${idx},'qty',this.value)"></td>
-        <td><input class="asm-cell" value="${row.material||''}" readonly style="color:#9A9DA2"></td>
-        <td><input class="asm-cell asm-cell-remark" value="${row.remark||''}" readonly style="color:#9A9DA2"></td>
+        <td><input class="asm-cell" value="${row.material||''}" onchange="ASMModule.editManualRow('${inst.instanceId}',${idx},'material',this.value)"></td>
+        <td><input class="asm-cell asm-cell-remark" value="${row.remark||''}" onchange="ASMModule.editManualRow('${inst.instanceId}',${idx},'remark',this.value)"></td>
+        <td style="text-align:center"><button class="asm-row-del" title="Delete row" onclick="ASMModule.deleteManualRow('${inst.instanceId}',${idx})">&#10005;</button></td>
       </tr>`).join('');
 
     return `
       <div class="asm-sbs-item" id="${inst.instanceId}">
         <div class="asm-sbs-item-head">
-          <span class="asm-sbs-item-title">${inst.itemName}</span>
-          <button class="asm-sbs-item-remove" onclick="ASMModule.removeFromSBS('${inst.instanceId}')">✕</button>
+          <div class="asm-item-switch" style="position:relative;flex:1;min-width:0"><div style="font-size:10px;font-weight:800;letter-spacing:.06em;color:#ECB22E;text-transform:uppercase">${(catObj.category||'').toUpperCase()}</div><button onclick="ASMModule.toggleItemSwitch('${inst.instanceId}')" style="background:none;border:none;color:#fff;cursor:pointer;display:flex;align-items:center;gap:8px;padding:0;font-size:15px;font-weight:800;max-width:100%" title="Switch item in this category"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${inst.itemName}</span><span style="color:#ECB22E;font-size:22px;line-height:1;flex:0 0 auto">\u25be</span></button><div id="switch_${inst.instanceId}" class="asm-item-switch-list" style="display:none;position:absolute;top:100%;left:0;z-index:200;background:#1E2124;border:1px solid #3A3D42;border-radius:8px;margin-top:4px;max-height:340px;overflow:auto;min-width:280px;box-shadow:0 8px 24px rgba(0,0,0,.5)"></div></div>
+          <button class="asm-sbs-item-remove" onclick="ASMModule.removeFromSBS('${inst.instanceId}')">&#10005;</button>
         </div>
-        <div class="asm-sbs-item-diagram-section" id="diagram_${inst.instanceId}">${imagesHtml}</div>
-        <div style="margin:10px 16px"><label style="font-size:12px;color:#9A9DA2;margin-right:8px">Room Name (optional)</label><input type="text" value="${inst.roomName ? String(inst.roomName).replace(/"/g,'&quot;') : ''}" placeholder="e.g. Master Bedroom" oninput="ASMModule.setRoomName('${inst.instanceId}',this.value)" style="background:#2A2D31;border:1px solid #3A3D42;color:#E8E8E8;border-radius:6px;padding:6px 10px;font-size:13px;width:240px"></div>
-        ${schema.notes ? `<div style="margin:10px 16px;padding:10px 12px;background:rgba(236,178,46,.1);border-left:3px solid #ECB22E;border-radius:4px;font-size:13px;color:#E8E8E8"><strong style="color:#ECB22E">Note:</strong> ${schema.notes}</div>` : ''}
-        <div class="asm-sbs-item-inputs">${inputsHtml}</div>
-        <div class="asm-sbs-item-outputs">
+        <div class="asm-sbs-item-diagram-section" id="diagram_${inst.instanceId}">${buildDiagramBody(inst, schema, imagesHtml)}</div>
+        ${buildInputZones(inst, schema)}
+        <div class="asm-out-head">Output Area</div><div class="asm-sbs-item-outputs">
           <table class="asm-out-table" id="manual_tbody_wrap_${inst.instanceId}">
-            <thead><tr><th>Sr</th><th>W</th><th>H</th><th>Qty</th><th>Material</th><th>Remark</th></tr></thead>
+            <thead><tr><th>Sr</th><th>${SC[0].l}</th><th>${SC[1].l}</th><th>Qty</th><th>Material</th><th>Remark</th><th></th></tr></thead>
             <tbody id="manual_tbody_${inst.instanceId}">${rowsHtml}</tbody>
           </table>
-          <button onclick="ASMModule.addManualRow('${inst.instanceId}')" style="margin:10px 0;background:#2A2D31;border:1px solid #3A3D42;color:#ECB22E;border-radius:6px;padding:6px 14px;font-size:12px;cursor:pointer">+ Add Row</button>
+          <button onclick="ASMModule.addManualRow('${inst.instanceId}')" style="margin:10px 8px 10px 0;background:#2A2D31;border:1px solid #3A3D42;color:#ECB22E;border-radius:6px;padding:6px 14px;font-size:12px;cursor:pointer">+ Add Row</button>
+          <button onclick="ASMModule.addManualRowsPrompt('${inst.instanceId}')" style="margin:10px 0;background:#2A2D31;border:1px solid #3A3D42;color:#ECB22E;border-radius:6px;padding:6px 14px;font-size:12px;cursor:pointer">+ Add Multiple Rows</button>
         </div>
         <div class="asm-sbs-item-actions">
+          <button class="asm-btn asm-btn-ghost" onclick="ASMModule.adjustEBand('${inst.instanceId}')">Adjust EBand</button>
+          <button class="asm-btn" style="background:#E01E5A;color:#fff" onclick="ASMModule.reportProblem('${inst.instanceId}')">Report Problem</button>
           <button class="asm-btn asm-btn-ghost" onclick="ASMModule.removeFromSBS('${inst.instanceId}')">Cancel</button>
           <button class="asm-btn asm-btn-primary" onclick="ASMModule.saveToReady('${inst.instanceId}')">Save → Ready</button>
         </div>
@@ -527,71 +719,277 @@ const ASMModule = (() => {
       '<td><input class="asm-cell asm-cell-num" type="number" value="" onchange="ASMModule.editManualRow(\'' + instanceId + '\',' + idx + ',\'w\',this.value)"></td>' +
       '<td><input class="asm-cell asm-cell-num" type="number" value="" onchange="ASMModule.editManualRow(\'' + instanceId + '\',' + idx + ',\'h\',this.value)"></td>' +
       '<td><input class="asm-cell asm-cell-num" type="number" value="" onchange="ASMModule.editManualRow(\'' + instanceId + '\',' + idx + ',\'qty\',this.value)"></td>' +
-      '<td><input class="asm-cell" value="" readonly style="color:#9A9DA2"></td>' +
-      '<td><input class="asm-cell asm-cell-remark" value="" readonly style="color:#9A9DA2"></td>';
+      '<td><input class="asm-cell" value="" onchange="ASMModule.editManualRow(\'' + instanceId + '\',' + idx + ',\'material\',this.value)"></td>' +
+      '<td><input class="asm-cell asm-cell-remark" value="" onchange="ASMModule.editManualRow(\'' + instanceId + '\',' + idx + ',\'remark\',this.value)"></td>' +
+      '<td style="text-align:center"><button class="asm-row-del" title="Delete row" onclick="ASMModule.deleteManualRow(\'' + instanceId + '\',' + idx + ')">&#10005;</button></td>';
     tbody.appendChild(tr);
   }
 
   async function editManualRow(instanceId, idx, field, value) {
     const inst = sbsItems.find(i => i.instanceId === instanceId);
     if (!inst || !inst.manualRows[idx]) return;
-    inst.manualRows[idx][field] = value;
     const row = inst.manualRows[idx];
+    // w/h are dimensions -> store mm. qty stays a count. Empty stays empty.
+    if ((field === 'w' || field === 'h') && value !== '' && value != null) {
+      value = UNITS.toMM(value);
+    }
+    row[field] = value;
+    // Mark material/remark as user-overridden so the server round-trip won't wipe them.
+    if (field === 'material' || field === 'remark') {
+      if (!row._editedFields) row._editedFields = {};
+      row._editedFields[field] = (value !== '' && value != null);
+      return; // no server call needed for a manual material/remark edit
+    }
+    // For w/h/qty edits, ask server for suggested material/remark — but never
+    // overwrite a field the user has already typed into.
     if (row.w && row.h) {
       try {
         const res = await fetch(`${API_BASE}/manual-row`, {
           method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, authH()),
-          body: JSON.stringify({ itemId: inst.itemId, inputs: inst.inputs, row, catalogue: inst.catalogueKey || currentCatalogue })
+          body: JSON.stringify({ itemId: inst.itemId, inputs: inst.inputs, row, catalogue: inst.catalogueKey || currentCatalogue, unit: UNITS.get() })
         });
         const data = await res.json();
         if (data.success) {
-          row.material = data.material; row.remark = data.remark;
-          // update only this row's material/remark cells
+          const ef = row._editedFields || {};
+          if (!ef.material) row.material = data.material;
+          if (!ef.remark)   row.remark   = data.remark;
           const tbody = document.getElementById('manual_tbody_' + instanceId);
           if (tbody && tbody.rows[idx]) {
-            tbody.rows[idx].cells[4].querySelector('input').value = data.material;
-            tbody.rows[idx].cells[5].querySelector('input').value = data.remark;
+            const ins = tbody.rows[idx].querySelectorAll('input');
+            // ins: [w,h,qty,material,remark]
+            if (!ef.material && ins[3]) ins[3].value = row.material || '';
+            if (!ef.remark && ins[4])   ins[4].value = row.remark || '';
           }
         }
       } catch (e) {}
     }
   }
 
+  function deleteManualRow(instanceId, idx) {
+    const inst = sbsItems.find(i => i.instanceId === instanceId);
+    if (!inst || !inst.manualRows) return;
+    inst.manualRows.splice(idx, 1);
+    if (!inst.manualRows.length) inst.manualRows.push({ w:'', h:'', qty:'', material:'', remark:'' });
+    renderSBS();
+  }
+
+  // Summary under the output table. Deleting a row is otherwise invisible once
+  // the page re-renders, so the count and the way back are stated here.
+  function outSummary(inst) {
+    const n = (inst.outputs || []).length;
+    const panels = (inst.outputs || []).reduce((a, o) => a + (o.qty || 0), 0);
+    const hidden = Object.keys(inst.deletedRows || {}).length;
+    const edited = (inst.outputs || []).filter(o => o._edited).length;
+    let s = n + ' components \u00b7 ' + panels + ' total panels';
+    if (hidden) s += ' \u00b7 <span style="color:#E01E5A">' + hidden + ' deleted</span>';
+    if (edited) s += ' \u00b7 <span style="color:#ECB22E">' + edited + ' edited</span>';
+    if (hidden || edited) {
+      s += '<button class="asm-sum-reset" onclick="ASMModule.restoreOutputRows(\'' +
+           inst.instanceId + '\')">Reset to formulas</button>';
+    }
+    return s;
+  }
+
+  // A formula row's identity across recalcs. The Master Sheet cell reference is
+  // stable for a given item, so it survives a recalculation; component name +
+  // sub-item is the fallback for rows the parser gave no cellRefs.
+  function outKey(o) {
+    if (o && o.cellRefs && o.cellRefs.w) return 'c:' + o.cellRefs.w;
+    return 'n:' + (o.subItem || '') + '|' + (o.component || '');
+  }
+
+  // Deleting a formula row records the deletion on the instance, so the next
+  // recalc keeps it deleted instead of regenerating it.
+  function deleteOutputRow(instanceId, idx) {
+    const inst = sbsItems.find(i => i.instanceId === instanceId);
+    if (!inst || !inst.outputs || !inst.outputs[idx]) return;
+    const o = inst.outputs[idx];
+    if (!o._manual) {
+      if (!inst.deletedRows) inst.deletedRows = {};
+      inst.deletedRows[outKey(o)] = true;
+    }
+    inst.outputs.splice(idx, 1);
+    updateSBSItemOutputs(inst);
+  }
+
+  // Bring back every row deleted on this item, and drop the manual overrides
+  // so the next recalc recomputes them from the formulas.
+  function restoreOutputRows(instanceId) {
+    const inst = sbsItems.find(i => i.instanceId === instanceId);
+    if (!inst) return;
+    inst.deletedRows = {};
+    (inst.outputs || []).forEach(o => { delete o._edited; delete o._editedFields; });
+    recalc(instanceId);
+    showToast('Deleted rows restored and manual edits cleared', 'success');
+  }
+
+  function addManualRowsPrompt(instanceId) {
+    const n = parseInt(prompt('How many rows to add?', '5'), 10);
+    if (!n || n < 1) return;
+    const inst = sbsItems.find(i => i.instanceId === instanceId);
+    if (!inst) return;
+    if (!inst.manualRows) inst.manualRows = [];
+    for (let i = 0; i < n; i++) inst.manualRows.push({ w:'', h:'', qty:'', material:'', remark:'' });
+    renderSBS();
+  }
+
+  // ---- W×H / H×W display order (display-only; packer keeps true w/h) ----
+  let dimOrder = 'wh';
+  try { if (localStorage.getItem('asm_dim_order') === 'hw') dimOrder = 'hw'; } catch (e) {}
+  function sizeCols() { return dimOrder === 'hw' ? [{ f: 'h', l: 'H' }, { f: 'w', l: 'W' }] : [{ f: 'w', l: 'W' }, { f: 'h', l: 'H' }]; }
+  function setDimOrder(o) {
+    dimOrder = (o === 'hw') ? 'hw' : 'wh';
+    try { localStorage.setItem('asm_dim_order', dimOrder); } catch (e) {}
+    const v = document.getElementById('asm-dimord-val'); if (v) v.textContent = dimOrder === 'hw' ? 'H×W' : 'W×H';
+    if (typeof renderSBS === 'function') renderSBS();
+  }
+  function toggleDimOrder() { setDimOrder(dimOrder === 'hw' ? 'wh' : 'hw'); }
+
+  // ---- Category item switcher (thumbnail dropdown; swap item in place, reset inputs) ----
+  if (typeof window !== 'undefined' && !window._asmSwitchClose) {
+    window._asmSwitchClose = true;
+    document.addEventListener('click', function (e) {
+      if (!e.target.closest || !e.target.closest('.asm-item-switch'))
+        document.querySelectorAll('.asm-item-switch-list').forEach(function (el) { el.style.display = 'none'; });
+    });
+  }
+  function toggleItemSwitch(instanceId) {
+    const box = document.getElementById('switch_' + instanceId); if (!box) return;
+    if (box.style.display !== 'none') { box.style.display = 'none'; return; }
+    document.querySelectorAll('.asm-item-switch-list').forEach(function (el) { el.style.display = 'none'; });
+    const inst = sbsItems.find(i => i.instanceId === instanceId); if (!inst) return;
+    const cat = ((catalogue.find(x => x.id === inst.itemId) || {}).category || '').toUpperCase();
+    const items = catalogue.filter(it => (it.category || '').toUpperCase() === cat);
+    box.innerHTML = items.map(function (it) {
+      let mainImg = null; if (it.mainImage) mainImg = (typeof it.mainImage === 'string') ? it.mainImage : (it.mainImage.base64 || null);
+      const t = thumbnails[it.id]; const src = (t && t.base64) ? t.base64 : mainImg;
+      const thumb = src
+        ? '<img src="' + src + '" style="width:40px;height:40px;object-fit:contain;background:#fff;border-radius:4px;flex:0 0 auto" onerror="this.style.display=\'none\'">'
+        : '<div style="width:40px;height:40px;display:flex;align-items:center;justify-content:center;background:#222529;border-radius:4px;flex:0 0 auto;font-size:18px">📦</div>';
+      const cur = it.id === inst.itemId;
+      return '<div onclick="ASMModule.switchSBSItem(\'' + instanceId + '\',\'' + it.id + '\')" style="display:flex;align-items:center;gap:10px;padding:7px 10px;cursor:pointer;border-bottom:1px solid #2A2D31;' + (cur ? 'background:#2A2D31' : '') + '" onmouseover="this.style.background=\'#2A2D31\'" onmouseout="this.style.background=\'' + (cur ? '#2A2D31' : '') + '\'">' + thumb + '<span style="font-size:13px;color:#E8E8E8">' + (cur ? '\u2713 ' : '') + escapeHtml(it.name) + '</span></div>';
+    }).join('');
+    box.style.display = 'block';
+  }
+  async function switchSBSItem(instanceId, newItemId) {
+    const idx = sbsItems.findIndex(i => i.instanceId === instanceId); if (idx < 0) return;
+    const box = document.getElementById('switch_' + instanceId); if (box) box.style.display = 'none';
+    if (sbsItems[idx].itemId === newItemId) return;
+    const catItem = catalogue.find(x => x.id === newItemId);
+    if (asmPlan !== 'pro' && !(catItem && catItem.is_free)) { showPricing(); return; }
+    if (!activeItemSchemas[newItemId]) {
+      try {
+        const res = await fetch(`${API_BASE}/item/${newItemId}?catalogue=${encodeURIComponent(currentCatalogue)}`, { headers: authH() });
+        if (res.status === 403) { showPricing(); return; }
+        const data = await res.json();
+        if (!data.success) { showToast('Failed to load item', 'error'); return; }
+        activeItemSchemas[newItemId] = data;
+      } catch (e) { showToast('Cannot load item', 'error'); return; }
+    }
+    const schema = activeItemSchemas[newItemId];
+    const inputs = {}; schema.inputs.forEach(inp => { inputs[inp.key] = inp.default; });
+    sbsItems[idx] = { instanceId: 'sbs_' + Date.now() + '_' + Math.floor(Math.random() * 1000), itemId: newItemId, itemName: schema.name, catalogueKey: currentCatalogue, inputs, outputs: [] };
+    renderSBS();
+  }
+
+  // One input control. Pulled out of renderSBSItem so the Dimensions zone, the
+  // Material zone and the manual-entry card all render a row the same way.
+  function buildInputRow(inst, inp) {
+    const val = inst.inputs[inp.key];
+    let control = '';
+    if (inp.type === 'number') {
+      const dispVal = (val != null && UNITS.isDimension(inp)) ? UNITS.fromMMNum(val) : val;
+      const sid = 'in_' + inst.instanceId + '_' + inp.key;
+      // A dimension steps in 10s, a count in 1s — nobody nudges a wardrobe
+      // width one millimetre at a time, and nobody wants 10 shelves per click.
+      const stp = (inp.unit === 'mm') ? 10 : 1;
+      control = `<span class="asm-num"><input id="${sid}" type="number" value="${dispVal}"
+        min="${inp.min ?? ''}" max="${inp.max ?? ''}"
+        oninput="ASMModule.updateInput('${inst.instanceId}','${inp.key}',this.value,'number')"><span class="asm-step"
+        ><button type="button" tabindex="-1" title="+${stp}" onclick="ASMModule.stepInput('${inst.instanceId}','${inp.key}','${sid}',${stp})">&#9650;</button
+        ><button type="button" tabindex="-1" title="-${stp}" onclick="ASMModule.stepInput('${inst.instanceId}','${inp.key}','${sid}',${-stp})">&#9660;</button
+        ></span></span>`;
+    } else if (inp.type === 'select') {
+      const _tb = Array.isArray(inp.textbOptions) && inp.textbOptions.indexOf(val) !== -1;
+      const _tv = inst.inputs[inp.key + '_txt'];
+      control = `<select onchange="ASMModule.updateInput('${inst.instanceId}','${inp.key}',this.value,'select')">
+        ${inp.options.map(o => `<option value="${o}" ${o === val ? 'selected' : ''}>${o}</option>`).join('')}
+      </select>` + (_tb ? `<input type="number" value="${(_tv != null && _tv !== '') ? UNITS.fromMMNum(_tv) : ''}" placeholder="value" oninput="ASMModule.updateInput('${inst.instanceId}','${inp.key}_txt',this.value,'number')" style="width:80px;margin-left:6px">` : '');
+    } else if (inp.type === 'boolean') {
+      control = `<label class="asm-switch">
+        <input type="checkbox" ${val ? 'checked' : ''}
+          onchange="ASMModule.updateInput('${inst.instanceId}','${inp.key}',this.checked,'boolean')">
+        <span class="asm-slider"></span>
+      </label>`;
+    } else {
+      control = `<input type="text" value="${val == null ? '' : val}"
+        oninput="ASMModule.updateInput('${inst.instanceId}','${inp.key}',this.value,'text')">`;
+    }
+    return `
+      <div class="asm-input-row">
+        <label title="${inp.help || ''}">${inp.label}</label>
+        ${control}
+      </div>`;
+  }
+
+  // Up/down arrows on a number input. Works in the displayed unit and then
+  // hands the value to updateInput, which converts back to mm, so a stepper
+  // behaves the same whether the user is in mm, inches or feet.
+  function stepInput(instanceId, key, sid, delta) {
+    const el = document.getElementById(sid);
+    if (!el) return;
+    let v = parseFloat(el.value);
+    if (!isFinite(v)) v = 0;
+    v = Math.round((v + delta) * 1000) / 1000;
+    const mn = parseFloat(el.min), mx = parseFloat(el.max);
+    if (isFinite(mn) && v < mn) v = mn;
+    if (isFinite(mx) && v > mx) v = mx;
+    el.value = v;
+    updateInput(instanceId, key, v, 'number');
+  }
+
+  function visibleInputs(schema) {
+    return (schema.inputs || []).filter(inp => {
+      const l = String(inp.label || '').trim().toLowerCase();
+      return l && l !== 'mm' && !inp.textFor;
+    });
+  }
+
+  // Master Sheet column H says "dim" or "mat". Older items carry no section at
+  // all, so fall back on the type: a number is a dimension, text is a material.
+  function sectionOf(inp) {
+    if (inp.section === 'dim' || inp.section === 'mat') return inp.section;
+    return (inp.unit === 'mm' || inp.type === 'number') ? 'dim' : 'mat';
+  }
+
+  // The two input zones plus the room-name row and the item note.
+  function buildInputZones(inst, schema) {
+    const all = visibleInputs(schema);
+    const dim = all.filter(i => sectionOf(i) === 'dim').map(i => buildInputRow(inst, i)).join('');
+    const mat = all.filter(i => sectionOf(i) === 'mat').map(i => buildInputRow(inst, i)).join('');
+    const room = `<div style="margin:10px 16px"><label style="font-size:12px;color:#9A9DA2;margin-right:8px">Room Name (optional)</label><input type="text" value="${inst.roomName ? String(inst.roomName).replace(/"/g, '&quot;') : ''}" placeholder="e.g. Master Bedroom" oninput="ASMModule.setRoomName('${inst.instanceId}',this.value)" style="background:#2A2D31;border:1px solid #3A3D42;color:#E8E8E8;border-radius:6px;padding:6px 10px;font-size:13px;width:240px"></div>`;
+    const note = schema.notes
+      ? `<div style="margin:10px 16px;padding:10px 12px;background:rgba(236,178,46,.1);border-left:3px solid #ECB22E;border-radius:4px;font-size:13px;color:#E8E8E8"><strong style="color:#ECB22E">Note:</strong> ${schema.notes}</div>`
+      : '';
+    return `<div class="asm-sbs-inputs-col">
+      <div class="asm-input-zone">
+        <div class="asm-zone-title">Input Area \u00b7 Dimensions</div>
+        ${room}${note}
+        <div class="asm-sbs-item-inputs">${dim}${fillCells(dim)}</div>
+      </div>
+      ${mat ? `<div class="asm-input-zone asm-zone-mat">
+        <div class="asm-zone-title">Material</div>
+        <div class="asm-sbs-item-inputs">${mat}${fillCells(mat)}</div>
+      </div>` : ''}
+    </div>`;
+  }
+
   function renderSBSItem(inst) {
+    const SC = sizeCols();
+    const catObj = catalogue.find(x => x.id === inst.itemId) || {};
     const schema = activeItemSchemas[inst.itemId];
     if (!schema) return '';
     if (schema.manualEntry) return renderManualItem(inst, schema);
-
-    // Build input fields
-    const inputsHtml = schema.inputs.map(inp => {
-      const val = inst.inputs[inp.key];
-      let control = '';
-
-      if (inp.type === 'number') {
-        control = `<input type="number" value="${val}"
-          min="${inp.min ?? ''}" max="${inp.max ?? ''}"
-          oninput="ASMModule.updateInput('${inst.instanceId}','${inp.key}',this.value,'number')">`;
-      } else if (inp.type === 'select') {
-        control = `<select onchange="ASMModule.updateInput('${inst.instanceId}','${inp.key}',this.value,'select')">
-          ${inp.options.map(o => `<option value="${o}" ${o === val ? 'selected' : ''}>${o}</option>`).join('')}
-        </select>`;
-      } else if (inp.type === 'boolean') {
-        control = `<label class="asm-switch">
-          <input type="checkbox" ${val ? 'checked' : ''}
-            onchange="ASMModule.updateInput('${inst.instanceId}','${inp.key}',this.checked,'boolean')">
-          <span class="asm-slider"></span>
-        </label>`;
-      } else {
-        control = `<input type="text" value="${val == null ? '' : val}"
-          oninput="ASMModule.updateInput('${inst.instanceId}','${inp.key}',this.value,'text')">`;
-      }
-
-      return `
-        <div class="asm-input-row">
-          <label title="${inp.help || ''}">${inp.label}</label>
-          ${control}
-        </div>`;
-    }).join('');
 
     // Build output table (with sub-item headings)
     const subDims = {};
@@ -603,7 +1001,7 @@ const ASMModule = (() => {
           let headerRow = '';
           if (o.subItem !== lastSub && o.subItem) {
             const d = subDims[o.subItem];
-            const dimLine = d ? `${d.w||'-'} × ${d.h||'-'}${d.d? ' × '+d.d : ''}${d.qty? ' · Qty '+d.qty : ''}` : '';
+            const dimLine = d ? `${d.w!=null?UNITS.fromMM(d.w):'-'} × ${d.h!=null?UNITS.fromMM(d.h):'-'}${d.d!=null? ' × '+UNITS.fromMM(d.d) : ''}${d.qty? ' · Qty '+d.qty : ''}` : '';
             headerRow = `<tr><td colspan="6" style="background:#2A2D31;padding:8px 10px;border-top:2px solid #ECB22E">
               <span style="color:#ECB22E;font-weight:700;font-size:13px">${o.subItem}</span>
               ${dimLine ? `<span style="color:#9A9DA2;font-size:11px;margin-left:10px">${dimLine}</span>` : ''}
@@ -612,12 +1010,12 @@ const ASMModule = (() => {
           lastSub = o.subItem;
           return headerRow + `
           <tr class="${o.conditional ? 'asm-out-conditional' : ''}">
-            <td class="asm-out-name"><input class="asm-cell" value="${o.component}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'component',this.value)"></td>
-            <td class="asm-out-num"><input class="asm-cell asm-cell-num" type="number" value="${o.w}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'w',this.value)"></td>
-            <td class="asm-out-num"><input class="asm-cell asm-cell-num" type="number" value="${o.h}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'h',this.value)"></td>
-            <td class="asm-out-num"><input class="asm-cell asm-cell-num" type="number" value="${o.qty}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'qty',this.value)"></td>
-            <td><input class="asm-cell" value="${o.color || ''}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'color',this.value)"></td>
-            <td class="asm-out-remark"><input class="asm-cell asm-cell-remark" value="${o.remark || ''}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'remark',this.value)"></td>
+            <td class="asm-out-name" data-label="Component"><input class="asm-cell" value="${o.component}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'component',this.value)"></td>
+            <td class="asm-out-num" data-label="${SC[0].l}"><input class="asm-cell asm-cell-num" type="number" value="${UNITS.fromMMNum(o[SC[0].f])}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'${SC[0].f}',this.value)"></td>
+            <td class="asm-out-num" data-label="${SC[1].l}"><input class="asm-cell asm-cell-num" type="number" value="${UNITS.fromMMNum(o[SC[1].f])}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'${SC[1].f}',this.value)"></td>
+            <td class="asm-out-num" data-label="Qty" data-short="QTY"><input class="asm-cell asm-cell-num" type="number" value="${o.qty}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'qty',this.value)"></td>
+            <td data-label="Color" data-short="COL"><input class="asm-cell" value="${o.color || ''}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'color',this.value)"></td>
+            <td class="asm-out-remark" data-label="Remark"><input class="asm-cell asm-cell-remark" value="${o.remark || ''}" placeholder="remark" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'remark',this.value)"></td>
           </tr>`;
         }).join('');
 
@@ -636,38 +1034,33 @@ const ASMModule = (() => {
     return `
       <div class="asm-sbs-item" id="${inst.instanceId}">
         <div class="asm-sbs-item-head">
-          <span class="asm-sbs-item-title">${inst.itemName}</span>
-          <button class="asm-sbs-item-remove" onclick="ASMModule.removeFromSBS('${inst.instanceId}')" title="Remove">✕</button>
+          <div class="asm-item-switch" style="position:relative;flex:1;min-width:0"><div style="font-size:10px;font-weight:800;letter-spacing:.06em;color:#ECB22E;text-transform:uppercase">${(catObj.category||'').toUpperCase()}</div><button onclick="ASMModule.toggleItemSwitch('${inst.instanceId}')" style="background:none;border:none;color:#fff;cursor:pointer;display:flex;align-items:center;gap:8px;padding:0;font-size:15px;font-weight:800;max-width:100%" title="Switch item in this category"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${inst.itemName}</span><span style="color:#ECB22E;font-size:22px;line-height:1;flex:0 0 auto">\u25be</span></button><div id="switch_${inst.instanceId}" class="asm-item-switch-list" style="display:none;position:absolute;top:100%;left:0;z-index:200;background:#1E2124;border:1px solid #3A3D42;border-radius:8px;margin-top:4px;max-height:340px;overflow:auto;min-width:280px;box-shadow:0 8px 24px rgba(0,0,0,.5)"></div></div>
+          <button class="asm-sbs-item-remove" onclick="ASMModule.removeFromSBS('${inst.instanceId}')" title="Remove">&#10005;</button>
         </div>
 
+        <div class="asm-sbs-split${has3D(schema) ? ' on' : ''}">
         <div class="asm-sbs-item-diagram-section" id="diagram_${inst.instanceId}">
-          ${imagesHtml}
+          ${buildDiagramBody(inst, schema, imagesHtml)}
         </div>
 
-        <div style="margin:10px 16px"><label style="font-size:12px;color:#9A9DA2;margin-right:8px">Room Name (optional)</label><input type="text" value="${inst.roomName ? String(inst.roomName).replace(/"/g,'&quot;') : ''}" placeholder="e.g. Master Bedroom" oninput="ASMModule.setRoomName('${inst.instanceId}',this.value)" style="background:#2A2D31;border:1px solid #3A3D42;color:#E8E8E8;border-radius:6px;padding:6px 10px;font-size:13px;width:240px"></div>
+        ${buildInputZones(inst, schema)}
 
-        ${schema.notes ? `<div style="margin:10px 16px;padding:10px 12px;background:rgba(236,178,46,.1);border-left:3px solid #ECB22E;border-radius:4px;font-size:13px;color:#E8E8E8"><strong style="color:#ECB22E">Note:</strong> ${schema.notes}</div>` : ''}
-
-        <div class="asm-sbs-item-inputs">
-          ${inputsHtml}
-        </div>
-
-        <div class="asm-sbs-item-outputs">
-          <table class="asm-out-table">
+        </div><div class="asm-out-head">Output Area</div><div class="asm-sbs-item-outputs">
+          <table class="asm-out-table asm-out-cards">
             <thead>
               <tr>
-                <th>Component</th><th>W</th><th>H</th><th>Qty</th><th>Color</th><th>Remark</th>
+                <th>Component</th><th>${SC[0].l}</th><th>${SC[1].l}</th><th>Qty</th><th>Color</th><th>Remark</th><th></th>
               </tr>
             </thead>
             <tbody>${outputsHtml}</tbody>
           </table>
-          <div class="asm-sbs-item-summary">
-            ${inst.outputs.length} components ·
-            ${inst.outputs.reduce((a, o) => a + (o.qty || 0), 0)} total panels
-          </div>
+          <div class="asm-sbs-item-summary">${outSummary(inst)}</div>
         </div>
 
         <div class="asm-sbs-item-actions">
+          <button class="asm-btn asm-btn-ghost" onclick="ASMModule.addSBSRows('${inst.instanceId}')">+ Add Rows</button>
+          <button class="asm-btn asm-btn-ghost" onclick="ASMModule.adjustEBand('${inst.instanceId}')">Adjust EBand</button>
+          <button class="asm-btn" style="background:#E01E5A;color:#fff" onclick="ASMModule.reportProblem('${inst.instanceId}')">Report Problem</button>
           <button class="asm-btn asm-btn-ghost" onclick="ASMModule.removeFromSBS('${inst.instanceId}')">Cancel</button>
           <button class="asm-btn asm-btn-primary" onclick="ASMModule.saveToReady('${inst.instanceId}')">Save → Ready</button>
         </div>
@@ -686,10 +1079,25 @@ const ASMModule = (() => {
     const inst = sbsItems.find(i => i.instanceId === instanceId);
     if (!inst) return;
 
-    if (type === 'number') value = parseFloat(value) || 0;
+    if (type === 'number') {
+      value = parseFloat(value) || 0;
+      // Display units -> mm (canonical). Use schema unit when available so the
+      // setter matches the render logic exactly; else denylist by key.
+      const schema = activeItemSchemas[inst.itemId];
+      const inpDef = schema && schema.inputs ? schema.inputs.find(i => i.key === key) : null;
+      if (UNITS.isDimension(inpDef || key)) value = UNITS.toMM(value);
+    }
     if (type === 'boolean') value = !!value;
 
     inst.inputs[key] = value;
+    push3D(instanceId);          // live 3D follows the typing, no debounce
+
+    if (type === 'select') {
+      renderSBS();
+      clearTimeout(recalcTimers[instanceId]);
+      recalcTimers[instanceId] = setTimeout(() => recalc(instanceId), 150);
+      return;
+    }
 
     // Manual-entry items have no formula outputs — recalc would wipe the manual table.
     const mSchema = activeItemSchemas[inst.itemId];
@@ -713,10 +1121,14 @@ const ASMModule = (() => {
       try {
         const res = await fetch(`${API_BASE}/manual-row`, {
           method: 'POST', headers: Object.assign({ 'Content-Type': 'application/json' }, authH()),
-          body: JSON.stringify({ itemId: inst.itemId, inputs: inst.inputs, row, catalogue: inst.catalogueKey || currentCatalogue })
+          body: JSON.stringify({ itemId: inst.itemId, inputs: inst.inputs, row, catalogue: inst.catalogueKey || currentCatalogue, unit: UNITS.get() })
         });
         const data = await res.json();
-        if (data.success) { row.material = data.material; row.remark = data.remark; }
+        if (data.success) {
+          const ef = row._editedFields || {};
+          if (!ef.material) row.material = data.material;
+          if (!ef.remark)   row.remark   = data.remark;
+        }
       } catch (e) { /* ignore per-row failure */ }
     }
     paintManualRows(inst);
@@ -748,12 +1160,30 @@ const ASMModule = (() => {
       const res = await fetch(`${API_BASE}/calculate`, {
         method: 'POST',
         headers: Object.assign({ 'Content-Type': 'application/json' }, authH()),
-        body: JSON.stringify({ itemId: inst.itemId, inputs: inst.inputs, catalogue: inst.catalogueKey || currentCatalogue })
+        body: JSON.stringify({ itemId: inst.itemId, inputs: inst.inputs, catalogue: inst.catalogueKey || currentCatalogue, unit: UNITS.get() })
       });
       const data = await res.json();
 
       if (data.success) {
-        inst.outputs = data.outputs;
+        // A recalc replaces every formula row, so anything the user did to the
+        // old rows has to be carried across by hand: rows they deleted stay
+        // deleted, and cells they typed into keep their typed value.
+        const manualRows = (inst.outputs || []).filter(o => o._manual);
+        const prev = {};
+        (inst.outputs || []).forEach(o => { if (!o._manual) prev[outKey(o)] = o; });
+        const gone = inst.deletedRows || {};
+        const fresh = data.outputs.filter(o => !gone[outKey(o)]).map(o => {
+          const was = prev[outKey(o)];
+          if (was && was._editedFields) {
+            Object.keys(was._editedFields).forEach(f => {
+              if (was._editedFields[f]) o[f] = was[f];
+            });
+            o._editedFields = Object.assign({}, was._editedFields);
+            o._edited = true;
+          }
+          return o;
+        });
+        inst.outputs = fresh.concat(manualRows);
         inst.subItems = data.subItems || [];
         updateSBSItemOutputs(inst);
       } else {
@@ -766,6 +1196,7 @@ const ASMModule = (() => {
 
   // Update only the output table (don't re-render whole item — keeps focus in inputs)
   function updateSBSItemOutputs(inst) {
+    const SC = sizeCols();
     // Manual-entry items own their table (manualRows). This function would
     // overwrite it with the formula-output rendering — never run it for them.
     const uSchema = activeItemSchemas[inst.itemId];
@@ -782,31 +1213,29 @@ const ASMModule = (() => {
       (inst.subItems || []).forEach(si => { subDims2[si.name] = si; });
       let lastSub2 = undefined;
       tbody.innerHTML = inst.outputs.length === 0
-        ? `<tr><td colspan="6" class="asm-out-empty">Fill inputs to calculate…</td></tr>`
+        ? `<tr><td colspan="7" class="asm-out-empty">Fill inputs to calculate…</td></tr>`
         : inst.outputs.map((o, idx) => {
             let hr = '';
             if (o.subItem !== lastSub2 && o.subItem) {
               const d = subDims2[o.subItem];
-              const dl = d ? `${d.w||'-'} × ${d.h||'-'}${d.d? ' × '+d.d : ''}${d.qty? ' · Qty '+d.qty : ''}` : '';
-              hr = `<tr><td colspan="6" style="background:#2A2D31;padding:8px 10px;border-top:2px solid #ECB22E"><span style="color:#ECB22E;font-weight:700;font-size:13px">${o.subItem}</span>${dl?`<span style="color:#9A9DA2;font-size:11px;margin-left:10px">${dl}</span>`:''}</td></tr>`;
+              const dl = d ? `${d.w!=null?UNITS.fromMM(d.w):'-'} × ${d.h!=null?UNITS.fromMM(d.h):'-'}${d.d!=null? ' × '+UNITS.fromMM(d.d) : ''}${d.qty? ' · Qty '+d.qty : ''}` : '';
+              hr = `<tr><td colspan="7" style="background:#2A2D31;padding:8px 10px;border-top:2px solid #ECB22E"><span style="color:#ECB22E;font-weight:700;font-size:13px">${o.subItem}</span>${dl?`<span style="color:#9A9DA2;font-size:11px;margin-left:10px">${dl}</span>`:''}</td></tr>`;
             }
             lastSub2 = o.subItem;
             return hr + `
             <tr class="${o.conditional ? 'asm-out-conditional' : ''}">
               <td class="asm-out-name"><input class="asm-cell" value="${o.component}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'component',this.value)"></td>
-              <td class="asm-out-num"><input class="asm-cell asm-cell-num" type="number" value="${o.w}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'w',this.value)"></td>
-              <td class="asm-out-num"><input class="asm-cell asm-cell-num" type="number" value="${o.h}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'h',this.value)"></td>
+              <td class="asm-out-num"><input class="asm-cell asm-cell-num" type="number" value="${UNITS.fromMMNum(o[SC[0].f])}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'${SC[0].f}',this.value)"></td>
+              <td class="asm-out-num"><input class="asm-cell asm-cell-num" type="number" value="${UNITS.fromMMNum(o[SC[1].f])}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'${SC[1].f}',this.value)"></td>
               <td class="asm-out-num"><input class="asm-cell asm-cell-num" type="number" value="${o.qty}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'qty',this.value)"></td>
               <td><input class="asm-cell" value="${o.color || ''}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'color',this.value)"></td>
               <td class="asm-out-remark"><input class="asm-cell asm-cell-remark" value="${o.remark || ''}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'remark',this.value)"></td>
+              <td style="text-align:center"><button class="asm-row-del" title="Delete row" onclick="ASMModule.deleteOutputRow('${inst.instanceId}',${idx})">&#10005;</button></td>
             </tr>`;
           }).join('');
     }
 
-    if (summary) {
-      summary.textContent =
-        `${inst.outputs.length} components · ${inst.outputs.reduce((a, o) => a + (o.qty || 0), 0)} total panels`;
-    }
+    if (summary) summary.innerHTML = outSummary(inst);
 
     // Update diagram with reference images
     const diagramEl = document.getElementById('diagram_' + inst.instanceId);
@@ -822,7 +1251,15 @@ const ASMModule = (() => {
              `).join('')}
            </div>`
         : '';
-      diagramEl.innerHTML = imagesHtml;
+      // A live 3D canvas lives in this same section. Rewriting the whole
+      // section would destroy it (and its WebGL context) on every keystroke,
+      // so when 3D is open only the hidden image pane is refreshed.
+      if (_active3d === inst.instanceId) {
+        const ip = document.getElementById('paneimg_' + inst.instanceId);
+        if (ip) ip.innerHTML = imagesHtml + buildVideoBtn(schema);
+      } else {
+        diagramEl.innerHTML = buildDiagramBody(inst, schema, imagesHtml);
+      }
     }
   }
 
@@ -850,15 +1287,70 @@ const ASMModule = (() => {
       });
       const data = await res.json();
       if (data.success && data.updates) {
+        const changed = [];
+        // Build cellRef → {outputIndex, field} map so updates land on the RIGHT
+        // row regardless of array order (idx from server can be stale after reopen,
+        // causing values to leak into unrelated rows). Match by cell reference.
+        const cellToTarget = {};
+        inst.outputs.forEach((o, oi) => {
+          if (!o.cellRefs) return;
+          if (o.cellRefs.w) cellToTarget[o.cellRefs.w] = { oi, field: 'w' };
+          if (o.cellRefs.h) cellToTarget[o.cellRefs.h] = { oi, field: 'h' };
+          if (o.cellRefs.q) cellToTarget[o.cellRefs.q] = { oi, field: 'qty' };
+        });
         data.updates.forEach(u => {
           if (u.value === '' || u.value == null) return;
-          // don't overwrite the just-edited cell
-          if (inst.outputs[u.idx].cellRefs && inst.outputs[u.idx].cellRefs[fmap[u.field]] === editedCell) return;
-          inst.outputs[u.idx][u.field] = u.value;
+          // Prefer matching by the update's cell reference; fall back to idx only
+          // if the server didn't send one.
+          let oi, field;
+          if (u.cell && cellToTarget[u.cell]) {
+            ({ oi, field } = cellToTarget[u.cell]);
+          } else if (u.idx != null && inst.outputs[u.idx]) {
+            oi = u.idx; field = { w: 'w', h: 'h', qty: 'qty' }[u.field] || u.field;
+          } else {
+            return; // can't safely locate target → skip (prevents cross-row leak)
+          }
+          const tgt = inst.outputs[oi];
+          if (!tgt) return;
+          const cf = { w: 'w', h: 'h', qty: 'q' }[field] || field;
+          if (tgt.cellRefs && tgt.cellRefs[cf] === editedCell) return;     // just-edited cell
+          if (tgt._editedFields && tgt._editedFields[field]) return;        // manual override
+          tgt[field] = u.value;
+          changed.push({ idx: oi, field, value: u.value });
         });
-        updateSBSItemOutputs(inst);
+        patchOutputCells(inst, changed);
       }
     } catch (e) { console.error('recalc failed', e); }
+  }
+
+  // Update only specific output cells' displayed values, leaving the DOM
+  // (and focus) intact. field is one of w/h/qty/component/color/remark.
+  function patchOutputCells(inst, changed) {
+    if (!changed || !changed.length) return;
+    const itemEl = document.getElementById(inst.instanceId);
+    if (!itemEl) return;
+    const tbody = itemEl.querySelector('.asm-out-table tbody');
+    if (!tbody) return;
+    // Map display row index → data output index. The tbody may contain
+    // sub-item header rows (colspan) interleaved with data rows, so walk
+    // data rows in order and match against outputs sequentially.
+    const dataRows = Array.prototype.filter.call(tbody.rows, tr => !tr.querySelector('td[colspan]'));
+    changed.forEach(ch => {
+      const tr = dataRows[ch.idx];
+      if (!tr) return;
+      const inputs = tr.querySelectorAll('input');
+      // column order: [component, w, h, qty, color, remark]
+      const _sc = sizeCols(); const colMap = { component: 0, qty: 3, color: 4, remark: 5 }; colMap[_sc[0].f] = 1; colMap[_sc[1].f] = 2;
+      const ci = colMap[ch.field];
+      if (ci == null || !inputs[ci]) return;
+      const active = document.activeElement;
+      if (inputs[ci] === active) return; // never stomp the focused field
+      let disp = ch.value;
+      if (ch.field === 'w' || ch.field === 'h') disp = UNITS.fromMMNum(ch.value);
+      inputs[ci].value = disp;
+    });
+    const summary = itemEl.querySelector('.asm-sbs-item-summary');
+    if (summary) summary.innerHTML = outSummary(inst);
   }
 
   function editOutput(instanceId, idx, field, value) {
@@ -868,10 +1360,13 @@ const ASMModule = (() => {
     if (field === 'w' || field === 'h' || field === 'qty') {
       value = parseFloat(value) || 0;
       if (field === 'qty') value = Math.round(value);
+      else value = UNITS.toMM(value); // w/h: display units -> mm
     }
 
     inst.outputs[idx][field] = value;
     inst.outputs[idx]._edited = true;
+    if (!inst.outputs[idx]._editedFields) inst.outputs[idx]._editedFields = {};
+    inst.outputs[idx]._editedFields[field] = true;
 
     // Propagate to dependent cells (only for w/h/qty numeric edits)
     if ((field === 'w' || field === 'h' || field === 'qty') && inst.outputs[idx].cellRefs) {
@@ -882,11 +1377,89 @@ const ASMModule = (() => {
     const itemEl = document.getElementById(instanceId);
     if (itemEl) {
       const summary = itemEl.querySelector('.asm-sbs-item-summary');
-      if (summary) {
-        summary.textContent =
-          `${inst.outputs.length} components · ${inst.outputs.reduce((a, o) => a + (o.qty || 0), 0)} total panels`;
-      }
+      if (summary) summary.innerHTML = outSummary(inst);
     }
+  }
+
+  // Add 5 blank panel rows to an SBS item
+  function addSBSRows(instanceId) {
+    const inst = sbsItems.find(i => i.instanceId === instanceId);
+    if (!inst) return;
+    if (!inst.outputs) inst.outputs = [];
+    for (let i = 0; i < 5; i++) {
+      inst.outputs.push({ component: '', w: 0, h: 0, qty: 1, material: '', remark: '', _edited: true, _manual: true });
+    }
+    renderSBS();
+  }
+
+  // ── Per-item Edge Band modal (L/R/T/B per panel + Auto-fill all) ──
+  function adjustEBand(instanceId) {
+    const inst = sbsItems.find(i => i.instanceId === instanceId);
+    if (!inst || !inst.outputs || !inst.outputs.length) { showToast('No panels to edge-band', 'error'); return; }
+
+    let modal = document.getElementById('asm-eband-modal');
+    if (modal) modal.remove();
+    modal = document.createElement('div');
+    modal.id = 'asm-eband-modal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:10004;background:rgba(0,0,0,.6);display:flex;align-items:flex-start;justify-content:center;padding:30px;overflow:auto';
+
+    const rowsHtml = inst.outputs.map((o, i) => {
+      const b = o.band || { l:0, r:0, t:0, b:0 };
+      const cell = (edge, v) => `<td style="padding:3px 6px;text-align:center"><input id="aeb-${edge}-${i}" value="${v}" style="width:50px;text-align:center;padding:3px;border:1px solid #5e3565;border-radius:4px;background:#2e1832;color:#f3e9f5"></td>`;
+      return `<tr>
+        <td style="padding:3px 8px;color:#c9a7d0">${i+1}</td>
+        <td style="padding:3px 8px;color:#f3e9f5">${o.component || ''}</td>
+        <td style="padding:3px 8px">${o.w ?? ''}</td>
+        <td style="padding:3px 8px">${o.h ?? ''}</td>
+        ${cell('l', b.l||0)}${cell('r', b.r||0)}${cell('t', b.t||0)}${cell('b', b.b||0)}
+      </tr>`;
+    }).join('');
+
+    modal.innerHTML = `
+      <div style="background:#3b1f3f;color:#f3e9f5;border:1px solid #5e3565;border-radius:10px;padding:20px;width:620px;max-width:100%;font-family:system-ui,sans-serif">
+        <div style="font-size:16px;font-weight:700;margin:0 0 6px">Edge Banding — ${inst.itemName || 'Item'}</div>
+        <div style="font-size:11px;color:#c9a7d0;margin-bottom:12px">L+R subtracted from W, T+B from H at export. Piece cut smaller; final size + band = entered size.</div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+          <span style="font-size:13px;color:#c9a7d0;min-width:130px">Default thickness (mm)</span>
+          ${['L','R','T','B'].map(k=>`<span style="display:flex;flex-direction:column;align-items:center;gap:2px">
+            <span style="font-size:10px;color:#c9a7d0">${k}</span>
+            <input id="aeb-def-${k}" value="${k==='B'?'0':'2'}" style="width:48px;text-align:center;padding:3px;border:1px solid #5e3565;border-radius:4px;background:#2e1832;color:#f3e9f5">
+          </span>`).join('')}
+          <button id="aeb-fill" style="padding:5px 10px;border:1px solid #5e3565;border-radius:5px;background:#4a2850;color:inherit;cursor:pointer">Auto-fill all ↓</button>
+        </div>
+        <div style="max-height:320px;overflow:auto;border:1px solid #5e3565;border-radius:6px">
+          <table style="width:100%;border-collapse:collapse;font-size:13px">
+            <thead><tr style="position:sticky;top:0;background:#4a2850">
+              ${['#','Component','W','H','L','R','T','B'].map(h=>`<th style="padding:5px 8px;text-align:left;color:#c9a7d0;font-size:11px">${h}</th>`).join('')}
+            </tr></thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+        </div>
+        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">
+          <button id="aeb-cancel" style="padding:7px 14px;border:1px solid #5e3565;border-radius:6px;background:transparent;color:inherit;cursor:pointer">Cancel</button>
+          <button id="aeb-save" style="padding:7px 14px;border:0;border-radius:6px;background:#f5b301;color:#3a2400;font-weight:700;cursor:pointer">Save</button>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+
+    const numV = id => { const el = document.getElementById(id); const v = el ? parseFloat(el.value) : 0; return isNaN(v) ? 0 : v; };
+    const setV = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+    const fill = () => {
+      const d = k => { const v = parseFloat(document.getElementById('aeb-def-'+k).value); return isNaN(v)?0:v; };
+      const dl=d('L'), dr=d('R'), dt=d('T'), db=d('B');
+      inst.outputs.forEach((o,i)=>{ setV(`aeb-l-${i}`,dl); setV(`aeb-r-${i}`,dr); setV(`aeb-t-${i}`,dt); setV(`aeb-b-${i}`,db); });
+    };
+    document.getElementById('aeb-fill').onclick = fill;
+    ['L','R','T','B'].forEach(k=>{ document.getElementById('aeb-def-'+k).oninput = fill; });
+    document.getElementById('aeb-cancel').onclick = () => modal.remove();
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+    document.getElementById('aeb-save').onclick = () => {
+      inst.outputs.forEach((o,i)=>{
+        o.band = { l:numV(`aeb-l-${i}`), r:numV(`aeb-r-${i}`), t:numV(`aeb-t-${i}`), b:numV(`aeb-b-${i}`) };
+      });
+      modal.remove();
+      showToast('Edge banding saved', 'success');
+    };
   }
 
   function removeFromSBS(instanceId) {
@@ -955,6 +1528,7 @@ const ASMModule = (() => {
       if (inst && ri) {
         ri.inputs = { ...inst.inputs };
         ri.outputs = inst.outputs.map(o => ({ ...o }));
+        ri.deletedRows = Object.assign({}, inst.deletedRows || {});
         ri._editing = false; ri._editInstanceId = null;
       }
       sbsItems = sbsItems.filter(i => i.instanceId !== instanceId);
@@ -1007,6 +1581,7 @@ const ASMModule = (() => {
       if (existing) {
         existing.inputs = { ...inst.inputs };
         existing.outputs = inst.outputs.map(o => ({ ...o }));
+        existing.deletedRows = Object.assign({}, inst.deletedRows || {});
         existing.roomName = inst.roomName || '';
         existing._editing = false;
         existing._editInstanceId = null;
@@ -1020,7 +1595,8 @@ const ASMModule = (() => {
         roomName: inst.roomName || '',
         catalogueKey: inst.catalogueKey || currentCatalogue,
         inputs: { ...inst.inputs },
-        outputs: inst.outputs.map(o => ({ ...o }))
+        outputs: inst.outputs.map(o => ({ ...o })),
+        deletedRows: Object.assign({}, inst.deletedRows || {})
       });
     }
 
@@ -1033,6 +1609,7 @@ const ASMModule = (() => {
   }
 
   function renderReadyItems() {
+    updateRisBadge();
     const list = document.getElementById('asm-ris-list');
     if (!list) return;
 
@@ -1049,10 +1626,11 @@ const ASMModule = (() => {
           <div class="asm-ris-item-head">
             <span class="asm-ris-num">${origIdx + 1}</span>
             <span class="asm-ris-name" style="cursor:pointer" onclick="ASMModule.reopenReady('${it.readyId}')" title="Click to edit">${it.itemName}${it.roomName ? ' <span style="font-size:10px;background:rgba(236,178,46,.16);color:#ECB22E;padding:2px 7px;border-radius:10px;font-weight:700">'+it.roomName+'</span>' : ''}${isEditing ? ' <span style="font-size:9px;background:#ECB22E;color:#1A1D21;padding:1px 5px;border-radius:3px;font-weight:700">EDITING</span>' : ''}</span>
-            <button class="asm-ris-remove" onclick="ASMModule.removeReady('${it.readyId}')" title="Remove">✕</button>
+            <button class="asm-ris-remove" onclick="ASMModule.duplicateReady('${it.readyId}')" title="Duplicate" style="margin-right:2px">&#10697;</button>
+            <button class="asm-ris-remove" onclick="ASMModule.removeReady('${it.readyId}')" title="Remove">&#10005;</button>
           </div>
           <div class="asm-ris-meta">
-            ${it.imported ? 'Imported file' : (() => { const i = it.inputs; const w = i.width || i.w || i.W || '?'; const h = i.ht || i.h || i.H || i.height || '?'; const d = i.depth || i.d || i.D || '?'; return w + '×' + h + '×' + d + 'mm'; })()}
+            ${it.imported ? 'Imported file' : (() => { const i = it.inputs; const w = i.width || i.w || i.W || '?'; const h = i.ht || i.h || i.H || i.height || '?'; const d = i.depth || i.d || i.D || '?'; return (dimOrder==='hw' ? (h + '×' + w) : (w + '×' + h)) + '×' + d + 'mm'; })()}
             · ${it.outputs.length} parts · ${totalPanels} panels
           </div>
         </div>`;
@@ -1077,7 +1655,7 @@ const ASMModule = (() => {
     it._editing = true;
     it._editInstanceId = instanceId;
 
-    const newInst = { instanceId, itemId: it.itemId, itemName: it.itemName, roomName: it.roomName || '', catalogueKey: it.catalogueKey || currentCatalogue, inputs: { ...it.inputs }, outputs: it.outputs.map(o => ({ ...o })), _readyId: readyId };
+    const newInst = { instanceId, itemId: it.itemId, itemName: it.itemName, roomName: it.roomName || '', catalogueKey: it.catalogueKey || currentCatalogue, inputs: { ...it.inputs }, outputs: it.outputs.map(o => ({ ...o })), deletedRows: Object.assign({}, it.deletedRows || {}), _readyId: readyId };
     const rSchema = activeItemSchemas[it.itemId];
     if (rSchema && rSchema.manualEntry) {
       newInst.manualRows = it.outputs.map(o => ({ w: o.w, h: o.h, qty: o.qty, material: o.color || o.component || '', remark: o.remark || '' }));
@@ -1087,7 +1665,32 @@ const ASMModule = (() => {
     renderReadyItems();
   }
 
+  // Duplicate a RIS item as a new independent entry (deep copy of inputs+outputs).
+  function duplicateReady(readyId) {
+    const it = readyItems.find(i => i.readyId === readyId);
+    if (!it) return;
+    const idx = readyItems.indexOf(it);
+    const copy = {
+      readyId: 'ready_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+      itemId: it.itemId,
+      itemName: it.itemName,
+      roomName: it.roomName || '',
+      catalogueKey: it.catalogueKey,
+      inputs: { ...it.inputs },
+      outputs: (it.outputs || []).map(o => ({ ...o })),
+      deletedRows: Object.assign({}, it.deletedRows || {}),
+      subItems: (it.subItems || []).map(s => ({ ...s })),
+      imported: it.imported || false
+    };
+    readyItems.splice(idx + 1, 0, copy);   // insert right after the original
+    renderReadyItems();
+    showToast('Item duplicated', 'success');
+  }
+
   function removeReady(readyId) {
+    const it = readyItems.find(i => i.readyId === readyId);
+    const name = it ? (it.itemName || 'this item') : 'this item';
+    if (!confirm('Do you want to delete ' + name + '?')) return;
     readyItems = readyItems.filter(i => i.readyId !== readyId);
     renderReadyItems();
   }
@@ -1120,8 +1723,8 @@ const ASMModule = (() => {
         <td style="padding:8px 10px;color:#9A9DA2">${origIdx + 1}</td>
         <td style="padding:8px 10px;color:${it.roomName ? '#ECB22E' : '#666'}">${room}</td>
         <td style="padding:8px 10px;color:#fff">${it.itemName}</td>
-        <td style="padding:8px 10px;text-align:right;color:#E8E8E8">${w}</td>
-        <td style="padding:8px 10px;text-align:right;color:#E8E8E8">${h}</td>
+        <td style="padding:8px 10px;text-align:right;color:#E8E8E8">${dimOrder==='hw'?h:w}</td>
+        <td style="padding:8px 10px;text-align:right;color:#E8E8E8">${dimOrder==='hw'?w:h}</td>
         <td style="padding:8px 10px;text-align:right;color:#E8E8E8">${d}</td>
         <td style="padding:8px 10px;text-align:right;color:#E8E8E8">${q}</td>
       </tr>`;
@@ -1135,7 +1738,7 @@ const ASMModule = (() => {
       <div style="background:#1E2124;border:1px solid #3A3D42;border-radius:12px;width:min(720px,92vw);max-height:85vh;display:flex;flex-direction:column;overflow:hidden">
         <div style="padding:16px 20px;border-bottom:1px solid #2A2D31;display:flex;align-items:center;justify-content:space-between">
           <div style="font-size:17px;font-weight:700;color:#fff">Review Check — ${readyItems.length} item${readyItems.length > 1 ? 's' : ''}</div>
-          <button onclick="this.closest('.asm-review-overlay').remove()" style="background:none;border:none;color:#9A9DA2;font-size:22px;cursor:pointer;line-height:1">✕</button>
+          <button onclick="this.closest('.asm-review-overlay').remove()" style="background:none;border:none;color:#9A9DA2;font-size:22px;cursor:pointer;line-height:1">&#10005;</button>
         </div>
         <div style="overflow:auto;padding:0 4px">
           <table style="width:100%;border-collapse:collapse;font-size:13px">
@@ -1144,8 +1747,8 @@ const ASMModule = (() => {
                 <th style="padding:10px;text-align:left;color:#9A9DA2;font-weight:600">#</th>
                 <th onclick="this.closest('.asm-review-overlay').remove();ASMModule.reviewCheck('room')" style="padding:10px;text-align:left;color:#9A9DA2;font-weight:600;cursor:pointer;user-select:none">Room${arrow('room')}</th>
                 <th onclick="this.closest('.asm-review-overlay').remove();ASMModule.reviewCheck('item')" style="padding:10px;text-align:left;color:#9A9DA2;font-weight:600;cursor:pointer;user-select:none">Item${arrow('item')}</th>
-                <th style="padding:10px;text-align:right;color:#9A9DA2;font-weight:600">W</th>
-                <th style="padding:10px;text-align:right;color:#9A9DA2;font-weight:600">H</th>
+                <th style="padding:10px;text-align:right;color:#9A9DA2;font-weight:600">${dimOrder==='hw'?'H':'W'}</th>
+                <th style="padding:10px;text-align:right;color:#9A9DA2;font-weight:600">${dimOrder==='hw'?'W':'H'}</th>
                 <th style="padding:10px;text-align:right;color:#9A9DA2;font-weight:600">D</th>
                 <th style="padding:10px;text-align:right;color:#9A9DA2;font-weight:600">Qty</th>
               </tr>
@@ -1193,11 +1796,13 @@ const ASMModule = (() => {
     readyItems.forEach(it => {
       it.outputs.forEach(o => {
         if (o.w > 0 && o.h > 0 && o.qty > 0) {
-          // addPanel(remark, l, w, qty, material, canRotate, srNo)
+          // addPanel(remark, l, w, qty, material, canRotate, srNo, component)
           // l = width (larger dim), w = height (smaller dim)
           const remark = o.remark || '';
           const material = o.material || o.color || 'DW';
-          window.addPanel(remark, o.w, o.h, o.qty, material, true, null);
+          const component = o.component || '';
+          const band = (o.band && (o.band.l||o.band.r||o.band.t||o.band.b)) ? o.band : null;
+          window.addPanel(remark, o.w, o.h, o.qty, material, true, null, component, band);
           totalPanels++;
         }
       });
@@ -1208,6 +1813,7 @@ const ASMModule = (() => {
       window.autoPopulateStock();
     }
 
+    trackAsm('export_optimizer');
     showToast(totalPanels + ' panels exported to optimizer', 'success');
     // Keep readyItems so user can return to ASM and edit
     showExportSuccessModal(totalPanels);
@@ -1264,6 +1870,173 @@ const ASMModule = (() => {
   }
 
   function apiBase() { return API_BASE.replace('/asm', ''); }
+
+  // fire-and-forget analytics; never blocks UI, never throws
+  function trackAsm(event) {
+    try {
+      var token = getAuthToken();
+      if (!token) return;
+      fetch(apiBase() + '/asm/track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ event: event })
+      }).catch(function(){});
+    } catch (e) {}
+  }
+
+  // ══ NOTIFICATIONS ══
+  let _notifTimer = null;
+  let _notifs = [];
+  let _myProblemsOverlay = null;
+
+  function startNotifications() {
+    const bell = document.getElementById('asm-bell-btn');
+    if (bell) bell.style.display = getAuthToken() ? '' : 'none';
+    fetchNotifications();
+    if (_notifTimer) clearInterval(_notifTimer);
+    _notifTimer = setInterval(fetchNotifications, 60000);
+  }
+  function stopNotifications() {
+    if (_notifTimer) { clearInterval(_notifTimer); _notifTimer = null; }
+  }
+
+  async function fetchNotifications() {
+    const token = getAuthToken();
+    if (!token) return;
+    try {
+      const res = await fetch(apiBase() + '/asm/notifications', { headers: { 'Authorization': 'Bearer ' + token } });
+      const data = await res.json();
+      if (!data.success) return;
+      _notifs = data.notifications || [];
+      const badge = document.getElementById('asm-bell-badge');
+      if (badge) {
+        if (data.unread > 0) { badge.textContent = data.unread > 99 ? '99+' : data.unread; badge.style.display = 'flex'; }
+        else badge.style.display = 'none';
+      }
+    } catch (e) {}
+  }
+
+  function toggleNotifications() {
+    let panel = document.getElementById('asm-notif-panel');
+    if (panel) { panel.remove(); return; }
+    panel = document.createElement('div');
+    panel.id = 'asm-notif-panel';
+    panel.style.cssText = 'position:absolute;top:56px;right:16px;width:340px;max-height:420px;overflow-y:auto;background:#1A1D21;border:1px solid #3A3D42;border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.5);z-index:10005';
+    let html = '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid #2A2D31"><span style="font-weight:700;color:#ECB22E;font-size:13px">Notifications</span>';
+    html += _notifs.length ? '<button id="asm-notif-readall" style="background:none;border:none;color:#7A7D82;font-size:11px;cursor:pointer">Mark all read</button>' : '';
+    html += '</div>';
+    if (!_notifs.length) {
+      html += '<div style="padding:24px 14px;color:#7A7D82;font-size:12px;text-align:center">No notifications yet.</div>';
+    } else {
+      _notifs.forEach(function (n) {
+        const dt = new Date(n.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+        html += '<div class="asm-notif-row" data-id="' + n.id + '" data-project="' + (n.project_id || '') + '" style="padding:11px 14px;border-bottom:1px solid #26282C;cursor:' + (n.project_id ? 'pointer' : 'default') + ';' + (n.read ? '' : 'background:rgba(236,178,46,.06)') + '">'
+          + '<div style="font-size:12.5px;color:#fff;font-weight:' + (n.read ? '400' : '700') + ';line-height:1.4">' + escapeHtml(n.body || n.title || '') + '</div>'
+          + '<div style="font-size:10px;color:#7A7D82;margin-top:3px">' + dt + '</div></div>';
+      });
+    }
+    panel.innerHTML = html;
+    document.body.appendChild(panel);
+
+    const readAll = document.getElementById('asm-notif-readall');
+    if (readAll) readAll.onclick = async function () {
+      await markNotifRead(null, true); panel.remove(); fetchNotifications();
+    };
+    panel.querySelectorAll('.asm-notif-row').forEach(function (row) {
+      row.onclick = async function () {
+        const id = row.getAttribute('data-id');
+        const pid = row.getAttribute('data-project');
+        await markNotifRead(id, false);
+        panel.remove();
+        fetchNotifications();
+        if (pid) { showProjects(); }
+      };
+    });
+    // Close on outside click
+    setTimeout(function () {
+      document.addEventListener('click', function closeP(e) {
+        const p = document.getElementById('asm-notif-panel');
+        if (p && !p.contains(e.target) && e.target.id !== 'asm-bell-btn') { p.remove(); document.removeEventListener('click', closeP); }
+      });
+    }, 0);
+  }
+
+  async function markNotifRead(id, all) {
+    const token = getAuthToken();
+    if (!token) return;
+    try {
+      await fetch(apiBase() + '/asm/notifications/read', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify(all ? { all: true } : { id })
+      });
+    } catch (e) {}
+  }
+
+  function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+
+  // ══ SHARE ══
+  async function openShare() {
+    const token = getAuthToken();
+    if (!token) { showToast('Please login first', 'error'); return; }
+    // Load the user's saved projects to choose from.
+    let projects = [];
+    try {
+      const res = await fetch(apiBase() + '/asm/projects', { headers: { 'Authorization': 'Bearer ' + token } });
+      const data = await res.json();
+      if (data.success) projects = data.projects || [];
+    } catch (e) { showToast('Could not load your projects', 'error'); return; }
+    if (!projects.length) { showToast('Save a project first, then share it', 'error'); return; }
+
+    let modal = document.getElementById('asm-share-modal');
+    if (modal) modal.remove();
+    modal = document.createElement('div');
+    modal.id = 'asm-share-modal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:10006;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;padding:16px';
+    let html = '<div style="background:#1A1D21;border:1px solid #3A3D42;border-radius:12px;width:100%;max-width:440px;max-height:88vh;overflow-y:auto;padding:20px">';
+    html += '<h3 style="margin:0 0 4px;color:#ECB22E;font-size:16px">Share Cutlist</h3>';
+    html += '<p style="margin:0 0 14px;color:#9A9DA2;font-size:12px">Sends a copy to another Pro user. They can edit and export their own copy.</p>';
+    html += '<label style="display:block;font-size:11px;color:#9A9DA2;margin-bottom:4px">Recipient email (Pro user)</label>';
+    html += '<input id="asm-share-email" type="email" placeholder="name@example.com" style="width:100%;box-sizing:border-box;background:#222529;border:1px solid #3A3D42;color:#fff;border-radius:6px;padding:9px;font-size:13px;margin-bottom:14px">';
+    html += '<div style="font-size:11px;color:#9A9DA2;margin-bottom:6px">Select projects to share</div>';
+    html += '<div style="max-height:230px;overflow-y:auto;border:1px solid #2A2D31;border-radius:8px">';
+    projects.forEach(function (p) {
+      html += '<label style="display:flex;align-items:center;gap:9px;padding:9px 11px;border-bottom:1px solid #26282C;cursor:pointer;font-size:12.5px;color:#fff">'
+        + '<input type="checkbox" class="asm-share-chk" value="' + p.id + '" style="width:16px;height:16px;accent-color:#ECB22E">'
+        + '<span>' + escapeHtml(p.name || 'Untitled') + (p.clientName ? ' <span style="color:#7A7D82">· ' + escapeHtml(p.clientName) + '</span>' : '') + '</span></label>';
+    });
+    html += '</div>';
+    html += '<div id="asm-share-status" style="font-size:12px;margin:12px 0 0;min-height:16px"></div>';
+    html += '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">';
+    html += '<button class="asm-btn asm-btn-ghost" id="asm-share-cancel">Cancel</button>';
+    html += '<button class="asm-btn asm-btn-primary" id="asm-share-send">Share</button>';
+    html += '</div></div>';
+    modal.innerHTML = html;
+    modal.addEventListener('click', function (e) { if (e.target === modal) modal.remove(); });
+    document.body.appendChild(modal);
+
+    document.getElementById('asm-share-cancel').onclick = function () { modal.remove(); };
+    document.getElementById('asm-share-send').onclick = function () { doShare(modal); };
+  }
+
+  async function doShare(modal) {
+    const email = (document.getElementById('asm-share-email').value || '').trim();
+    const ids = Array.prototype.map.call(document.querySelectorAll('.asm-share-chk:checked'), function (c) { return c.value; });
+    const st = document.getElementById('asm-share-status');
+    if (!email) { st.textContent = 'Enter a recipient email'; st.style.color = '#E01E5A'; return; }
+    if (!ids.length) { st.textContent = 'Select at least one project'; st.style.color = '#E01E5A'; return; }
+    st.textContent = 'Sharing…'; st.style.color = '#7A7D82';
+    const token = getAuthToken();
+    try {
+      const res = await fetch(apiBase() + '/asm/share', {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+        body: JSON.stringify({ recipientEmail: email, projectIds: ids })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) { st.textContent = data.error || 'Share failed'; st.style.color = '#E01E5A'; return; }
+      st.textContent = '✓ ' + (data.message || 'Shared'); st.style.color = '#2EB67D';
+      setTimeout(function () { modal.remove(); }, 1200);
+    } catch (e) { st.textContent = e.message; st.style.color = '#E01E5A'; }
+  }
 
   async function saveProject() {
     if (readyItems.length === 0 && sbsItems.length === 0) { showToast('Nothing to save', 'error'); return; }
@@ -1512,485 +2285,28 @@ const ASMModule = (() => {
   }
 
   // ========================================================================
-  // SVG DIAGRAM GENERATOR
+  // PDF EXPORT (delegated to asm-pdf-export.js / window.ASMPdf)
   // ========================================================================
 
-  function generateItemDiagram(inst) {
-    if (!inst.outputs || inst.outputs.length === 0) return '';
-
-    const inp = inst.inputs;
-    const W = inp.width || inp.w || inp.W || 1000;
-    const H = inp.ht || inp.h || inp.H || inp.height || 800;
-    const D = inp.depth || inp.d || inp.D || 400;
-    const category = (inst.itemId || '').toLowerCase();
-
-    // Detect item type from name/id
-    if (category.includes('wardrobe') || category.includes('sliding')) return wardrobeDiagram(inst, W, H, D);
-    if (category.includes('cab') || category.includes('cabinet') || category.includes('shutter')) return cabinetDiagram(inst, W, H, D);
-    if (category.includes('bed')) return bedDiagram(inst, W, H, D);
-    if (category.includes('loft') || category.includes('bl')) return loftDiagram(inst, W, H, D);
-    if (category.includes('dressing') || category.includes('table')) return cabinetDiagram(inst, W, H, D);
-
-    // Generic fallback
-    return genericDiagram(inst, W, H, D);
-  }
-
-  function wardrobeDiagram(inst, W, H, D) {
-    // Scale to fit in ~400x300 SVG
-    const scale = Math.min(360 / W, 260 / H);
-    const sw = Math.round(W * scale);
-    const sh = Math.round(H * scale);
-    const ox = Math.round((400 - sw) / 2); // offset x
-    const oy = 20; // offset y
-    const svgH = sh + 70;
-
-    // Find components
-    const find = (name) => inst.outputs.find(o => o.component && o.component.toUpperCase().includes(name));
-    const shelf = find('SHELF');
-    const halfShelf = find('HALF');
-    const vertical = find('VERTICAL PART') || find('PARTITION');
-    const locker = find('LOCKER');
-    const drawer = find('DRAWER') || find('FACE');
-    const door = find('DOOR');
-    const shelfCount = shelf ? shelf.qty : 0;
-    const halfCount = halfShelf ? halfShelf.qty : 0;
-    const hasLocker = locker && locker.qty > 0;
-    const hasDrawers = drawer && drawer.qty > 0;
-
-    // Panel thickness scaled
-    const pt = Math.max(2, Math.round(18 * scale));
-    const midX = ox + Math.round(sw / 2);
-
-    let svg = `<svg width="100%" viewBox="0 0 400 ${svgH}" style="max-height:300px">`;
-
-    // Back panel (dashed)
-    svg += `<rect x="${ox + pt}" y="${oy + pt}" width="${sw - pt * 2}" height="${sh - pt * 2}" fill="none" stroke="var(--text-muted)" stroke-width="0.5" stroke-dasharray="3 2" opacity="0.4"/>`;
-
-    // Top
-    svg += `<rect x="${ox}" y="${oy}" width="${sw}" height="${pt}" rx="1" fill="#1D9E75" fill-opacity="0.3" stroke="#1D9E75" stroke-width="0.5"/>`;
-    // Bottom
-    svg += `<rect x="${ox + pt}" y="${oy + sh - pt}" width="${sw - pt * 2}" height="${pt}" rx="1" fill="#1D9E75" fill-opacity="0.3" stroke="#1D9E75" stroke-width="0.5"/>`;
-    // Left side
-    svg += `<rect x="${ox}" y="${oy + pt}" width="${pt}" height="${sh - pt}" rx="1" fill="#378ADD" fill-opacity="0.3" stroke="#378ADD" stroke-width="0.5"/>`;
-    // Right side
-    svg += `<rect x="${ox + sw - pt}" y="${oy + pt}" width="${pt}" height="${sh - pt}" rx="1" fill="#378ADD" fill-opacity="0.3" stroke="#378ADD" stroke-width="0.5"/>`;
-
-    // Vertical partition (center)
-    if (vertical && vertical.qty > 0) {
-      svg += `<rect x="${midX - 1}" y="${oy + pt}" width="${3}" height="${sh - pt * 2 - (hasDrawers ? sh * 0.2 : 0)}" fill="#7F77DD" fill-opacity="0.5" stroke="#7F77DD" stroke-width="0.5"/>`;
-    }
-
-    // Shelves (left compartment)
-    const shelfArea = sh - pt * 2 - (hasDrawers ? sh * 0.25 : 0) - (hasLocker ? sh * 0.15 : 0);
-    const leftW = midX - ox - pt - 2;
-    for (let i = 0; i < Math.min(shelfCount, 6); i++) {
-      const sy = oy + pt + Math.round(shelfArea * (i + 1) / (shelfCount + 1));
-      svg += `<rect x="${ox + pt}" y="${sy}" width="${leftW}" height="2" fill="#639922" fill-opacity="0.6" stroke="#639922" stroke-width="0.5"/>`;
-    }
-
-    // Half shelves (right compartment, upper)
-    const rightX = midX + 3;
-    const rightW = ox + sw - pt - rightX;
-    const upperH = Math.round(shelfArea * 0.5);
-    for (let i = 0; i < Math.min(halfCount, 4); i++) {
-      const sy = oy + pt + Math.round(upperH * (i + 1) / (Math.min(halfCount, 4) + 1));
-      // Half shelf = two halves
-      svg += `<rect x="${rightX}" y="${sy}" width="${Math.round(rightW / 2) - 2}" height="2" fill="#BA7517" fill-opacity="0.5" stroke="#BA7517" stroke-width="0.5"/>`;
-      svg += `<rect x="${rightX + Math.round(rightW / 2) + 2}" y="${sy}" width="${Math.round(rightW / 2) - 2}" height="2" fill="#BA7517" fill-opacity="0.5" stroke="#BA7517" stroke-width="0.5"/>`;
-    }
-
-    // Drawers (bottom left)
-    if (hasDrawers) {
-      const drawerY = oy + sh - pt - Math.round(sh * 0.22);
-      const drawerH = Math.round(sh * 0.18);
-      const rows = Math.min(drawer.qty, 4);
-      const rowH = Math.round(drawerH / rows);
-      for (let i = 0; i < rows; i++) {
-        svg += `<rect x="${ox + pt + 4}" y="${drawerY + i * rowH + 2}" width="${leftW - 8}" height="${rowH - 4}" rx="2" fill="#D85A30" fill-opacity="0.2" stroke="#D85A30" stroke-width="0.5"/>`;
-        // Handle
-        const hy = drawerY + i * rowH + Math.round(rowH / 2);
-        svg += `<line x1="${ox + pt + leftW / 2 - 8}" y1="${hy}" x2="${ox + pt + leftW / 2 + 8}" y2="${hy}" stroke="#D85A30" stroke-width="1.5" stroke-linecap="round"/>`;
-      }
-    }
-
-    // Locker (bottom right)
-    if (hasLocker) {
-      const lockerY = oy + sh - pt - Math.round(sh * 0.18);
-      const lockerH = Math.round(sh * 0.14);
-      svg += `<rect x="${rightX + 2}" y="${lockerY}" width="${rightW - 4}" height="${lockerH}" rx="2" fill="none" stroke="var(--text-muted)" stroke-width="0.5" stroke-dasharray="3 2"/>`;
-      svg += `<text x="${rightX + rightW / 2}" y="${lockerY + lockerH / 2 + 4}" text-anchor="middle" fill="var(--text-muted)" font-size="9" font-family="var(--font-sans)">LOCKER</text>`;
-    }
-
-    // Sliding doors (overlay)
-    svg += `<rect x="${ox + 2}" y="${oy + pt + 2}" width="${Math.round(sw / 2) - 4}" height="${sh - pt * 2 - 4}" rx="2" fill="none" stroke="var(--text-accent)" stroke-width="0.8" stroke-dasharray="8 4" opacity="0.4"/>`;
-    svg += `<rect x="${midX + 2}" y="${oy + pt + 2}" width="${Math.round(sw / 2) - 4}" height="${sh - pt * 2 - 4}" rx="2" fill="none" stroke="var(--text-accent)" stroke-width="0.8" stroke-dasharray="8 4" opacity="0.4"/>`;
-
-    // Skirting
-    svg += `<rect x="${ox}" y="${oy + sh}" width="${sw}" height="${Math.max(3, Math.round(8 * scale))}" rx="1" fill="var(--text-muted)" fill-opacity="0.3" stroke="var(--text-muted)" stroke-width="0.5"/>`;
-
-    // Dimension labels
-    svg += `<text x="${ox + sw / 2}" y="${oy + sh + 30}" text-anchor="middle" fill="var(--text-secondary)" font-size="11" font-family="var(--font-sans)" font-weight="500">${W} × ${H} × ${D} mm</text>`;
-
-    // Component count
-    svg += `<text x="${ox + sw / 2}" y="${oy + sh + 45}" text-anchor="middle" fill="var(--text-muted)" font-size="9" font-family="var(--font-sans)">${inst.outputs.length} components</text>`;
-
-    svg += '</svg>';
-    return svg;
-  }
-
-  function cabinetDiagram(inst, W, H, D) {
-    const scale = Math.min(360 / W, 260 / H);
-    const sw = Math.round(W * scale);
-    const sh = Math.round(H * scale);
-    const ox = Math.round((400 - sw) / 2);
-    const oy = 20;
-    const svgH = sh + 70;
-    const pt = Math.max(2, Math.round(18 * scale));
-
-    const find = (name) => inst.outputs.find(o => o.component && o.component.toUpperCase().includes(name));
-    const shelf = find('SHELF');
-    const door = find('DOOR');
-    const shelfCount = shelf ? shelf.qty : 0;
-    const doorCount = door ? door.qty : 1;
-
-    let svg = `<svg width="100%" viewBox="0 0 400 ${svgH}" style="max-height:280px">`;
-
-    // Back (dashed)
-    svg += `<rect x="${ox + pt}" y="${oy + pt}" width="${sw - pt * 2}" height="${sh - pt * 2}" fill="none" stroke="var(--text-muted)" stroke-width="0.5" stroke-dasharray="3 2" opacity="0.4"/>`;
-
-    // Top, Bottom
-    svg += `<rect x="${ox}" y="${oy}" width="${sw}" height="${pt}" rx="1" fill="#1D9E75" fill-opacity="0.3" stroke="#1D9E75" stroke-width="0.5"/>`;
-    svg += `<rect x="${ox + pt}" y="${oy + sh - pt}" width="${sw - pt * 2}" height="${pt}" rx="1" fill="#1D9E75" fill-opacity="0.3" stroke="#1D9E75" stroke-width="0.5"/>`;
-
-    // Sides
-    svg += `<rect x="${ox}" y="${oy + pt}" width="${pt}" height="${sh - pt}" rx="1" fill="#378ADD" fill-opacity="0.3" stroke="#378ADD" stroke-width="0.5"/>`;
-    svg += `<rect x="${ox + sw - pt}" y="${oy + pt}" width="${pt}" height="${sh - pt}" rx="1" fill="#378ADD" fill-opacity="0.3" stroke="#378ADD" stroke-width="0.5"/>`;
-
-    // Shelves
-    const innerW = sw - pt * 2;
-    for (let i = 0; i < Math.min(shelfCount, 6); i++) {
-      const sy = oy + pt + Math.round((sh - pt * 2) * (i + 1) / (shelfCount + 1));
-      svg += `<rect x="${ox + pt}" y="${sy}" width="${innerW}" height="2" fill="#639922" fill-opacity="0.6" stroke="#639922" stroke-width="0.5"/>`;
-    }
-
-    // Doors overlay
-    const doorW = Math.round(innerW / Math.min(doorCount, 4));
-    for (let i = 0; i < Math.min(doorCount, 4); i++) {
-      const dx = ox + pt + i * doorW;
-      svg += `<rect x="${dx + 3}" y="${oy + pt + 3}" width="${doorW - 6}" height="${sh - pt * 2 - 6}" rx="3" fill="none" stroke="var(--text-accent)" stroke-width="0.8" stroke-dasharray="6 3" opacity="0.4"/>`;
-      // Handle
-      const hx = dx + doorW - 12;
-      svg += `<line x1="${hx}" y1="${oy + sh / 2 - 8}" x2="${hx}" y2="${oy + sh / 2 + 8}" stroke="var(--text-accent)" stroke-width="1.5" stroke-linecap="round" opacity="0.5"/>`;
-    }
-
-    svg += `<text x="${ox + sw / 2}" y="${oy + sh + 30}" text-anchor="middle" fill="var(--text-secondary)" font-size="11" font-family="var(--font-sans)" font-weight="500">${W} × ${H} × ${D} mm</text>`;
-    svg += `<text x="${ox + sw / 2}" y="${oy + sh + 45}" text-anchor="middle" fill="var(--text-muted)" font-size="9" font-family="var(--font-sans)">${inst.outputs.length} components</text>`;
-    svg += '</svg>';
-    return svg;
-  }
-
-  function bedDiagram(inst, W, H, D) {
-    // Bed is wide and short
-    const scale = Math.min(360 / W, 180 / H);
-    const sw = Math.round(W * scale);
-    const sh = Math.round(H * scale);
-    const ox = Math.round((400 - sw) / 2);
-    const oy = 30;
-    const svgH = sh + 90;
-
-    let svg = `<svg width="100%" viewBox="0 0 400 ${svgH}" style="max-height:240px">`;
-
-    // Mattress area
-    svg += `<rect x="${ox}" y="${oy}" width="${sw}" height="${sh}" rx="6" fill="var(--text-muted)" fill-opacity="0.08" stroke="var(--text-muted)" stroke-width="1"/>`;
-
-    // Headboard
-    svg += `<rect x="${ox}" y="${oy - 16}" width="${sw}" height="18" rx="3" fill="#7F77DD" fill-opacity="0.3" stroke="#7F77DD" stroke-width="0.5"/>`;
-    svg += `<text x="${ox + sw / 2}" y="${oy - 5}" text-anchor="middle" fill="var(--text-muted)" font-size="8" font-family="var(--font-sans)">HEADBOARD</text>`;
-
-    // Side rails
-    svg += `<rect x="${ox}" y="${oy}" width="6" height="${sh}" rx="1" fill="#378ADD" fill-opacity="0.3" stroke="#378ADD" stroke-width="0.5"/>`;
-    svg += `<rect x="${ox + sw - 6}" y="${oy}" width="6" height="${sh}" rx="1" fill="#378ADD" fill-opacity="0.3" stroke="#378ADD" stroke-width="0.5"/>`;
-
-    // Bottom panel
-    svg += `<rect x="${ox + 6}" y="${oy + sh - 6}" width="${sw - 12}" height="6" rx="1" fill="#1D9E75" fill-opacity="0.3" stroke="#1D9E75" stroke-width="0.5"/>`;
-
-    // Storage (if trolley/flap)
-    const hasTrolley = (inst.itemId || '').toLowerCase().includes('trl') || (inst.itemId || '').toLowerCase().includes('trolley');
-    if (hasTrolley) {
-      svg += `<rect x="${ox + 10}" y="${oy + 10}" width="${sw - 20}" height="${sh - 20}" rx="3" fill="none" stroke="var(--text-muted)" stroke-width="0.5" stroke-dasharray="4 2"/>`;
-      svg += `<text x="${ox + sw / 2}" y="${oy + sh / 2 + 3}" text-anchor="middle" fill="var(--text-muted)" font-size="9" font-family="var(--font-sans)">STORAGE</text>`;
-    }
-
-    svg += `<text x="${ox + sw / 2}" y="${oy + sh + 30}" text-anchor="middle" fill="var(--text-secondary)" font-size="11" font-family="var(--font-sans)" font-weight="500">${W} × ${H} × ${D} mm</text>`;
-    svg += `<text x="${ox + sw / 2}" y="${oy + sh + 45}" text-anchor="middle" fill="var(--text-muted)" font-size="9" font-family="var(--font-sans)">${inst.outputs.length} components</text>`;
-    svg += '</svg>';
-    return svg;
-  }
-
-  function loftDiagram(inst, W, H, D) {
-    // Loft is wide and short (overhead cabinet)
-    const scale = Math.min(360 / W, 160 / H);
-    const sw = Math.round(W * scale);
-    const sh = Math.round(H * scale);
-    const ox = Math.round((400 - sw) / 2);
-    const oy = 20;
-    const svgH = sh + 70;
-    const pt = Math.max(2, Math.round(14 * scale));
-
-    const find = (name) => inst.outputs.find(o => o.component && o.component.toUpperCase().includes(name));
-    const door = find('DOOR');
-    const doorCount = door ? door.qty : 1;
-
-    let svg = `<svg width="100%" viewBox="0 0 400 ${svgH}" style="max-height:220px">`;
-
-    // Structure
-    svg += `<rect x="${ox}" y="${oy}" width="${sw}" height="${sh}" rx="3" fill="var(--text-muted)" fill-opacity="0.06" stroke="var(--text-muted)" stroke-width="1"/>`;
-    svg += `<rect x="${ox}" y="${oy}" width="${sw}" height="${pt}" rx="1" fill="#1D9E75" fill-opacity="0.3" stroke="#1D9E75" stroke-width="0.5"/>`;
-    svg += `<rect x="${ox}" y="${oy + sh - pt}" width="${sw}" height="${pt}" rx="1" fill="#1D9E75" fill-opacity="0.3" stroke="#1D9E75" stroke-width="0.5"/>`;
-    svg += `<rect x="${ox}" y="${oy + pt}" width="${pt}" height="${sh - pt * 2}" rx="1" fill="#378ADD" fill-opacity="0.3" stroke="#378ADD" stroke-width="0.5"/>`;
-    svg += `<rect x="${ox + sw - pt}" y="${oy + pt}" width="${pt}" height="${sh - pt * 2}" rx="1" fill="#378ADD" fill-opacity="0.3" stroke="#378ADD" stroke-width="0.5"/>`;
-
-    // Doors
-    const innerW = sw - pt * 2;
-    const dw = Math.round(innerW / Math.min(doorCount, 3));
-    for (let i = 0; i < Math.min(doorCount, 3); i++) {
-      svg += `<rect x="${ox + pt + i * dw + 3}" y="${oy + pt + 3}" width="${dw - 6}" height="${sh - pt * 2 - 6}" rx="2" fill="none" stroke="var(--text-accent)" stroke-width="0.8" stroke-dasharray="5 3" opacity="0.5"/>`;
-    }
-
-    svg += `<text x="${ox + sw / 2}" y="${oy + sh + 25}" text-anchor="middle" fill="var(--text-secondary)" font-size="11" font-family="var(--font-sans)" font-weight="500">${W} × ${H} × ${D} mm</text>`;
-    svg += `<text x="${ox + sw / 2}" y="${oy + sh + 40}" text-anchor="middle" fill="var(--text-muted)" font-size="9" font-family="var(--font-sans)">${inst.outputs.length} components</text>`;
-    svg += '</svg>';
-    return svg;
-  }
-
-  function genericDiagram(inst, W, H, D) {
-    const scale = Math.min(360 / W, 240 / H);
-    const sw = Math.round(W * scale);
-    const sh = Math.round(H * scale);
-    const ox = Math.round((400 - sw) / 2);
-    const oy = 20;
-    const svgH = sh + 70;
-
-    let svg = `<svg width="100%" viewBox="0 0 400 ${svgH}" style="max-height:260px">`;
-    svg += `<rect x="${ox}" y="${oy}" width="${sw}" height="${sh}" rx="4" fill="var(--text-muted)" fill-opacity="0.06" stroke="var(--text-muted)" stroke-width="1"/>`;
-
-    // Show component names inside
-    const maxShow = Math.min(inst.outputs.length, 8);
-    for (let i = 0; i < maxShow; i++) {
-      const o = inst.outputs[i];
-      const ty = oy + 20 + i * 16;
-      svg += `<text x="${ox + 12}" y="${ty}" fill="var(--text-secondary)" font-size="9" font-family="var(--font-sans)">${o.component}: ${o.w}×${o.h} (${o.qty})</text>`;
-    }
-    if (inst.outputs.length > maxShow) {
-      svg += `<text x="${ox + 12}" y="${oy + 20 + maxShow * 16}" fill="var(--text-muted)" font-size="9" font-family="var(--font-sans)">+ ${inst.outputs.length - maxShow} more...</text>`;
-    }
-
-    svg += `<text x="${ox + sw / 2}" y="${oy + sh + 25}" text-anchor="middle" fill="var(--text-secondary)" font-size="11" font-family="var(--font-sans)" font-weight="500">${W} × ${H} × ${D} mm</text>`;
-    svg += '</svg>';
-    return svg;
-  }
-
-  // ========================================================================
-  // EXPORT TO PDF
-  // ========================================================================
-
-  function exportToPDF() {
-    if (readyItems.length === 0) { showToast('No items to export', 'error'); return; }
-    if (asmPlan !== 'pro') {
-      const hasLockedItems = readyItems.some(it => {
-        const ci = catalogue.find(x => x.id === it.itemId);
-        return ci ? !ci.is_free : true;
-      });
-      if (hasLockedItems) { showToast('PDF export with PRO items requires upgrade', 'error'); showPricing(); return; }
-    }
-    showExportOptions();
-  }
-
-  function hf(flag){ try { return (typeof hasFeature==='function') ? hasFeature(flag) : (asmPlan==='pro'); } catch(e){ return asmPlan==='pro'; } }
-
-  function showExportOptions() {
-    const old = document.getElementById('asm-export-modal'); if (old) old.remove();
-    const gp = (typeof profile!=='undefined' && profile) ? profile : {};
-    const overlay = document.createElement('div');
-    overlay.id = 'asm-export-modal';
-    overlay.dataset.client = currentClientName || '';
-    overlay.style.cssText = 'position:fixed;inset:0;z-index:10005;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center';
-    overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
-    const row = (id, label, sub, checked, locked) =>
-      `<label class="asm-eo-row" style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #2A2D31;${locked?'opacity:.45':''}">
-         <div><div style="font-size:13px;color:#E8E8E8">${label}${locked?' <span style="color:#ECB22E;font-size:10px">⭐PRO</span>':''}</div>
-         <div style="font-size:11px;color:#7A7D82">${sub}</div></div>
-         <input type="checkbox" id="${id}" ${checked?'checked':''} ${locked?'disabled':''} style="width:18px;height:18px;accent-color:#2EB67D">
-       </label>`;
-    overlay.innerHTML = `
-      <div style="background:#1A1D21;border:1px solid #3A3D42;border-radius:12px;width:440px;max-height:85vh;overflow:auto">
-        <div style="padding:16px 20px;background:#222529;border-bottom:1px solid #3A3D42;display:flex;justify-content:space-between;align-items:center">
-          <div style="font-size:15px;font-weight:700;color:#fff">📄 Export PDF Options</div>
-          <button onclick="document.getElementById('asm-export-modal').remove()" style="background:none;border:none;color:#7A7D82;font-size:20px;cursor:pointer">✕</button>
-        </div>
-        <div style="padding:16px 20px">
-          ${row('eo-logo','Company Logo','Your logo from My Profile', false, !hf('pdfLogoHeader')||!gp.logo)}
-          ${row('eo-company','Company Name','Business name from My Profile', false, !hf('pdfCompanyName')||!gp.biz)}
-          <div style="padding:12px 0;border-bottom:1px solid #2A2D31">
-            <div style="font-size:13px;color:#E8E8E8;margin-bottom:6px">Client Name</div>
-            <input type="text" id="eo-client-text" value="${(currentClientName||'').replace(/"/g,'&quot;')}" placeholder="Type client name" style="width:100%;padding:8px 10px;background:#222529;border:1px solid #3A3D42;border-radius:6px;color:#fff;font-size:13px;box-sizing:border-box">
-          </div>
-          ${row('eo-outer','Print Outer Details','Input values grid atop each item', true, false)}
-          ${row('eo-summary','Panel Summary','Components / panels line per item', true, false)}
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0 4px">
-            <div><div style="font-size:13px;color:#E8E8E8">W×H×Qty×Material font (pt)</div>
-            <div style="font-size:11px;color:#7A7D82">Component table text size</div></div>
-            <input type="number" id="eo-font" value="14" min="8" max="24" style="width:60px;padding:6px 8px;background:#222529;border:1px solid #3A3D42;border-radius:6px;color:#fff;font-size:13px;text-align:center">
-          </div>
-        </div>
-        <div style="padding:12px 20px;background:#222529;border-top:1px solid #3A3D42;display:flex;justify-content:flex-end;gap:8px">
-          <button onclick="document.getElementById('asm-export-modal').remove()" style="padding:8px 16px;background:#3A3D42;border:none;border-radius:6px;color:#ABABAD;font-size:13px;cursor:pointer">Cancel</button>
-          <button onclick="ASMModule._runExport()" style="padding:8px 16px;background:#ECB22E;border:none;border-radius:6px;color:#1A1D21;font-weight:700;font-size:13px;cursor:pointer">Export PDF</button>
-        </div>
-      </div>`;
-    document.body.appendChild(overlay);
-  }
-
-  function _runExport() {
-    const gp = (typeof profile!=='undefined' && profile) ? profile : {};
-    const modalEl = document.getElementById('asm-export-modal');
-    const opt = {
-      logo:    document.getElementById('eo-logo')?.checked && gp.logo,
-      company: document.getElementById('eo-company')?.checked && gp.biz,
-      phone:   document.getElementById('eo-company')?.checked && gp.phone,
-      client:  (document.getElementById('eo-client-text')?.value || '').trim(),
-      outer:   document.getElementById('eo-outer')?.checked,
-      summary: document.getElementById('eo-summary')?.checked,
-      font:    parseInt(document.getElementById('eo-font')?.value) || 14,
-      biz: gp.biz, logoSrc: gp.logo, phoneNum: gp.phone
+  function _pdfCtx() {
+    return {
+      readyItems,
+      catalogue,
+      asmPlan,
+      currentClientName,
+      showToast,
+      showPricing,
     };
-    document.getElementById('asm-export-modal')?.remove();
-    _doExportPDF(opt);
   }
-
-  function _doExportPDF(opt) {
-    opt = opt || {};
-    const fs = opt.font || 14;
-    let html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
-      <title>EasyCutList ASM - Size Sheet</title>
-      <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { font-family: Arial, sans-serif; font-size: 11px; color: #333; padding: 15px; }
-        .header { text-align: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 2px solid #333; }
-        .header h1 { font-size: 16px; margin-bottom: 3px; }
-        .header p { font-size: 10px; color: #666; }
-        .item { margin-bottom: 18px; }
-        .item-title { background: #333; color: #fff; padding: 6px 10px; font-size: 13px; font-weight: bold; page-break-after: avoid; }
-        .run-header { display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #333; padding-bottom: 8px; position: running(hdr); width: 100%; }
-        @page { margin: 34mm 12mm 16mm 12mm; @top-center { content: element(hdr); } @bottom-left { content: "Generated by EasyCutList ASM"; font-size: 9px; color: #999; } @bottom-right { content: "Page " counter(page) " of " counter(pages); font-size: 9px; color: #999; } }
-        .item-inputs { background: #f5f5f5; padding: 6px 10px; font-size: 10px; color: #555; border-bottom: 1px solid #ddd; page-break-after: avoid; }
-        table { width: 100%; border-collapse: collapse; }
-        thead { display: table-header-group; }
-        tr { page-break-inside: avoid; }
-        th { background: #eee; padding: 4px 6px; text-align: left; font-size: ${fs}px; border: 1px solid #ccc; font-weight: 700; }
-        td { padding: 4px 6px; border: 1px solid #ccc; font-size: ${fs}px; }
-        td.num { text-align: right; font-weight: 600; }
-        .summary { font-size: 10px; color: #666; text-align: right; padding: 4px; }
-        .footer { margin-top: 20px; text-align: left; font-size: 12px; color: #666; border-top: 1px solid #ccc; padding-top: 8px; }
-        @media print { body { padding: 10px; } tr { page-break-inside: avoid; } thead { display: table-header-group; } }
-      </style>
-    </head><body>`;
-
-    const escH = s => String(s==null?'':s).replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-    if (opt.logo || opt.company || opt.client) {
-      const center = [];
-      if (opt.company && opt.biz) center.push(`<div style="font-weight:900;font-size:16px">${escH(opt.biz)}</div>`);
-      if (opt.phone && opt.phoneNum) center.push(`<div style="font-size:11px;color:#666">${escH(opt.phoneNum)}</div>`);
-      const logoImg = (opt.logo && opt.logoSrc) ? `<img src="${opt.logoSrc}" style="max-height:40px;max-width:90px;object-fit:contain">` : '';
-      const clientHtml = opt.client ? `<div style="font-size:15px;font-weight:700;color:#c0392b;margin-top:2px">${escH(opt.client)}</div>` : '';
-      html += `<div class="run-header">
-        <div style="flex:1;display:flex;align-items:center;gap:12px">${logoImg}${clientHtml}</div>
-        <div style="flex:1;text-align:center">${center.join('')}</div>
-        <div style="flex:1;text-align:right;font-size:9px;color:#aaa">${new Date().toLocaleDateString('en-IN')}<div style="font-size:8px;color:#bbb">Generated by EasyCutList ASM</div></div>
-      </div>`;
-    } else {
-      html += `<div class="header">
-        <h1>EasyCutList - Auto Size Module (ASM)</h1>
-        <p>Generated: ${new Date().toLocaleDateString()} ${new Date().toLocaleTimeString()}</p>
-      </div>`;
-    }
-
-    let grandTotalPanels = 0;
-    let globalSrNo = 0;
-
-    readyItems.forEach((it, idx) => {
-      const inp = it.inputs;
-      const w = inp.width || inp.w || inp.W || '?';
-      const h = inp.ht || inp.h || inp.H || inp.height || '?';
-      const d = inp.depth || inp.d || inp.D || '?';
-      const dims = w + ' x ' + h + ' x ' + d + ' mm';
-      const totalPanels = it.outputs.reduce((a, o) => a + (o.qty || 0), 0);
-      grandTotalPanels += totalPanels;
-
-      // Input summary as clean table
-      const inputRows = Object.entries(it.inputs)
-        .filter(([k, v]) => v !== '' && v !== null && v !== undefined)
-        .map(([k, v]) => '<td style="padding:2px 8px;border:1px solid #ddd;font-weight:600;background:#f9f9f9;font-size:9px">' + k + '</td><td style="padding:2px 8px;border:1px solid #ddd;font-size:9px">' + v + '</td>')
-      
-      // Show inputs in rows of 4 pairs each
-      let inputTable = '<table style="width:100%;border-collapse:collapse;margin:2px 0"><tr>';
-      inputRows.forEach((cell, i) => {
-        inputTable += cell;
-        if ((i + 1) % 4 === 0 && i < inputRows.length - 1) inputTable += '</tr><tr>';
-      });
-      inputTable += '</tr></table>';
-
-      html += '<div class="item">';
-      const roomPrefix = it.roomName ? (String(it.roomName).trim() + ' — ') : '';
-      html += '<div class="item-title">' + (idx + 1) + '. ' + roomPrefix + it.itemName + '  |  ' + dims + '  |  Qty: ' + (inp.qty || inp.Qty || 1) + '</div>';
-      if (opt.outer) html += '<div class="item-inputs">' + inputTable + '</div>';
-      html += '<table><thead><tr><th>Sr</th><th>Component</th><th>W</th><th>H</th><th>Qty</th><th>Color</th><th>Remark</th><th>Box No</th></tr></thead><tbody>';
-
-      it.outputs.forEach((o) => {
-        globalSrNo++;
-        // Clean up color and remark - remove formula artifacts
-        let color = String(o.color || '-');
-        let remark = String(o.remark || '-');
-        // Remove JS formula text (anything with ===, ?, ||, etc.)
-        if (color.includes('===') || color.includes('?') || color.includes('||')) color = '-';
-        if (remark.includes('===') || remark.includes('?') || remark.includes('||')) remark = '-';
-        // Remove wrapping quotes
-        color = color.replace(/^["']|["']$/g, '');
-        remark = remark.replace(/^["']|["']$/g, '');
-
-        html += '<tr>';
-        html += '<td>' + globalSrNo + '</td>';
-        html += '<td>' + (o.component || '-') + '</td>';
-        html += '<td class="num">' + (o.w || 0) + '</td>';
-        html += '<td class="num">' + (o.h || 0) + '</td>';
-        html += '<td class="num">' + (o.qty || 0) + '</td>';
-        html += '<td>' + color + '</td>';
-        html += '<td>' + remark + '</td>';
-        html += '<td></td>';
-        html += '</tr>';
-      });
-
-      html += '</tbody></table>';
-      if (opt.summary) html += '<div class="summary">' + it.outputs.length + ' components | ' + totalPanels + ' panels</div>';
-      html += '</div>';
-    });
-
-    html += '<div class="footer">Total: ' + readyItems.length + ' items | ' + grandTotalPanels + ' panels<br>Generated and calculated with EasyCutList ASM</div>';
-    html += '<script src="https://unpkg.com/pagedjs/dist/paged.polyfill.js"><\/script>';
-    html += '<script>window.PagedConfig={auto:true,after:()=>{setTimeout(()=>window.print(),200);}};<\/script>';
-    html += '</body></html>';
-
-    // Open print window
-    const printWin = window.open('', '_blank');
-    if (!printWin) { showToast('Allow popups to export PDF', 'error'); return; }
-    printWin.document.write(html);
-    printWin.document.close();
-    printWin.focus();
+  function exportToPDF() {
+    if (!window.ASMPdf) { showToast('PDF module not loaded', 'error'); return; }
+    trackAsm('export_pdf');
+    ASMPdf.exportToPDF(_pdfCtx());
   }
-
-  // ========================================================================
-  // ASM PLAN & PRICING
-  // ========================================================================
+  function _runExport() {
+    if (!window.ASMPdf) { showToast('PDF module not loaded', 'error'); return; }
+    ASMPdf.runExport(_pdfCtx());
+  }
 
   async function checkASMPlan() {
     const token = getAuthToken();
@@ -2030,9 +2346,17 @@ const ASMModule = (() => {
     renderCatalogue();
   }
 
+  let _asmCoupon = '';
+  function resetPlanPrices(box) {
+    box.querySelectorAll('.asm-plan-price').forEach(function(el){
+      el.innerHTML = '₹' + Number(el.getAttribute('data-base')).toLocaleString();
+    });
+  }
+
   async function showPricing() {
     const token = getAuthToken();
     if (!token) { showToast('Please login first', 'error'); return; }
+    _asmCoupon = '';
 
     let plans = [];
     let keyId = '';
@@ -2075,7 +2399,7 @@ const ASMModule = (() => {
       let inner = '';
       if (isPopular) inner += '<div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:#ECB22E;color:#1A1D21;font-size:9px;font-weight:800;padding:2px 10px;border-radius:10px">BEST VALUE</div>';
       inner += '<div style="font-size:14px;font-weight:800;color:#fff;margin-bottom:4px">' + p.label + '</div>';
-      inner += '<div style="font-size:28px;font-weight:900;color:#ECB22E;margin:10px 0">₹' + p.price.toLocaleString() + '</div>';
+      inner += '<div class="asm-plan-price" data-base="' + p.price + '" style="font-size:28px;font-weight:900;color:#ECB22E;margin:10px 0">₹' + p.price.toLocaleString() + '</div>';
       inner += '<div style="font-size:11px;color:#7A7D82;margin-bottom:16px">₹' + perMonth.toLocaleString() + '/month</div>';
       inner += '<button class="asm-btn asm-btn-primary" style="width:100%;padding:10px" onclick="ASMModule.startASMPayment(\'' + p.id + '\')">Choose Plan</button>';
 
@@ -2089,7 +2413,54 @@ const ASMModule = (() => {
     const features = document.createElement('div');
     features.style.cssText = 'padding:0 28px 20px;font-size:11px;color:#7A7D82;text-align:center';
     features.innerHTML = 'Includes: All 93+ furniture items | Unlimited projects | Save to cloud | PDF export | Export to optimizer | Priority support';
+    // Coupon field
+    const couponWrap = document.createElement('div');
+    couponWrap.style.cssText = 'padding:0 28px 16px';
+    couponWrap.innerHTML =
+      '<div style="display:flex;gap:8px;max-width:340px;margin:0 auto">' +
+        '<input id="asm-coupon-field" type="text" placeholder="Coupon code (optional)" style="flex:1;text-transform:uppercase;background:#222529;border:1px solid #3A3D42;color:#fff;border-radius:6px;padding:9px;font-size:13px">' +
+        '<button id="asm-coupon-apply" class="asm-btn asm-btn-ghost" style="white-space:nowrap">Apply</button>' +
+      '</div>' +
+      '<div id="asm-coupon-msg" style="text-align:center;font-size:12px;margin-top:8px;min-height:15px"></div>';
+    box.appendChild(couponWrap);
+
     box.appendChild(features);
+
+    // Wire coupon apply — updates each plan card's displayed price
+    const applyBtn = couponWrap.querySelector('#asm-coupon-apply');
+    const field = couponWrap.querySelector('#asm-coupon-field');
+    const msg = couponWrap.querySelector('#asm-coupon-msg');
+    applyBtn.onclick = async function() {
+      const code = (field.value || '').trim().toUpperCase();
+      if (!code) { _asmCoupon = ''; resetPlanPrices(box); msg.textContent = ''; return; }
+      msg.textContent = 'Checking…'; msg.style.color = '#7A7D82';
+      // Validate against the first plan just to check validity; per-plan recompute below.
+      let anyValid = false, lastReason = '';
+      const priceEls = box.querySelectorAll('.asm-plan-price');
+      for (const el of priceEls) {
+        const base = Number(el.getAttribute('data-base'));
+        const planCard = el.closest('div');
+        // find plan id from the card's button
+        const btn = el.parentElement.querySelector('button[onclick*="startASMPayment"]');
+        const pid = btn ? btn.getAttribute('onclick').match(/startASMPayment\('([^']+)'\)/)[1] : null;
+        try {
+          const r = await fetch(apiBase() + '/asm/payments/validate-coupon', {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({ code, planId: pid, email: (CURRENT_USER && CURRENT_USER.email) || '' })
+          });
+          const d = await r.json();
+          if (d.valid) {
+            anyValid = true;
+            el.innerHTML = '<span style="text-decoration:line-through;color:#7A7D82;font-size:18px">₹' + base.toLocaleString() + '</span> ₹' + Math.round(d.finalPrice).toLocaleString();
+          } else {
+            lastReason = d.reason || 'Invalid coupon';
+            el.innerHTML = '₹' + base.toLocaleString();
+          }
+        } catch (e) { lastReason = e.message; }
+      }
+      if (anyValid) { _asmCoupon = code; msg.textContent = '✓ Coupon applied'; msg.style.color = '#2EB67D'; }
+      else { _asmCoupon = ''; msg.textContent = lastReason || 'Invalid coupon'; msg.style.color = '#E01E5A'; }
+    };
 
     // Close
     const closeDiv = document.createElement('div');
@@ -2104,6 +2475,70 @@ const ASMModule = (() => {
     modal.appendChild(box);
     modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
     document.body.appendChild(modal);
+  }
+
+  // Coupon prompt — returns code string (applied), '' (skipped), or false (cancelled).
+  function promptCoupon(planId, email, token) {
+    return new Promise(function(resolve) {
+      let modal = document.getElementById('asm-coupon-modal');
+      if (modal) modal.remove();
+      modal = document.createElement('div');
+      modal.id = 'asm-coupon-modal';
+      modal.style.cssText = 'position:fixed;inset:0;z-index:10007;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;padding:16px';
+      modal.innerHTML =
+        '<div style="background:#1A1D21;border:1px solid #3A3D42;border-radius:12px;width:100%;max-width:380px;padding:20px">' +
+          '<h3 style="margin:0 0 4px;color:#ECB22E;font-size:16px">Have a coupon?</h3>' +
+          '<p style="margin:0 0 14px;color:#9A9DA2;font-size:12px">Enter a code, or skip to pay full price.</p>' +
+          '<div style="display:flex;gap:8px">' +
+            '<input id="asm-coupon-input" type="text" placeholder="COUPON CODE" style="flex:1;text-transform:uppercase;background:#222529;border:1px solid #3A3D42;color:#fff;border-radius:6px;padding:9px;font-size:13px">' +
+            '<button id="asm-coupon-apply" class="asm-btn asm-btn-ghost" style="white-space:nowrap">Apply</button>' +
+          '</div>' +
+          '<div id="asm-coupon-status" style="font-size:12px;margin-top:10px;min-height:16px"></div>' +
+          '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">' +
+            '<button id="asm-coupon-cancel" class="asm-btn asm-btn-ghost">Cancel</button>' +
+            '<button id="asm-coupon-continue" class="asm-btn asm-btn-primary">Continue</button>' +
+          '</div>' +
+        '</div>';
+      document.body.appendChild(modal);
+
+      const input = modal.querySelector('#asm-coupon-input');
+      const status = modal.querySelector('#asm-coupon-status');
+      let validCode = ''; // set once a coupon validates
+
+      function done(val) { modal.remove(); resolve(val); }
+
+      modal.querySelector('#asm-coupon-apply').onclick = async function() {
+        const code = (input.value || '').trim().toUpperCase();
+        if (!code) { status.textContent = 'Enter a code first'; status.style.color = '#E01E5A'; return; }
+        status.textContent = 'Checking…'; status.style.color = '#7A7D82';
+        try {
+          const r = await fetch(apiBase() + '/asm/payments/validate-coupon', {
+            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+            body: JSON.stringify({ code, planId, email })
+          });
+          const d = await r.json();
+          if (d.valid) {
+            validCode = d.code;
+            status.innerHTML = '✓ Applied: ₹' + d.basePrice.toLocaleString('en-IN') +
+              ' → <b style="color:#2EB67D">₹' + d.finalPrice.toLocaleString('en-IN') + '</b> (save ₹' + d.discount.toLocaleString('en-IN') + ')';
+            status.style.color = '#2EB67D';
+          } else {
+            validCode = '';
+            status.textContent = d.reason || 'Invalid coupon';
+            status.style.color = '#E01E5A';
+          }
+        } catch (e) { status.textContent = e.message; status.style.color = '#E01E5A'; }
+      };
+
+      modal.querySelector('#asm-coupon-continue').onclick = function() {
+        // If they typed a code but didn't Apply, treat it as the code (server re-validates anyway).
+        const typed = (input.value || '').trim().toUpperCase();
+        done(validCode || typed || '');
+      };
+      modal.querySelector('#asm-coupon-cancel').onclick = function() { done(false); };
+      modal.addEventListener('click', function(e) { if (e.target === modal) done(false); });
+      input.focus();
+    });
   }
 
   async function startASMPayment(planId) {
@@ -2130,12 +2565,14 @@ const ASMModule = (() => {
 
     if (!userId) { showToast('Could not identify user', 'error'); return; }
 
+    const coupon = _asmCoupon || '';
+
     try {
       // Create order
       const res = await fetch(apiBase() + '/asm/payments/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-        body: JSON.stringify({ planId, userId, email })
+        body: JSON.stringify({ planId, userId, email, coupon: coupon || '' })
       });
       const order = await res.json();
 
@@ -2200,6 +2637,245 @@ const ASMModule = (() => {
   // TOAST NOTIFICATIONS
   // ========================================================================
 
+  // ── image compression: File -> data URL (JPEG, max 1600px, q0.7) ──
+  function compressImage(file) {
+    return new Promise((resolve, reject) => {
+      if (!/^image\/(jpeg|png)$/.test(file.type)) { reject(new Error('Only JPG/PNG')); return; }
+      const img = new Image();
+      const reader = new FileReader();
+      reader.onload = e => { img.src = e.target.result; };
+      reader.onerror = () => reject(new Error('read failed'));
+      img.onload = () => {
+        const MAX = 1600;
+        let { width: w, height: h } = img;
+        if (w > MAX || h > MAX) { const s = Math.min(MAX / w, MAX / h); w = Math.round(w * s); h = Math.round(h * s); }
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        c.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve(c.toDataURL('image/jpeg', 0.7));
+      };
+      img.onerror = () => reject(new Error('bad image'));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // shared: build an attach control that collects compressed data URLs into `store` array
+  function buildAttachUI(store, previewId) {
+    return '<div style="margin-top:10px">' +
+      '<label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#9A9DA2;cursor:pointer">' +
+        '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>' +
+        'Attach screenshots' +
+        '<input type="file" accept="image/png,image/jpeg" multiple style="display:none" ' +
+          'onchange="ASMModule._onAttach(event,\''+previewId+'\')"></label>' +
+      '<div id="'+previewId+'" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px"></div></div>';
+  }
+
+  // global registry so inline onchange can reach the right store
+  var _attachStores = {};
+  async function _onAttach(ev, previewId) {
+    const files = Array.from(ev.target.files || []);
+    const prev = document.getElementById(previewId);
+    const store = _attachStores[previewId] = _attachStores[previewId] || [];
+    for (const f of files) {
+      if (store.length >= 6) { showToast('Max 6 images', 'error'); break; }
+      try {
+        const durl = await compressImage(f);
+        store.push(durl);
+        const wrap = document.createElement('div');
+        wrap.style.cssText = 'position:relative;width:52px;height:52px';
+        const idx = store.length - 1;
+        wrap.innerHTML = '<img src="'+durl+'" style="width:52px;height:52px;object-fit:cover;border-radius:6px;border:1px solid #3A3D42">' +
+          '<span style="position:absolute;top:-6px;right:-6px;background:#E01E5A;color:#fff;border-radius:50%;width:16px;height:16px;font-size:11px;line-height:16px;text-align:center;cursor:pointer" '+
+          'onclick="ASMModule._rmAttach(\''+previewId+'\','+idx+',this)">×</span>';
+        prev.appendChild(wrap);
+      } catch (e) { showToast(e.message, 'error'); }
+    }
+    ev.target.value = '';
+  }
+  function _rmAttach(previewId, idx, el) {
+    const store = _attachStores[previewId];
+    if (store && store[idx] !== undefined) store[idx] = null; // tombstone (keep indices)
+    if (el && el.parentElement) el.parentElement.remove();
+  }
+  function _collectAttachments(previewId) {
+    return (_attachStores[previewId] || []).filter(Boolean);
+  }
+  function _clearAttachments(previewId) { delete _attachStores[previewId]; }
+
+  // render attachments inside a thread bubble
+  function renderAttachments(atts) {
+    if (!atts || !atts.length) return '';
+    return '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px">' +
+      atts.map(u => '<a href="'+u+'" target="_blank" rel="noopener"><img src="'+u+'" style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid #3A3D42"></a>').join('') +
+      '</div>';
+  }
+
+  // Unified "Export Files" — collects RIS panels, opens ExportFiles modal
+  function exportFilesRIS() {
+    if (!readyItems || !readyItems.length) { showToast('No items in Ready — build and save first', 'error'); return; }
+    if (!window.ExportFiles) { showToast('Export module not loaded', 'error'); return; }
+    const panels = [];
+    readyItems.forEach(it => {
+      (it.outputs || []).forEach(o => {
+        if (o.w > 0 && o.h > 0 && o.qty > 0) {
+          const b = o.band || {};
+          panels.push({
+            label: o.component || o.remark || 'Panel',
+            length: o.w, width: o.h, qty: o.qty,
+            material: o.material || o.color || 'DW',
+            grain: !!o.grainLocked,
+            ebL: b.l || '', ebR: b.r || '', ebT: b.t || '', ebB: b.b || ''
+          });
+        }
+      });
+    });
+    window.ExportFiles.open({
+      title: (readyItems[0] && readyItems[0].roomName) || 'ASM_Export',
+      panels: panels,
+      stock: [],
+      onPdf: function(){ exportToPDF(); }
+    });
+  }
+
+  function reportProblem(instanceId) {
+    const inst = sbsItems.find(i => i.instanceId === instanceId);
+    const itemName = inst ? (inst.itemName || 'Item') : 'Item';
+    const ov = document.createElement('div');
+    ov.className = 'asm-review-overlay';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:100000';
+    ov.innerHTML =
+      '<div style="background:#1E2124;border:1px solid #3A3D42;border-radius:12px;padding:24px;max-width:480px;width:92%">' +
+        '<div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:4px">Report a problem</div>' +
+        '<div style="font-size:13px;color:#9A9DA2;margin-bottom:14px">Item: <b style="color:#ECB22E">' + itemName.replace(/</g,"&lt;") + '</b></div>' +
+        '<textarea id="rpBody" rows="5" placeholder="Describe the problem…" style="width:100%;box-sizing:border-box;background:#14161A;border:1px solid #3A3D42;color:#fff;border-radius:8px;padding:10px;font-family:inherit;font-size:13px;resize:vertical"></textarea>' +
+        buildAttachUI(null, 'rpAttach') +
+        '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">' +
+          '<button class="asm-btn asm-btn-ghost" id="rpCancel">Cancel</button>' +
+          '<button class="asm-btn" style="background:#E01E5A;color:#fff" id="rpSend">Send</button>' +
+        '</div>' +
+        '<div id="rpStatus" style="font-size:12px;margin-top:8px"></div>' +
+      '</div>';
+    document.body.appendChild(ov);
+    const close = () => ov.remove();
+    ov.querySelector('#rpCancel').onclick = close;
+    ov.onclick = e => { if (e.target === ov) close(); };
+    ov.querySelector('#rpSend').onclick = async () => {
+      const body = ov.querySelector('#rpBody').value.trim();
+      const st = ov.querySelector('#rpStatus');
+      if (!body) { st.textContent = 'Please type a message.'; st.style.color = '#E01E5A'; return; }
+      st.textContent = 'Sending…'; st.style.color = '#9A9DA2';
+      try {
+        const images = _collectAttachments('rpAttach');
+        if (!body && !images.length) { st.textContent = 'Add a message or image.'; st.style.color = '#E01E5A'; return; }
+        const res = await fetch(apiBase() + '/asm/problem', {
+          method: 'POST',
+          headers: Object.assign({ 'Content-Type': 'application/json' }, authH()),
+          body: JSON.stringify({ itemName: itemName, body: body, images: images })
+        });
+        const d = await res.json();
+        if (d.success) { _clearAttachments('rpAttach'); showToast('Problem reported — we will reply soon', 'success'); close(); }
+        else { st.textContent = d.error || 'Failed to send'; st.style.color = '#E01E5A'; }
+      } catch (e) { st.textContent = e.message; st.style.color = '#E01E5A'; }
+    };
+  }
+
+  async function refreshMyProblemsBadge() {
+    try {
+      const res = await fetch(apiBase() + '/asm/my-problems', { headers: authH() });
+      const d = await res.json();
+      const probs = d.problems || [];
+      const unread = probs.filter(p => p.unread_user).length;
+      const badge = document.getElementById('asm-msgs-badge');
+      if (badge) {
+        if (unread > 0) { badge.textContent = unread; badge.style.display = 'flex'; }
+        else badge.style.display = 'none';
+      }
+      return probs;
+    } catch (e) { return []; }
+  }
+
+  async function openMyProblems() {
+    const probs = await refreshMyProblemsBadge();
+    const ov = document.createElement('div');
+    ov.className = 'asm-review-overlay';
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:100000';
+    const esc = x => String(x==null?'':x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+    const fmt = iso => { if(!iso) return ''; const d=new Date(iso); return isNaN(d)?'':d.toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}); };
+
+    function threadHtml(p) {
+      return (p.messages||[]).map(m => {
+        const mine = m.sender === 'user';
+        return '<div style="margin:6px 0;display:flex;' + (mine?'justify-content:flex-end':'') + '">' +
+          '<div style="max-width:80%;background:' + (mine?'#2B5C43':'#26282C') + ';color:#eee;padding:8px 11px;border-radius:9px;font-size:13px">' +
+            '<div style="font-size:10px;color:#9A9DA2;margin-bottom:2px">' + (mine?'You':'Support') + ' · ' + fmt(m.created_at) + '</div>' +
+            (m.body ? esc(m.body) : '') + renderAttachments(m.attachments) + '</div></div>';
+      }).join('');
+    }
+
+    const body = probs.length ? probs.map(p =>
+      '<div style="background:#1A1D21;border:1px solid #2A2D31;border-radius:10px;padding:14px;margin-bottom:12px">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
+          '<div style="font-size:13px;color:#ECB22E;font-weight:700">' + esc(p.item_name || 'Item') + (p.status==='closed'?' <span style="background:#555;color:#fff;font-size:9px;padding:1px 6px;border-radius:8px">CLOSED</span>':'') + '</div>' +
+          '<div style="font-size:11px;color:#9A9DA2">' + fmt(p.created_at) + '</div>' +
+        '</div>' +
+        '<div style="max-height:220px;overflow-y:auto;margin-bottom:8px">' + threadHtml(p) + '</div>' +
+        (p.status==='closed' ? '<div style="font-size:12px;color:#9A9DA2">This thread is closed.</div>' :
+          '<div style="display:flex;gap:6px">' +
+            '<input id="myreply-' + p.id + '" placeholder="Reply…" style="flex:1;background:#111;border:1px solid #3A3D42;color:#fff;border-radius:6px;padding:7px;font-size:13px;font-family:inherit">' +
+            '<button class="asm-btn asm-btn-primary" onclick="ASMModule.replyMyProblem(' + p.id + ')">Send</button>' +
+          '</div>' + buildAttachUI(null, 'myAttach-' + p.id)) +
+        '<div id="myrepstatus-' + p.id + '" style="font-size:11px;margin-top:4px"></div>' +
+      '</div>'
+    ).join('') : '<div style="color:#9A9DA2;font-size:13px;text-align:center;padding:20px">No messages yet. Use "Report Problem" on an item to start.</div>';
+
+    ov.innerHTML =
+      '<div style="background:#1E2124;border:1px solid #3A3D42;border-radius:12px;padding:22px;max-width:560px;width:94%;max-height:82vh;overflow-y:auto">' +
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
+          '<div style="font-size:16px;font-weight:700;color:#fff">My Messages</div>' +
+          '<button class="asm-btn asm-btn-ghost" id="myMsgClose">Close</button>' +
+        '</div>' + body +
+      '</div>';
+    document.body.appendChild(ov);
+    ov.querySelector('#myMsgClose').onclick = () => ov.remove();
+    ov.onclick = e => { if (e.target === ov) ov.remove(); };
+    ov._probs = probs;
+    _myProblemsOverlay = ov;
+
+    // mark replies as read (server side) — clears the badge
+    try {
+      for (const p of probs) {
+        if (p.unread_user) {
+          await fetch(apiBase() + '/asm/problem/mark-read', {
+            method: 'POST', headers: Object.assign({ 'Content-Type':'application/json' }, authH()),
+            body: JSON.stringify({ problem_id: p.id })
+          });
+        }
+      }
+      refreshMyProblemsBadge();
+    } catch (e) {}
+  }
+
+  async function replyMyProblem(id) {
+    const inp = document.getElementById('myreply-' + id);
+    const st = document.getElementById('myrepstatus-' + id);
+    const body = (inp.value || '').trim();
+    st.textContent = 'Sending…'; st.style.color = '#9A9DA2';
+    try {
+      const images = _collectAttachments('myAttach-' + id);
+      if (!body && !images.length) { st.textContent = 'Add text or image.'; st.style.color = '#E01E5A'; return; }
+      const res = await fetch(apiBase() + '/asm/problem/reply', {
+        method: 'POST', headers: Object.assign({ 'Content-Type':'application/json' }, authH()),
+        body: JSON.stringify({ problem_id: id, body: body, images: images })
+      });
+      const d = await res.json();
+      if (d.success) {
+        _clearAttachments('myAttach-' + id);
+        if (_myProblemsOverlay) _myProblemsOverlay.remove();
+        openMyProblems();  // reload thread
+      } else { st.textContent = d.error || 'Failed'; st.style.color = '#E01E5A'; }
+    } catch (e) { st.textContent = e.message; st.style.color = '#E01E5A'; }
+  }
+
   function showToast(msg, type = 'info') {
     const toast = document.createElement('div');
     toast.className = `asm-toast asm-toast-${type}`;
@@ -2220,7 +2896,7 @@ const ASMModule = (() => {
     if (document.getElementById('asm-fullpage-styles')) return;
     const style = document.createElement('style');
     style.id = 'asm-fullpage-styles';
-    style.textContent = ASM_CSS;
+    style.textContent = window.ASM_CSS;
     document.head.appendChild(style);
   }
 
@@ -2266,6 +2942,10 @@ const ASMModule = (() => {
     else if (e.key === 'ArrowRight') modalNav(1);
   });
 
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && document.getElementById('asm-video-modal')) closeVideo();
+  });
+
   function showImportModal() {
     const old = document.getElementById('asm-import-modal'); if (old) old.remove();
     const m = document.createElement('div');
@@ -2276,7 +2956,7 @@ const ASMModule = (() => {
       <div style="background:#1A1D21;border:1px solid #3A3D42;border-radius:12px;width:440px;overflow:hidden">
         <div style="padding:16px 20px;background:#222529;border-bottom:1px solid #3A3D42;display:flex;justify-content:space-between;align-items:center">
           <div style="font-size:15px;font-weight:700;color:#fff">Import your own Sizes in RIS</div>
-          <button onclick="document.getElementById('asm-import-modal').remove()" style="background:none;border:none;color:#7A7D82;font-size:20px;cursor:pointer">✕</button>
+          <button onclick="document.getElementById('asm-import-modal').remove()" style="background:none;border:none;color:#7A7D82;font-size:20px;cursor:pointer">&#10005;</button>
         </div>
         <div style="padding:20px">
           <div style="font-size:12px;color:#ABABAD;margin-bottom:12px">Columns: Component | W | H | Qty | Material | Remark. Component optional. Item name = file name.</div>
@@ -2363,323 +3043,91 @@ const ASMModule = (() => {
   }
 
   // ── Public API ──
+  function newProject() {
+    const hasWork = (sbsItems && sbsItems.length) || (readyItems && readyItems.length);
+    if (hasWork && !confirm('Start a new project? Unsaved items will be cleared.')) return;
+    sbsItems = [];
+    readyItems = [];
+    currentProjectId = null;
+    currentProjectName = '';
+    if (typeof currentClientName !== 'undefined') currentClientName = '';
+    syncProjectName();
+    renderSBS();
+    renderReadyItems();
+    closeDrawers();
+    showToast('New project started', 'success');
+  }
+
+  // Collapse either side panel to a rail so the SBS (and the 3D model) get the
+  // width. Hovering a rail floats its panel back without moving anything else.
+  function toggleSide(cls, key) {
+    const root = document.getElementById('asm-fullpage');
+    if (!root) return;
+    const collapsed = root.classList.toggle(cls);
+    try { localStorage.setItem(key, collapsed ? '1' : '0'); } catch (e) {}
+    // the centre column just changed width — the WebGL canvas will not notice
+    // on its own, so tell it once the CSS transition has settled
+    setTimeout(function () { if (window.ASM3D) { try { ASM3D.resize(); } catch (e) {} } }, 240);
+  }
+  function toggleCS()  { toggleSide('cs-collapsed',  'asm_cs_collapsed'); }
+  function toggleRIS() { toggleSide('ris-collapsed', 'asm_ris_collapsed'); }
+
+  function applyCSState() {
+    const root = document.getElementById('asm-fullpage');
+    if (!root) return;
+    const read = k => { try { return localStorage.getItem(k) || '0'; } catch (e) { return '0'; } };
+    root.classList.toggle('cs-collapsed',  read('asm_cs_collapsed')  === '1');
+    root.classList.toggle('ris-collapsed', read('asm_ris_collapsed') === '1');
+  }
+
+  function toggleDrawer(which) {
+    const cs = document.querySelector('.asm-catalogue');
+    const ris = document.querySelector('.asm-ris');
+    const scrim = document.getElementById('asm-scrim');
+    const target = which === 'cs' ? cs : ris;
+    const other = which === 'cs' ? ris : cs;
+    if (!target) return;
+    const opening = !target.classList.contains('drawer-open');
+    if (other) other.classList.remove('drawer-open');
+    target.classList.toggle('drawer-open', opening);
+    if (scrim) scrim.classList.toggle('show', opening);
+  }
+  function closeDrawers() {
+    document.querySelectorAll('.asm-catalogue,.asm-ris').forEach(d => d.classList.remove('drawer-open'));
+    const scrim = document.getElementById('asm-scrim');
+    if (scrim) scrim.classList.remove('show');
+  }
+  function updateRisBadge() {
+    const n = (readyItems && readyItems.length) || 0;
+    const b = document.getElementById('asm-ris-badge');
+    if (b) b.textContent = n;
+    const r = document.getElementById('asm-ris-rail-count');
+    if (r) { r.textContent = n; r.style.display = n ? 'flex' : 'none'; }
+  }
+
+  function makeQuotation() {
+    if (typeof window !== 'undefined' && window.ASMQuote) {
+      if (!readyItems || !readyItems.length) { showToast('No items in Ready Items — build and save first', 'error'); return; }
+      trackAsm('make_quotation');
+      window.ASMQuote.open(readyItems);
+    } else { showToast('Quotation module not loaded', 'error'); }
+  }
+
   return {
-    init, openASM, closeASM,
-    showImportModal, downloadSample, doImport,
+    init, openASM, closeASM, makeQuotation, newProject, toggleDrawer, closeDrawers,
+    showImportModal, downloadSample, doImport, toggleCS, toggleRIS, stepInput, restoreOutputRows,
     filterCatalogue, addToSBS, removeFromSBS,
-    updateInput, setRoomName, editOutput, saveToReady, reviewCheck, setRisSort, asmLogin, asmLogout,
-    reopenReady, removeReady, clearReady, exportReady, exportToPDF, _runExport, sbsFont, switchCatalogue, showCategoryGallery, exitGallery, addManualRow, editManualRow,
+    updateInput, setRoomName, editOutput, deleteOutputRow, saveToReady, reviewCheck, setRisSort, asmLogin, asmLogout,
+    reopenReady, removeReady, duplicateReady, clearReady, exportReady, exportToPDF, _runExport, sbsFont, setUnit, switchCatalogue, showCategoryGallery, exitGallery, addManualRow, addManualRowsPrompt, deleteManualRow, editManualRow, addSBSRows, adjustEBand, reportProblem, exportFilesRIS, openMyProblems, replyMyProblem, _onAttach, _rmAttach,
     saveProject, showProjects, loadProject, deleteProject,
     showPricing, startASMPayment,
-    openImageModal, closeImageModal, modalNav
+    setDimOrder, toggleDimOrder,
+    toggleItemSwitch, switchSBSItem,
+    toggleNotifications, openShare,
+    openImageModal, closeImageModal, modalNav,
+    openVideo, closeVideo,
+    show3DView, showImageView
   };
 })();
 
 document.addEventListener('DOMContentLoaded', () => ASMModule.init());
-
-// ============================================================================
-// CSS (injected on first open)
-// ============================================================================
-const ASM_CSS = `
-#asm-fullpage {
-  position: fixed; inset: 0; z-index: 9999;
-  background: #1A1D21;
-  display: none; flex-direction: column;
-  font-family: 'Lato', -apple-system, sans-serif;
-  color: #D1D2D3;
-}
-
-.asm-topbar {
-  height: 56px; flex-shrink: 0;
-  background: #350D36;
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 0 20px; color: #fff;
-  box-shadow: 0 2px 8px rgba(0,0,0,.3);
-}
-.asm-logo-svg { flex-shrink: 0; }
-.asm-title { font-size: 18px; font-weight: 900; letter-spacing: .5px; display: flex; align-items: center; gap: 10px; }
-.asm-topbar-actions { display: flex; align-items: center; gap: 8px; }
-.asm-top-btn { background: rgba(255,255,255,.1); border: none; color: #fff; padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer; transition: background .2s; font-family: inherit; }
-.asm-top-btn:hover { background: rgba(255,255,255,.2); }
-.asm-save-btn { background: rgba(236,178,46,.2); color: #ECB22E; }
-.asm-save-btn:hover { background: rgba(236,178,46,.3); }
-.asm-close {
-  background: rgba(255,255,255,.12); border: none; color: #fff;
-  width: 34px; height: 34px; border-radius: 6px; font-size: 18px; cursor: pointer;
-  transition: background .2s;
-}
-.asm-close:hover { background: rgba(255,255,255,.25); }
-
-.asm-body {
-  flex: 1; display: grid;
-  grid-template-columns: 240px 1fr 300px;
-  gap: 1px; background: #2C2D30; overflow: hidden;
-}
-
-.asm-col { background: #1A1D21; display: flex; flex-direction: column; overflow: hidden; }
-.asm-col-head {
-  padding: 12px 16px; font-size: 12px; font-weight: 800; letter-spacing: .8px;
-  color: #ECB22E; background: #222529; border-bottom: 2px solid #4A154B; flex-shrink: 0;
-}
-
-/* CATALOGUE (left) */
-.asm-search {
-  margin: 10px 12px; padding: 8px 12px; border-radius: 6px;
-  border: 1px solid #3A3D42; background: #222529; color: #D1D2D3; font-size: 13px;
-}
-.asm-search:focus { outline: none; border-color: #ECB22E; }
-.asm-cat-list { flex: 1; overflow-y: auto; padding: 0 8px 12px; }
-.asm-cat-group-label {
-  font-size: 10px; font-weight: 800; color: #7A7D82; letter-spacing: 1px;
-  padding: 12px 8px 6px; text-transform: uppercase;
-}
-.asm-cat-item {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 9px 12px; margin: 2px 0; border-radius: 6px; cursor: pointer;
-  font-size: 13px; transition: background .15s;
-  border-left: 3px solid transparent;
-}
-.asm-cat-item:hover { background: #2C2D30; border-left-color: #ECB22E; }
-.asm-cat-locked { opacity: .5; }
-.asm-cat-locked:hover { border-left-color: #E01E5A; }
-.asm-cat-locked .asm-cat-item-name { color: #7A7D82; }
-.asm-cat-item-name { color: #D1D2D3; }
-.asm-cat-item-add {
-  width: 20px; height: 20px; border-radius: 4px; background: #4A154B; color: #fff;
-  display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 700;
-  opacity: 0; transition: opacity .15s;
-}
-.asm-cat-item:hover .asm-cat-item-add { opacity: 1; }
-
-/* SBS (middle) */
-.asm-sbs-body { flex: 1; overflow-y: auto; padding: 16px; }
-.asm-sbs-body .asm-out-table, .asm-sbs-body .asm-out-table input { font-size: var(--sbs-font, 14px); }
-.asm-sbs-empty {
-  height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center;
-  color: #5A5D62; text-align: center; gap: 12px; font-size: 14px;
-}
-.asm-sbs-empty-icon { font-size: 48px; opacity: .4; }
-
-.asm-sbs-item {
-  background: #222529; border: 1px solid #3A3D42; border-radius: 10px;
-  margin-bottom: 18px; overflow: hidden;
-}
-.asm-sbs-item-head {
-  display: flex; align-items: center; justify-content: space-between;
-  padding: 12px 16px; background: #2C2D30; border-bottom: 1px solid #3A3D42;
-}
-.asm-sbs-item-title { font-size: 15px; font-weight: 800; color: #fff; }
-.asm-sbs-item-remove {
-  background: none; border: none; color: #7A7D82; cursor: pointer; font-size: 16px;
-  width: 28px; height: 28px; border-radius: 5px; transition: all .15s;
-}
-.asm-sbs-item-remove:hover { background: rgba(224,30,90,.15); color: #E01E5A; }
-
-.asm-sbs-item-inputs {
-  padding: 14px 16px;
-  display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px 18px;
-  background: #1E2125;
-}
-.asm-input-row { display: flex; align-items: center; gap: 10px; }
-.asm-input-row label { flex: 1; font-size: 12px; color: #ABABAD; }
-.asm-input-row input[type=number], .asm-input-row select {
-  width: 90px; padding: 6px 8px; border-radius: 5px;
-  border: 1px solid #3A3D42; background: #14161A; color: #fff; font-size: 13px; text-align: right;
-}
-.asm-input-row select { width: 130px; text-align: left; }
-.asm-input-row input:focus, .asm-input-row select:focus { outline: none; border-color: #ECB22E; }
-
-/* toggle switch */
-.asm-switch { position: relative; display: inline-block; width: 40px; height: 22px; }
-.asm-switch input { opacity: 0; width: 0; height: 0; }
-.asm-slider {
-  position: absolute; inset: 0; cursor: pointer; background: #3A3D42;
-  border-radius: 22px; transition: .2s;
-}
-.asm-slider:before {
-  content: ""; position: absolute; height: 16px; width: 16px; left: 3px; bottom: 3px;
-  background: #fff; border-radius: 50%; transition: .2s;
-}
-.asm-switch input:checked + .asm-slider { background: #ECB22E; }
-.asm-switch input:checked + .asm-slider:before { transform: translateX(18px); }
-
-.asm-sbs-item-outputs { padding: 0 16px 14px; }
-
-.asm-sbs-item-diagram-section {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 12px 16px;
-  background: #1A1D21;
-  border-bottom: 1px solid #292B2F;
-  align-items: stretch;
-}
-
-.asm-ref-images {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  justify-content: center;
-  padding: 12px;
-  background: rgba(0,0,0,.2);
-  border-radius: 6px;
-}
-
-.asm-ref-image-item {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  transition: all .2s;
-}
-
-.asm-ref-image-item:hover {
-  opacity: .85;
-  transform: scale(1.04);
-}
-
-.asm-ref-image-item img {
-  width: 280px;
-  height: 220px;
-  object-fit: contain;
-  border-radius: 6px;
-  border: 1px solid #3A3D42;
-  background: #14161A;
-  padding: 4px;
-  cursor: pointer;
-}
-
-.asm-ref-label {
-  font-size: 11px;
-  color: #7A7D82;
-  text-align: center;
-  max-width: 280px;
-  word-break: break-word;
-  font-weight: 600;
-}
-
-.asm-sbs-item-diagram {
-  width: 100%;
-  text-align: center;
-  padding: 16px;
-  min-height: 300px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(0,0,0,.2);
-  border: 1px solid #3A3D42;
-  border-radius: 6px;
-}
-
-.asm-modal-overlay {
-  position: fixed; inset: 0;
-  background: rgba(0,0,0,.85);
-  display: flex; align-items: center; justify-content: center;
-  z-index: 10000; opacity: 0; visibility: hidden; transition: all .3s;
-}
-.asm-modal-overlay.show { opacity: 1; visibility: visible; }
-.asm-modal-content {
-  position: relative; background: #1A1D21; border-radius: 8px;
-  max-width: 90vw; max-height: 90vh; overflow: auto;
-  box-shadow: 0 8px 32px rgba(0,0,0,.6);
-}
-.asm-modal-image {
-  width: auto; height: auto; display: block;
-  max-width: 90vw; max-height: 85vh; object-fit: contain;
-}
-.asm-modal-close {
-  position: absolute; top: 12px; right: 12px; width: 32px; height: 32px;
-  background: rgba(0,0,0,.6); border: none; border-radius: 4px; color: #fff;
-  font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center;
-  z-index: 10001; transition: all .2s;
-}
-.asm-modal-close:hover { background: rgba(0,0,0,.9); }
-
-.asm-out-table { width: 100%; border-collapse: collapse; font-size: 12px; }
-.asm-out-table th {
-  text-align: left; padding: 8px 10px; color: #7A7D82; font-weight: 700;
-  border-bottom: 1px solid #3A3D42; font-size: 11px; text-transform: uppercase; letter-spacing: .5px;
-}
-.asm-out-table td { padding: 7px 10px; border-bottom: 1px solid #292B2F; }
-.asm-out-name { font-weight: 700; color: #D1D2D3; }
-.asm-out-num { text-align: right; font-family: 'Inconsolata', monospace; color: #ECB22E; font-weight: 600; }
-.asm-out-remark { color: #8A8D92; font-size: 11px; }
-
-/* editable output cells */
-.asm-cell {
-  background: #222529; border: 1px solid #3A3D42; color: inherit; font: inherit;
-  padding: 4px 6px; width: 100%; border-radius: 4px; box-sizing: border-box;
-}
-.asm-cell:hover { border-color: #3A3D42; }
-.asm-cell:focus { outline: none; border-color: #ECB22E; background: #14161A; }
-.asm-cell-num { text-align: right; width: 70px; color: #ECB22E; font-family: 'Inconsolata', monospace; font-weight: 600; }
-.asm-cell-remark { color: #8A8D92; font-size: 11px; }
-td .asm-cell { font-weight: 700; color: #D1D2D3; }
-td .asm-cell-num { font-weight: 600; color: #ECB22E; }
-.asm-out-conditional { background: rgba(74,21,75,.18); }
-.asm-out-empty { text-align: center; color: #5A5D62; padding: 16px; font-style: italic; }
-.asm-sbs-item-summary { margin-top: 10px; font-size: 11px; color: #7A7D82; text-align: right; }
-
-.asm-sbs-item-actions {
-  display: flex; gap: 8px; justify-content: flex-end;
-  padding: 12px 16px; background: #1E2125; border-top: 1px solid #3A3D42;
-}
-
-/* RIS (right) */
-.asm-ris-list { flex: 1; overflow-y: auto; padding: 12px; }
-.asm-ris-item {
-  background: #222529; border: 1px solid #3A3D42; border-radius: 8px;
-  padding: 10px 12px; margin-bottom: 8px;
-}
-.asm-ris-item-head { display: flex; align-items: center; gap: 8px; }
-.asm-ris-num {
-  width: 22px; height: 22px; border-radius: 50%; background: #4A154B; color: #fff;
-  display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0;
-}
-.asm-ris-name { flex: 1; font-size: 13px; font-weight: 700; color: #fff; }
-.asm-ris-remove {
-  background: none; border: none; color: #7A7D82; cursor: pointer; font-size: 14px;
-  width: 24px; height: 24px; border-radius: 4px;
-}
-.asm-ris-remove:hover { background: rgba(224,30,90,.15); color: #E01E5A; }
-.asm-ris-meta { font-size: 11px; color: #7A7D82; margin-top: 5px; padding-left: 30px; }
-.asm-ris-foot {
-  flex-shrink: 0; padding: 12px; border-top: 1px solid #3A3D42;
-  display: flex; flex-direction: column; gap: 8px;
-}
-
-.asm-empty { text-align: center; color: #5A5D62; padding: 30px 16px; font-size: 13px; line-height: 1.6; }
-
-/* buttons */
-.asm-btn {
-  padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: 700;
-  cursor: pointer; border: none; transition: all .15s; font-family: inherit;
-}
-.asm-btn-primary { background: #ECB22E; color: #1A1D21; }
-.asm-btn-primary:hover { background: #f5c044; }
-.asm-btn-secondary { background: #4A154B; color: #fff; }
-.asm-btn-secondary:hover { background: #611f64; }
-.asm-btn-ghost { background: transparent; color: #ABABAD; border: 1px solid #3A3D42; }
-.asm-btn-ghost:hover { background: #2C2D30; color: #fff; }
-
-/* toast */
-.asm-toast {
-  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(20px);
-  padding: 12px 22px; border-radius: 8px; font-size: 13px; font-weight: 600;
-  z-index: 10001; opacity: 0; transition: all .3s; color: #fff;
-  box-shadow: 0 4px 16px rgba(0,0,0,.4);
-}
-.asm-toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
-.asm-toast-success { background: #2EB67D; }
-.asm-toast-error { background: #E01E5A; }
-.asm-toast-info { background: #36C5F0; color: #1A1D21; }
-
-/* responsive */
-@media (max-width: 900px) {
-  .asm-body { grid-template-columns: 1fr; grid-template-rows: auto 1fr auto; }
-  .asm-catalogue { max-height: 180px; }
-  .asm-ris { max-height: 200px; }
-  .asm-sbs-item-inputs { grid-template-columns: 1fr; }
-}
-`;
