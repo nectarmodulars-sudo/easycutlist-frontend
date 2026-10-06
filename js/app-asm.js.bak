@@ -687,7 +687,6 @@ const ASMModule = (() => {
       <div class="asm-sbs-item" id="${inst.instanceId}">
         <div class="asm-sbs-item-head">
           <div class="asm-item-switch" style="position:relative;flex:1;min-width:0"><div style="font-size:10px;font-weight:800;letter-spacing:.06em;color:#ECB22E;text-transform:uppercase">${(catObj.category||'').toUpperCase()}</div><button onclick="ASMModule.toggleItemSwitch('${inst.instanceId}')" style="background:none;border:none;color:#fff;cursor:pointer;display:flex;align-items:center;gap:8px;padding:0;font-size:15px;font-weight:800;max-width:100%" title="Switch item in this category"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${inst.itemName}</span><span style="color:#ECB22E;font-size:22px;line-height:1;flex:0 0 auto">\u25be</span></button><div id="switch_${inst.instanceId}" class="asm-item-switch-list" style="display:none;position:absolute;top:100%;left:0;z-index:200;background:#1E2124;border:1px solid #3A3D42;border-radius:8px;margin-top:4px;max-height:340px;overflow:auto;min-width:280px;box-shadow:0 8px 24px rgba(0,0,0,.5)"></div></div>
-          <span class="asm-preset-slot" data-inst="${inst.instanceId}"></span>
           <button class="asm-sbs-item-remove" onclick="ASMModule.removeFromSBS('${inst.instanceId}')">&#10005;</button>
         </div>
         <div class="asm-sbs-item-diagram-section" id="diagram_${inst.instanceId}">${buildDiagramBody(inst, schema, imagesHtml)}</div>
@@ -784,14 +783,9 @@ const ASMModule = (() => {
     const panels = (inst.outputs || []).reduce((a, o) => a + (o.qty || 0), 0);
     const hidden = Object.keys(inst.deletedRows || {}).length;
     const edited = (inst.outputs || []).filter(o => o._edited).length;
-    const undoN = (inst._undo || []).length;
     let s = n + ' components \u00b7 ' + panels + ' total panels';
     if (hidden) s += ' \u00b7 <span style="color:#E01E5A">' + hidden + ' deleted</span>';
     if (edited) s += ' \u00b7 <span style="color:#ECB22E">' + edited + ' edited</span>';
-    if (undoN) {
-      s += '<button class="asm-sum-reset" title="Bring back the row just deleted" onclick="ASMModule.undoDeleteRow(\'' +
-           inst.instanceId + '\')">\u21a9 Undo delete</button>';
-    }
     if (hidden || edited) {
       s += '<button class="asm-sum-reset" onclick="ASMModule.restoreOutputRows(\'' +
            inst.instanceId + '\')">Reset to formulas</button>';
@@ -813,59 +807,12 @@ const ASMModule = (() => {
     const inst = sbsItems.find(i => i.instanceId === instanceId);
     if (!inst || !inst.outputs || !inst.outputs[idx]) return;
     const o = inst.outputs[idx];
-    const key = o._manual ? null : outKey(o);
-    if (key) {
+    if (!o._manual) {
       if (!inst.deletedRows) inst.deletedRows = {};
-      inst.deletedRows[key] = true;
+      inst.deletedRows[outKey(o)] = true;
     }
     inst.outputs.splice(idx, 1);
-    if (!inst._undo) inst._undo = [];
-    inst._undo.push({ row: o, idx: idx, key: key });
-    if (inst._undo.length > 20) inst._undo.shift();
     updateSBSItemOutputs(inst);
-  }
-
-  // Put back the row deleted most recently. The stack goes 20 deep, so repeated
-  // clicks walk back through the deletions in reverse order. It lives on the
-  // instance in memory — a page reload starts it empty.
-  function undoDeleteRow(instanceId) {
-    const inst = sbsItems.find(i => i.instanceId === instanceId);
-    if (!inst || !inst._undo || !inst._undo.length) return;
-    const last = inst._undo.pop();
-    if (last.key && inst.deletedRows) delete inst.deletedRows[last.key];
-    if (!inst.outputs) inst.outputs = [];
-    const at = Math.min(last.idx, inst.outputs.length);
-    inst.outputs.splice(at, 0, last.row);
-    updateSBSItemOutputs(inst);
-    showToast('Row restored', 'success');
-  }
-
-  // Read-only view of one SBS instance, for asm-presets.js. A copy, not the
-  // live object — nothing outside this module mutates inputs directly.
-  function getInstance(instanceId) {
-    const inst = sbsItems.find(i => i.instanceId === instanceId);
-    if (!inst) return null;
-    return {
-      instanceId: inst.instanceId,
-      itemId: inst.itemId,
-      itemName: inst.itemName,
-      inputs: Object.assign({}, inst.inputs)
-    };
-  }
-
-  // Load a saved setting. Stored values are already in mm, the canonical unit
-  // inst.inputs uses, so nothing is converted on the way in.
-  function applyInputs(instanceId, inputs) {
-    const inst = sbsItems.find(i => i.instanceId === instanceId);
-    if (!inst || !inputs || typeof inputs !== 'object') return false;
-    const schema = activeItemSchemas[inst.itemId];
-    const keys = (schema && schema.inputs) ? schema.inputs.map(i => i.key) : Object.keys(inputs);
-    keys.forEach(k => { if (inputs[k] !== undefined) inst.inputs[k] = inputs[k]; });
-    renderSBS();
-    push3D(instanceId);
-    if (schema && schema.manualEntry) refreshManualRows(instanceId);
-    else recalc(instanceId);
-    return true;
   }
 
   // Bring back every row deleted on this item, and drop the manual overrides
@@ -1092,7 +1039,6 @@ const ASMModule = (() => {
       <div class="asm-sbs-item" id="${inst.instanceId}">
         <div class="asm-sbs-item-head">
           <div class="asm-item-switch" style="position:relative;flex:1;min-width:0"><div style="font-size:10px;font-weight:800;letter-spacing:.06em;color:#ECB22E;text-transform:uppercase">${(catObj.category||'').toUpperCase()}</div><button onclick="ASMModule.toggleItemSwitch('${inst.instanceId}')" style="background:none;border:none;color:#fff;cursor:pointer;display:flex;align-items:center;gap:8px;padding:0;font-size:15px;font-weight:800;max-width:100%" title="Switch item in this category"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${inst.itemName}</span><span style="color:#ECB22E;font-size:22px;line-height:1;flex:0 0 auto">\u25be</span></button><div id="switch_${inst.instanceId}" class="asm-item-switch-list" style="display:none;position:absolute;top:100%;left:0;z-index:200;background:#1E2124;border:1px solid #3A3D42;border-radius:8px;margin-top:4px;max-height:340px;overflow:auto;min-width:280px;box-shadow:0 8px 24px rgba(0,0,0,.5)"></div></div>
-          <span class="asm-preset-slot" data-inst="${inst.instanceId}"></span>
           <button class="asm-sbs-item-remove" onclick="ASMModule.removeFromSBS('${inst.instanceId}')" title="Remove">&#10005;</button>
         </div>
 
@@ -1127,11 +1073,6 @@ const ASMModule = (() => {
 
   // Update a single input and recalc live (debounced)
   let recalcTimers = {};
-  // One counter per SBS item, bumped on every /calculate request. Typing
-  // "400" with a pause after the 4 fires two requests; without this the
-  // slower d=4 reply could land last and overwrite the correct d=400 one,
-  // leaving stale sizes on screen until the next edit.
-  let recalcSeq = {};
   function setRoomName(instanceId, value) {
     const inst = sbsItems.find(i => i.instanceId === instanceId);
     if (!inst) return;
@@ -1219,8 +1160,6 @@ const ASMModule = (() => {
     const rSchema2 = activeItemSchemas[inst.itemId];
     if (rSchema2 && rSchema2.manualEntry) return;
 
-    const myReq = (recalcSeq[instanceId] = (recalcSeq[instanceId] || 0) + 1);
-
     try {
       const res = await fetch(`${API_BASE}/calculate`, {
         method: 'POST',
@@ -1228,9 +1167,6 @@ const ASMModule = (() => {
         body: JSON.stringify({ itemId: inst.itemId, inputs: inst.inputs, catalogue: inst.catalogueKey || currentCatalogue, unit: UNITS.get() })
       });
       const data = await res.json();
-
-      // A newer request went out while this one was in flight — drop this reply.
-      if (myReq !== recalcSeq[instanceId]) return;
 
       if (data.success) {
         // A recalc replaces every formula row, so anything the user did to the
@@ -2247,7 +2183,6 @@ const ASMModule = (() => {
     init, openASM, closeASM, makeQuotation, newProject, toggleDrawer, closeDrawers,
     showImportModal, downloadSample, doImport, toggleCS, toggleRIS, stepInput, restoreOutputRows,
     filterCatalogue, addToSBS, removeFromSBS,
-    undoDeleteRow, getInstance, applyInputs,
     updateInput, setRoomName, editOutput, deleteOutputRow, saveToReady, reviewCheck, setRisSort, asmLogin, asmLogout,
     reopenReady, removeReady, duplicateReady, clearReady, exportReady, exportToPDF, _runExport, sbsFont, setUnit, switchCatalogue, showCategoryGallery, exitGallery, addManualRow, addManualRowsPrompt, deleteManualRow, editManualRow, addSBSRows, adjustEBand, reportProblem, exportFilesRIS, openMyProblems, replyMyProblem, _onAttach, _rmAttach,
     saveProject, showProjects, loadProject, deleteProject, duplicateProject,
