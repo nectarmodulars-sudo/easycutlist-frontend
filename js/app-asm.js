@@ -134,24 +134,66 @@ const ASMModule = (() => {
           'onclick="ASMModule.showImageView(\'' + id + '\')"><span class="dot"></span>Image</button>' +
         '<button class="asm-view-tab' + (on ? ' on' : '') + '" id="tab3d_' + id + '" ' +
           'onclick="ASMModule.show3DView(\'' + id + '\')"><span class="dot"></span>3D View</button>' +
+        '<button class="asm-view-tab" id="tabout_' + id + '" ' +
+          'onclick="ASMModule.showOutView(\'' + id + '\')"><span class="dot"></span>Output sizes</button>' +
       '</div>' +
       '<div class="asm-view-pane" id="paneimg_' + id + '"' + (on ? ' style="display:none"' : '') + '>' + imgPane + '</div>' +
-      '<div class="asm-view-pane asm3d-mount" id="pane3d_' + id + '"' + (on ? '' : ' style="display:none"') + '></div>';
+      '<div class="asm-view-pane asm3d-mount" id="pane3d_' + id + '"' + (on ? '' : ' style="display:none"') + '></div>' +
+      /* the output table is parked here when its tab is picked; it lives
+         further down the item until then */
+      '<div class="asm-view-pane asm-out-pane" id="paneout_' + id + '" style="display:none"></div>';
   }
 
+  /* Which tab each item is on. A full re-render rebuilds the item from the
+     template, which puts the tabs back to their default and the output block
+     back at its anchor — so the tab has to be re-applied afterwards, the same
+     way the 3D canvas is remounted. Without this, typing a value made the
+     Output sizes pane go blank. */
+  const _viewMode = {};
+
   function setViewTabs(instanceId, mode) {
+    _viewMode[instanceId] = mode;
     const t1 = document.getElementById('tabimg_' + instanceId);
     const t2 = document.getElementById('tab3d_' + instanceId);
+    const t3 = document.getElementById('tabout_' + instanceId);
     const p1 = document.getElementById('paneimg_' + instanceId);
     const p2 = document.getElementById('pane3d_' + instanceId);
+    const p3 = document.getElementById('paneout_' + instanceId);
     if (t1) t1.classList.toggle('on', mode === 'img');
     if (t2) t2.classList.toggle('on', mode === '3d');
+    if (t3) t3.classList.toggle('on', mode === 'out');
     if (p1) p1.style.display = (mode === 'img') ? '' : 'none';
     if (p2) p2.style.display = (mode === '3d') ? '' : 'none';
+    if (p3) p3.style.display = (mode === 'out') ? '' : 'none';
+    parkOutputs(instanceId, mode === 'out');
+  }
+
+  /* The output table is one block in the item. For the Output sizes tab it is
+     MOVED into the tab pane and moved back when another tab is picked, so
+     there is only ever one copy of it and every id and handler on its rows
+     keeps working. `outhome_` is the empty anchor it came from. */
+  function parkOutputs(instanceId, inPane) {
+    const blk = document.getElementById('out_' + instanceId);
+    const home = document.getElementById('outhome_' + instanceId);
+    const pane = document.getElementById('paneout_' + instanceId);
+    if (!blk || !home || !pane) return;
+    if (inPane) { if (blk.parentNode !== pane) pane.appendChild(blk); blk.style.display = ''; }
+    else {
+      if (blk.parentNode !== home.parentNode) home.parentNode.insertBefore(blk, home.nextSibling);
+      blk.style.display = 'none';
+    }
+  }
+
+  /* Leaving the 3D tab only HIDES the pane. Closing the viewer would throw
+     away the camera angle and every shelf the user had moved, so coming back
+     showed a freshly solved model in default positions. The canvas stays
+     alive in the hidden pane; it is closed only when another item takes the
+     single WebGL context, or when the DOM is rebuilt. */
+  function showOutView(instanceId) {
+    setViewTabs(instanceId, 'out');
   }
 
   function showImageView(instanceId) {
-    if (_active3d === instanceId) { try { ASM3D.close(); } catch (e) {} _active3d = null; }
     setViewTabs(instanceId, 'img');
   }
 
@@ -167,6 +209,13 @@ const ASMModule = (() => {
     }
     const mount = document.getElementById('pane3d_' + instanceId);
     if (!mount) return;
+    /* the viewer is still alive in the hidden pane — show it as the user left
+       it instead of solving the item again from scratch */
+    if (_active3d === instanceId && ASM3D.current && mount.firstChild) {
+      setViewTabs(instanceId, '3d');
+      setTimeout(function () { try { ASM3D.resize(); } catch (e) {} }, 0);
+      return;
+    }
     _active3d = instanceId;
     setViewTabs(instanceId, '3d');
     ASM3D.open(mount, { ruleCode: schema.ruleCode, inputs: inst.inputs, item: inst.itemName })
@@ -175,6 +224,10 @@ const ASMModule = (() => {
 
   // Called after any full re-render, which throws the canvas away with the DOM.
   function remount3D() {
+    // every item that was showing its output table gets it back
+    sbsItems.forEach(function (i) {
+      if (_viewMode[i.instanceId] === 'out') setViewTabs(i.instanceId, 'out');
+    });
     if (!_active3d) return;
     const id = _active3d;
     if (!sbsItems.some(i => i.instanceId === id)) {   // the item is gone
@@ -198,6 +251,9 @@ const ASMModule = (() => {
 
 
   async function openASM() {
+    // asm-support.js holds no reference to this closure; hand it the three
+    // things it needs the first time the page is opened.
+    if (window.ASMSupport) ASMSupport.init({ apiBase: apiBase, authH: authH, showToast: showToast });
     let container = document.getElementById('asm-fullpage');
     if (!container) {
       container = buildPageShell();
@@ -324,7 +380,11 @@ const ASMModule = (() => {
         <!-- MIDDLE: Size Building Space -->
         <div class="asm-col asm-sbs">
           <div class="asm-col-head" style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
-            <span>SIZE BUILDING SPACE (SBS)</span>
+            <span style="display:flex;align-items:baseline;gap:10px;min-width:0">
+              <span>SIZE BUILDING SPACE (SBS)</span>
+              <span id="asm-cat-head-name" style="font-size:15px;font-weight:700;color:#fff;letter-spacing:-.2px;text-transform:none;white-space:nowrap;overflow:hidden;text-overflow:ellipsis"></span>
+              <span id="asm-cat-head-desc" style="display:none;background:rgba(236,178,46,.14);color:#ECB22E;font-size:11px;font-weight:600;padding:2px 9px;border-radius:20px;text-transform:none"></span>
+            </span>
             <span style="display:flex;align-items:center;gap:10px;font-size:11px;color:#7A7D82">
               <span style="display:flex;align-items:center;gap:5px">units
                 <select id="asm-units-select" onchange="ASMModule.setUnit(this.value)" title="Display units — all calculations stay in mm" style="background:#2A2D31;border:1px solid #3A3D42;color:#E8E8E8;border-radius:6px;padding:3px 6px;font-size:11px;cursor:pointer;max-width:150px"></select>
@@ -338,10 +398,6 @@ const ASMModule = (() => {
                 <button id="asm-dimord-btn" onclick="ASMModule.toggleDimOrder()" title="Swap size display: W×H / H×W (display only)" style="background:#2A2D31;border:1px solid #3A3D42;color:#ECB22E;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer"><span id="asm-dimord-val">${dimOrder === 'hw' ? 'H×W' : 'W×H'}</span></button>
               </span>
             </span>
-          </div>
-          <div id="asm-cat-banner" style="padding:14px 16px;border-bottom:1px solid #2A2D31;display:none;align-items:center;gap:14px;flex-wrap:wrap">
-            <div id="asm-cat-banner-name" style="font-size:21px;font-weight:700;color:#fff;letter-spacing:-.2px"></div>
-            <span id="asm-cat-banner-desc" style="display:none;background:rgba(236,178,46,.14);color:#ECB22E;font-size:14px;font-weight:600;padding:5px 14px;border-radius:20px"></span>
           </div>
           <div id="asm-sbs-body" class="asm-sbs-body"></div>
         </div>
@@ -412,17 +468,19 @@ const ASMModule = (() => {
     } catch (err) { console.error('loadCatalogueList error:', err); }
   }
 
+  /* The catalogue name used to have a band of its own under the header, which
+     cost ~55px of height directly above the 3D view. It sits in the header row
+     now, beside the SBS label. */
   function updateCatBanner() {
-    const banner = document.getElementById('asm-cat-banner');
-    if (!banner) return;
+    const nameEl = document.getElementById('asm-cat-head-name');
+    const descEl = document.getElementById('asm-cat-head-desc');
+    if (!nameEl) return;
     const cat = catalogueList.find(c => c.key === currentCatalogue);
-    const nameEl = document.getElementById('asm-cat-banner-name');
-    const descEl = document.getElementById('asm-cat-banner-desc');
-    if (!cat) { banner.style.display = 'none'; return; }
-    banner.style.display = 'flex';
-    nameEl.textContent = cat.name || '';
-    descEl.textContent = cat.description || '';
-    descEl.style.display = cat.description ? 'inline-block' : 'none';
+    nameEl.textContent = cat ? (cat.name || '') : '';
+    if (descEl) {
+      descEl.textContent = cat ? (cat.description || '') : '';
+      descEl.style.display = (cat && cat.description) ? 'inline-block' : 'none';
+    }
   }
 
   function renderCatalogueDropdown() {
@@ -684,6 +742,7 @@ const ASMModule = (() => {
       <div class="asm-sbs-item" id="${inst.instanceId}">
         <div class="asm-sbs-item-head">
           <div class="asm-item-switch" style="position:relative;flex:1;min-width:0"><div style="font-size:10px;font-weight:800;letter-spacing:.06em;color:#ECB22E;text-transform:uppercase">${(catObj.category||'').toUpperCase()}</div><button onclick="ASMModule.toggleItemSwitch('${inst.instanceId}')" style="background:none;border:none;color:#fff;cursor:pointer;display:flex;align-items:center;gap:8px;padding:0;font-size:15px;font-weight:800;max-width:100%" title="Switch item in this category"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${inst.itemName}</span><span style="color:#ECB22E;font-size:22px;line-height:1;flex:0 0 auto">\u25be</span></button><div id="switch_${inst.instanceId}" class="asm-item-switch-list" style="display:none;position:absolute;top:100%;left:0;z-index:200;background:#1E2124;border:1px solid #3A3D42;border-radius:8px;margin-top:4px;max-height:340px;overflow:auto;min-width:280px;box-shadow:0 8px 24px rgba(0,0,0,.5)"></div></div>
+          <span class="asm-preset-slot" data-inst="${inst.instanceId}"></span>
           <button class="asm-sbs-item-remove" onclick="ASMModule.removeFromSBS('${inst.instanceId}')">&#10005;</button>
         </div>
         <div class="asm-sbs-item-diagram-section" id="diagram_${inst.instanceId}">${buildDiagramBody(inst, schema, imagesHtml)}</div>
@@ -780,9 +839,14 @@ const ASMModule = (() => {
     const panels = (inst.outputs || []).reduce((a, o) => a + (o.qty || 0), 0);
     const hidden = Object.keys(inst.deletedRows || {}).length;
     const edited = (inst.outputs || []).filter(o => o._edited).length;
+    const undoN = (inst._undo || []).length;
     let s = n + ' components \u00b7 ' + panels + ' total panels';
     if (hidden) s += ' \u00b7 <span style="color:#E01E5A">' + hidden + ' deleted</span>';
     if (edited) s += ' \u00b7 <span style="color:#ECB22E">' + edited + ' edited</span>';
+    if (undoN) {
+      s += '<button class="asm-sum-reset" title="Bring back the row just deleted" onclick="ASMModule.undoDeleteRow(\'' +
+           inst.instanceId + '\')">\u21a9 Undo delete</button>';
+    }
     if (hidden || edited) {
       s += '<button class="asm-sum-reset" onclick="ASMModule.restoreOutputRows(\'' +
            inst.instanceId + '\')">Reset to formulas</button>';
@@ -804,12 +868,59 @@ const ASMModule = (() => {
     const inst = sbsItems.find(i => i.instanceId === instanceId);
     if (!inst || !inst.outputs || !inst.outputs[idx]) return;
     const o = inst.outputs[idx];
-    if (!o._manual) {
+    const key = o._manual ? null : outKey(o);
+    if (key) {
       if (!inst.deletedRows) inst.deletedRows = {};
-      inst.deletedRows[outKey(o)] = true;
+      inst.deletedRows[key] = true;
     }
     inst.outputs.splice(idx, 1);
+    if (!inst._undo) inst._undo = [];
+    inst._undo.push({ row: o, idx: idx, key: key });
+    if (inst._undo.length > 20) inst._undo.shift();
     updateSBSItemOutputs(inst);
+  }
+
+  // Put back the row deleted most recently. The stack goes 20 deep, so repeated
+  // clicks walk back through the deletions in reverse order. It lives on the
+  // instance in memory — a page reload starts it empty.
+  function undoDeleteRow(instanceId) {
+    const inst = sbsItems.find(i => i.instanceId === instanceId);
+    if (!inst || !inst._undo || !inst._undo.length) return;
+    const last = inst._undo.pop();
+    if (last.key && inst.deletedRows) delete inst.deletedRows[last.key];
+    if (!inst.outputs) inst.outputs = [];
+    const at = Math.min(last.idx, inst.outputs.length);
+    inst.outputs.splice(at, 0, last.row);
+    updateSBSItemOutputs(inst);
+    showToast('Row restored', 'success');
+  }
+
+  // Read-only view of one SBS instance, for asm-presets.js. A copy, not the
+  // live object — nothing outside this module mutates inputs directly.
+  function getInstance(instanceId) {
+    const inst = sbsItems.find(i => i.instanceId === instanceId);
+    if (!inst) return null;
+    return {
+      instanceId: inst.instanceId,
+      itemId: inst.itemId,
+      itemName: inst.itemName,
+      inputs: Object.assign({}, inst.inputs)
+    };
+  }
+
+  // Load a saved setting. Stored values are already in mm, the canonical unit
+  // inst.inputs uses, so nothing is converted on the way in.
+  function applyInputs(instanceId, inputs) {
+    const inst = sbsItems.find(i => i.instanceId === instanceId);
+    if (!inst || !inputs || typeof inputs !== 'object') return false;
+    const schema = activeItemSchemas[inst.itemId];
+    const keys = (schema && schema.inputs) ? schema.inputs.map(i => i.key) : Object.keys(inputs);
+    keys.forEach(k => { if (inputs[k] !== undefined) inst.inputs[k] = inputs[k]; });
+    renderSBS();
+    push3D(instanceId);
+    if (schema && schema.manualEntry) refreshManualRows(instanceId);
+    else recalc(instanceId);
+    return true;
   }
 
   // Bring back every row deleted on this item, and drop the manual overrides
@@ -996,13 +1107,13 @@ const ASMModule = (() => {
     (inst.subItems || []).forEach(si => { subDims[si.name] = si; });
     let lastSub = undefined;
     const outputsHtml = inst.outputs.length === 0
-      ? `<tr><td colspan="6" class="asm-out-empty">Fill inputs to calculate…</td></tr>`
+      ? `<tr><td colspan="7" class="asm-out-empty">Fill inputs to calculate…</td></tr>`
       : inst.outputs.map((o, idx) => {
           let headerRow = '';
           if (o.subItem !== lastSub && o.subItem) {
             const d = subDims[o.subItem];
             const dimLine = d ? `${d.w!=null?UNITS.fromMM(d.w):'-'} × ${d.h!=null?UNITS.fromMM(d.h):'-'}${d.d!=null? ' × '+UNITS.fromMM(d.d) : ''}${d.qty? ' · Qty '+d.qty : ''}` : '';
-            headerRow = `<tr><td colspan="6" style="background:#2A2D31;padding:8px 10px;border-top:2px solid #ECB22E">
+            headerRow = `<tr><td colspan="7" style="background:#2A2D31;padding:8px 10px;border-top:2px solid #ECB22E">
               <span style="color:#ECB22E;font-weight:700;font-size:13px">${o.subItem}</span>
               ${dimLine ? `<span style="color:#9A9DA2;font-size:11px;margin-left:10px">${dimLine}</span>` : ''}
             </td></tr>`;
@@ -1016,6 +1127,7 @@ const ASMModule = (() => {
             <td class="asm-out-num" data-label="Qty" data-short="QTY"><input class="asm-cell asm-cell-num" type="number" value="${o.qty}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'qty',this.value)"></td>
             <td data-label="Color" data-short="COL"><input class="asm-cell" value="${o.color || ''}" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'color',this.value)"></td>
             <td class="asm-out-remark" data-label="Remark"><input class="asm-cell asm-cell-remark" value="${o.remark || ''}" placeholder="remark" onchange="ASMModule.editOutput('${inst.instanceId}',${idx},'remark',this.value)"></td>
+            <td style="text-align:center"><button class="asm-row-del" title="Delete row" onclick="ASMModule.deleteOutputRow('${inst.instanceId}',${idx})">&#10005;</button></td>
           </tr>`;
         }).join('');
 
@@ -1035,6 +1147,7 @@ const ASMModule = (() => {
       <div class="asm-sbs-item" id="${inst.instanceId}">
         <div class="asm-sbs-item-head">
           <div class="asm-item-switch" style="position:relative;flex:1;min-width:0"><div style="font-size:10px;font-weight:800;letter-spacing:.06em;color:#ECB22E;text-transform:uppercase">${(catObj.category||'').toUpperCase()}</div><button onclick="ASMModule.toggleItemSwitch('${inst.instanceId}')" style="background:none;border:none;color:#fff;cursor:pointer;display:flex;align-items:center;gap:8px;padding:0;font-size:15px;font-weight:800;max-width:100%" title="Switch item in this category"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${inst.itemName}</span><span style="color:#ECB22E;font-size:22px;line-height:1;flex:0 0 auto">\u25be</span></button><div id="switch_${inst.instanceId}" class="asm-item-switch-list" style="display:none;position:absolute;top:100%;left:0;z-index:200;background:#1E2124;border:1px solid #3A3D42;border-radius:8px;margin-top:4px;max-height:340px;overflow:auto;min-width:280px;box-shadow:0 8px 24px rgba(0,0,0,.5)"></div></div>
+          <span class="asm-preset-slot" data-inst="${inst.instanceId}"></span>
           <button class="asm-sbs-item-remove" onclick="ASMModule.removeFromSBS('${inst.instanceId}')" title="Remove">&#10005;</button>
         </div>
 
@@ -1045,7 +1158,7 @@ const ASMModule = (() => {
 
         ${buildInputZones(inst, schema)}
 
-        </div><div class="asm-out-head">Output Area</div><div class="asm-sbs-item-outputs">
+        </div><div id="outhome_${inst.instanceId}"></div><div id="out_${inst.instanceId}" class="asm-out-block"${has3D(schema) ? ' style="display:none"' : ''}><div class="asm-out-head">Output Area</div><div class="asm-sbs-item-outputs">
           <table class="asm-out-table asm-out-cards">
             <thead>
               <tr>
@@ -1055,7 +1168,7 @@ const ASMModule = (() => {
             <tbody>${outputsHtml}</tbody>
           </table>
           <div class="asm-sbs-item-summary">${outSummary(inst)}</div>
-        </div>
+        </div></div>
 
         <div class="asm-sbs-item-actions">
           <button class="asm-btn asm-btn-ghost" onclick="ASMModule.addSBSRows('${inst.instanceId}')">+ Add Rows</button>
@@ -1069,6 +1182,11 @@ const ASMModule = (() => {
 
   // Update a single input and recalc live (debounced)
   let recalcTimers = {};
+  // One counter per SBS item, bumped on every /calculate request. Typing
+  // "400" with a pause after the 4 fires two requests; without this the
+  // slower d=4 reply could land last and overwrite the correct d=400 one,
+  // leaving stale sizes on screen until the next edit.
+  let recalcSeq = {};
   function setRoomName(instanceId, value) {
     const inst = sbsItems.find(i => i.instanceId === instanceId);
     if (!inst) return;
@@ -1156,6 +1274,8 @@ const ASMModule = (() => {
     const rSchema2 = activeItemSchemas[inst.itemId];
     if (rSchema2 && rSchema2.manualEntry) return;
 
+    const myReq = (recalcSeq[instanceId] = (recalcSeq[instanceId] || 0) + 1);
+
     try {
       const res = await fetch(`${API_BASE}/calculate`, {
         method: 'POST',
@@ -1163,6 +1283,9 @@ const ASMModule = (() => {
         body: JSON.stringify({ itemId: inst.itemId, inputs: inst.inputs, catalogue: inst.catalogueKey || currentCatalogue, unit: UNITS.get() })
       });
       const data = await res.json();
+
+      // A newer request went out while this one was in flight — drop this reply.
+      if (myReq !== recalcSeq[instanceId]) return;
 
       if (data.success) {
         // A recalc replaces every formula row, so anything the user did to the
@@ -1204,7 +1327,8 @@ const ASMModule = (() => {
 
     const itemEl = document.getElementById(inst.instanceId);
     if (!itemEl) return;
-
+    // the block may be parked in the Output sizes pane — it is still inside
+    // the item either way, so one query finds it
     const tbody = itemEl.querySelector('.asm-out-table tbody');
     const summary = itemEl.querySelector('.asm-sbs-item-summary');
 
@@ -1251,14 +1375,20 @@ const ASMModule = (() => {
              `).join('')}
            </div>`
         : '';
-      // A live 3D canvas lives in this same section. Rewriting the whole
-      // section would destroy it (and its WebGL context) on every keystroke,
-      // so when 3D is open only the hidden image pane is refreshed.
-      if (_active3d === inst.instanceId) {
+      /* A live 3D canvas lives in this same section, and so does the output
+         table when its tab is picked — it is MOVED into a pane in here.
+         Rewriting the whole section would destroy either one on every
+         keystroke: the WebGL context in the 3D case, the output block in the
+         other, which is why the table went blank and the tabs snapped back to
+         Image as soon as a value was typed. In both cases only the hidden
+         image pane is refreshed. */
+      const vm = _viewMode[inst.instanceId];
+      if (_active3d === inst.instanceId || vm === 'out') {
         const ip = document.getElementById('paneimg_' + inst.instanceId);
         if (ip) ip.innerHTML = imagesHtml + buildVideoBtn(schema);
       } else {
         diagramEl.innerHTML = buildDiagramBody(inst, schema, imagesHtml);
+        setViewTabs(inst.instanceId, vm || 'img');
       }
     }
   }
@@ -1387,79 +1517,18 @@ const ASMModule = (() => {
     if (!inst) return;
     if (!inst.outputs) inst.outputs = [];
     for (let i = 0; i < 5; i++) {
-      inst.outputs.push({ component: '', w: 0, h: 0, qty: 1, material: '', remark: '', _edited: true, _manual: true });
+      inst.outputs.push({ component: '', w: 0, h: 0, qty: '', material: '', remark: '', _edited: true, _manual: true });
     }
     renderSBS();
   }
 
-  // ── Per-item Edge Band modal (L/R/T/B per panel + Auto-fill all) ──
+  // Edge Band modal lives in asm-eband.js. It writes o.band straight onto
+  // this instance's output rows, so it needs the instance, not a copy.
   function adjustEBand(instanceId) {
     const inst = sbsItems.find(i => i.instanceId === instanceId);
-    if (!inst || !inst.outputs || !inst.outputs.length) { showToast('No panels to edge-band', 'error'); return; }
-
-    let modal = document.getElementById('asm-eband-modal');
-    if (modal) modal.remove();
-    modal = document.createElement('div');
-    modal.id = 'asm-eband-modal';
-    modal.style.cssText = 'position:fixed;inset:0;z-index:10004;background:rgba(0,0,0,.6);display:flex;align-items:flex-start;justify-content:center;padding:30px;overflow:auto';
-
-    const rowsHtml = inst.outputs.map((o, i) => {
-      const b = o.band || { l:0, r:0, t:0, b:0 };
-      const cell = (edge, v) => `<td style="padding:3px 6px;text-align:center"><input id="aeb-${edge}-${i}" value="${v}" style="width:50px;text-align:center;padding:3px;border:1px solid #5e3565;border-radius:4px;background:#2e1832;color:#f3e9f5"></td>`;
-      return `<tr>
-        <td style="padding:3px 8px;color:#c9a7d0">${i+1}</td>
-        <td style="padding:3px 8px;color:#f3e9f5">${o.component || ''}</td>
-        <td style="padding:3px 8px">${o.w ?? ''}</td>
-        <td style="padding:3px 8px">${o.h ?? ''}</td>
-        ${cell('l', b.l||0)}${cell('r', b.r||0)}${cell('t', b.t||0)}${cell('b', b.b||0)}
-      </tr>`;
-    }).join('');
-
-    modal.innerHTML = `
-      <div style="background:#3b1f3f;color:#f3e9f5;border:1px solid #5e3565;border-radius:10px;padding:20px;width:620px;max-width:100%;font-family:system-ui,sans-serif">
-        <div style="font-size:16px;font-weight:700;margin:0 0 6px">Edge Banding — ${inst.itemName || 'Item'}</div>
-        <div style="font-size:11px;color:#c9a7d0;margin-bottom:12px">L+R subtracted from W, T+B from H at export. Piece cut smaller; final size + band = entered size.</div>
-        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
-          <span style="font-size:13px;color:#c9a7d0;min-width:130px">Default thickness (mm)</span>
-          ${['L','R','T','B'].map(k=>`<span style="display:flex;flex-direction:column;align-items:center;gap:2px">
-            <span style="font-size:10px;color:#c9a7d0">${k}</span>
-            <input id="aeb-def-${k}" value="${k==='B'?'0':'2'}" style="width:48px;text-align:center;padding:3px;border:1px solid #5e3565;border-radius:4px;background:#2e1832;color:#f3e9f5">
-          </span>`).join('')}
-          <button id="aeb-fill" style="padding:5px 10px;border:1px solid #5e3565;border-radius:5px;background:#4a2850;color:inherit;cursor:pointer">Auto-fill all ↓</button>
-        </div>
-        <div style="max-height:320px;overflow:auto;border:1px solid #5e3565;border-radius:6px">
-          <table style="width:100%;border-collapse:collapse;font-size:13px">
-            <thead><tr style="position:sticky;top:0;background:#4a2850">
-              ${['#','Component','W','H','L','R','T','B'].map(h=>`<th style="padding:5px 8px;text-align:left;color:#c9a7d0;font-size:11px">${h}</th>`).join('')}
-            </tr></thead>
-            <tbody>${rowsHtml}</tbody>
-          </table>
-        </div>
-        <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">
-          <button id="aeb-cancel" style="padding:7px 14px;border:1px solid #5e3565;border-radius:6px;background:transparent;color:inherit;cursor:pointer">Cancel</button>
-          <button id="aeb-save" style="padding:7px 14px;border:0;border-radius:6px;background:#f5b301;color:#3a2400;font-weight:700;cursor:pointer">Save</button>
-        </div>
-      </div>`;
-    document.body.appendChild(modal);
-
-    const numV = id => { const el = document.getElementById(id); const v = el ? parseFloat(el.value) : 0; return isNaN(v) ? 0 : v; };
-    const setV = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
-    const fill = () => {
-      const d = k => { const v = parseFloat(document.getElementById('aeb-def-'+k).value); return isNaN(v)?0:v; };
-      const dl=d('L'), dr=d('R'), dt=d('T'), db=d('B');
-      inst.outputs.forEach((o,i)=>{ setV(`aeb-l-${i}`,dl); setV(`aeb-r-${i}`,dr); setV(`aeb-t-${i}`,dt); setV(`aeb-b-${i}`,db); });
-    };
-    document.getElementById('aeb-fill').onclick = fill;
-    ['L','R','T','B'].forEach(k=>{ document.getElementById('aeb-def-'+k).oninput = fill; });
-    document.getElementById('aeb-cancel').onclick = () => modal.remove();
-    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
-    document.getElementById('aeb-save').onclick = () => {
-      inst.outputs.forEach((o,i)=>{
-        o.band = { l:numV(`aeb-l-${i}`), r:numV(`aeb-r-${i}`), t:numV(`aeb-t-${i}`), b:numV(`aeb-b-${i}`) };
-      });
-      modal.remove();
-      showToast('Edge banding saved', 'success');
-    };
+    if (!inst) return;
+    if (!window.ASMEBand) { showToast('Edge band module not loaded', 'error'); return; }
+    ASMEBand.open(inst, showToast);
   }
 
   function removeFromSBS(instanceId) {
@@ -1553,6 +1622,15 @@ const ASMModule = (() => {
     const inst = sbsItems.find(i => i.instanceId === instanceId);
     if (!inst) return;
 
+    /* A picture of the 3D view as the user framed it — same camera, same open
+       doors — so the PDF can carry it beside that item's sizes. Only possible
+       while the view is actually open, so it is taken here, at save time. An
+       earlier snapshot is kept when the view is not open this time. */
+    let snap3d = inst.snap3d || '';
+    if (_active3d === instanceId && window.ASM3D && ASM3D.snapshot) {
+      try { snap3d = ASM3D.snapshot(1100) || snap3d; } catch (e) {}
+    }
+
     const schema = activeItemSchemas[inst.itemId];
     // Manual items: convert filled manualRows -> outputs format so RIS/PDF/export work
     if (schema && schema.manualEntry) {
@@ -1583,6 +1661,7 @@ const ASMModule = (() => {
         existing.outputs = inst.outputs.map(o => ({ ...o }));
         existing.deletedRows = Object.assign({}, inst.deletedRows || {});
         existing.roomName = inst.roomName || '';
+        if (snap3d) existing.snap3d = snap3d;
         existing._editing = false;
         existing._editInstanceId = null;
       }
@@ -1596,7 +1675,8 @@ const ASMModule = (() => {
         catalogueKey: inst.catalogueKey || currentCatalogue,
         inputs: { ...inst.inputs },
         outputs: inst.outputs.map(o => ({ ...o })),
-        deletedRows: Object.assign({}, inst.deletedRows || {})
+        deletedRows: Object.assign({}, inst.deletedRows || {}),
+        snap3d: snap3d
       });
     }
 
@@ -1655,7 +1735,7 @@ const ASMModule = (() => {
     it._editing = true;
     it._editInstanceId = instanceId;
 
-    const newInst = { instanceId, itemId: it.itemId, itemName: it.itemName, roomName: it.roomName || '', catalogueKey: it.catalogueKey || currentCatalogue, inputs: { ...it.inputs }, outputs: it.outputs.map(o => ({ ...o })), deletedRows: Object.assign({}, it.deletedRows || {}), _readyId: readyId };
+    const newInst = { instanceId, itemId: it.itemId, itemName: it.itemName, roomName: it.roomName || '', catalogueKey: it.catalogueKey || currentCatalogue, inputs: { ...it.inputs }, outputs: it.outputs.map(o => ({ ...o })), deletedRows: Object.assign({}, it.deletedRows || {}), snap3d: it.snap3d || '', _readyId: readyId };
     const rSchema = activeItemSchemas[it.itemId];
     if (rSchema && rSchema.manualEntry) {
       newInst.manualRows = it.outputs.map(o => ({ w: o.w, h: o.h, qty: o.qty, material: o.color || o.component || '', remark: o.remark || '' }));
@@ -1884,407 +1964,70 @@ const ASMModule = (() => {
     } catch (e) {}
   }
 
-  // ══ NOTIFICATIONS ══
-  let _notifTimer = null;
-  let _notifs = [];
-  let _myProblemsOverlay = null;
-
-  function startNotifications() {
-    const bell = document.getElementById('asm-bell-btn');
-    if (bell) bell.style.display = getAuthToken() ? '' : 'none';
-    fetchNotifications();
-    if (_notifTimer) clearInterval(_notifTimer);
-    _notifTimer = setInterval(fetchNotifications, 60000);
-  }
-  function stopNotifications() {
-    if (_notifTimer) { clearInterval(_notifTimer); _notifTimer = null; }
-  }
-
-  async function fetchNotifications() {
-    const token = getAuthToken();
-    if (!token) return;
-    try {
-      const res = await fetch(apiBase() + '/asm/notifications', { headers: { 'Authorization': 'Bearer ' + token } });
-      const data = await res.json();
-      if (!data.success) return;
-      _notifs = data.notifications || [];
-      const badge = document.getElementById('asm-bell-badge');
-      if (badge) {
-        if (data.unread > 0) { badge.textContent = data.unread > 99 ? '99+' : data.unread; badge.style.display = 'flex'; }
-        else badge.style.display = 'none';
-      }
-    } catch (e) {}
-  }
-
-  function toggleNotifications() {
-    let panel = document.getElementById('asm-notif-panel');
-    if (panel) { panel.remove(); return; }
-    panel = document.createElement('div');
-    panel.id = 'asm-notif-panel';
-    panel.style.cssText = 'position:absolute;top:56px;right:16px;width:340px;max-height:420px;overflow-y:auto;background:#1A1D21;border:1px solid #3A3D42;border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.5);z-index:10005';
-    let html = '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid #2A2D31"><span style="font-weight:700;color:#ECB22E;font-size:13px">Notifications</span>';
-    html += _notifs.length ? '<button id="asm-notif-readall" style="background:none;border:none;color:#7A7D82;font-size:11px;cursor:pointer">Mark all read</button>' : '';
-    html += '</div>';
-    if (!_notifs.length) {
-      html += '<div style="padding:24px 14px;color:#7A7D82;font-size:12px;text-align:center">No notifications yet.</div>';
-    } else {
-      _notifs.forEach(function (n) {
-        const dt = new Date(n.created_at).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
-        html += '<div class="asm-notif-row" data-id="' + n.id + '" data-project="' + (n.project_id || '') + '" style="padding:11px 14px;border-bottom:1px solid #26282C;cursor:' + (n.project_id ? 'pointer' : 'default') + ';' + (n.read ? '' : 'background:rgba(236,178,46,.06)') + '">'
-          + '<div style="font-size:12.5px;color:#fff;font-weight:' + (n.read ? '400' : '700') + ';line-height:1.4">' + escapeHtml(n.body || n.title || '') + '</div>'
-          + '<div style="font-size:10px;color:#7A7D82;margin-top:3px">' + dt + '</div></div>';
-      });
-    }
-    panel.innerHTML = html;
-    document.body.appendChild(panel);
-
-    const readAll = document.getElementById('asm-notif-readall');
-    if (readAll) readAll.onclick = async function () {
-      await markNotifRead(null, true); panel.remove(); fetchNotifications();
-    };
-    panel.querySelectorAll('.asm-notif-row').forEach(function (row) {
-      row.onclick = async function () {
-        const id = row.getAttribute('data-id');
-        const pid = row.getAttribute('data-project');
-        await markNotifRead(id, false);
-        panel.remove();
-        fetchNotifications();
-        if (pid) { showProjects(); }
-      };
-    });
-    // Close on outside click
-    setTimeout(function () {
-      document.addEventListener('click', function closeP(e) {
-        const p = document.getElementById('asm-notif-panel');
-        if (p && !p.contains(e.target) && e.target.id !== 'asm-bell-btn') { p.remove(); document.removeEventListener('click', closeP); }
-      });
-    }, 0);
-  }
-
-  async function markNotifRead(id, all) {
-    const token = getAuthToken();
-    if (!token) return;
-    try {
-      await fetch(apiBase() + '/asm/notifications/read', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-        body: JSON.stringify(all ? { all: true } : { id })
-      });
-    } catch (e) {}
-  }
+  // Notifications retired — the messaging thread replaced them and the bell
+  // is hidden in updateAsmAuthUI. Kept as a no-op so the public API, which
+  // every generated onclick depends on, does not change shape.
+  function toggleNotifications() {}
 
   function escapeHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 
-  // ══ SHARE ══
-  async function openShare() {
-    const token = getAuthToken();
-    if (!token) { showToast('Please login first', 'error'); return; }
-    // Load the user's saved projects to choose from.
-    let projects = [];
-    try {
-      const res = await fetch(apiBase() + '/asm/projects', { headers: { 'Authorization': 'Bearer ' + token } });
-      const data = await res.json();
-      if (data.success) projects = data.projects || [];
-    } catch (e) { showToast('Could not load your projects', 'error'); return; }
-    if (!projects.length) { showToast('Save a project first, then share it', 'error'); return; }
-
-    let modal = document.getElementById('asm-share-modal');
-    if (modal) modal.remove();
-    modal = document.createElement('div');
-    modal.id = 'asm-share-modal';
-    modal.style.cssText = 'position:fixed;inset:0;z-index:10006;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;padding:16px';
-    let html = '<div style="background:#1A1D21;border:1px solid #3A3D42;border-radius:12px;width:100%;max-width:440px;max-height:88vh;overflow-y:auto;padding:20px">';
-    html += '<h3 style="margin:0 0 4px;color:#ECB22E;font-size:16px">Share Cutlist</h3>';
-    html += '<p style="margin:0 0 14px;color:#9A9DA2;font-size:12px">Sends a copy to another Pro user. They can edit and export their own copy.</p>';
-    html += '<label style="display:block;font-size:11px;color:#9A9DA2;margin-bottom:4px">Recipient email (Pro user)</label>';
-    html += '<input id="asm-share-email" type="email" placeholder="name@example.com" style="width:100%;box-sizing:border-box;background:#222529;border:1px solid #3A3D42;color:#fff;border-radius:6px;padding:9px;font-size:13px;margin-bottom:14px">';
-    html += '<div style="font-size:11px;color:#9A9DA2;margin-bottom:6px">Select projects to share</div>';
-    html += '<div style="max-height:230px;overflow-y:auto;border:1px solid #2A2D31;border-radius:8px">';
-    projects.forEach(function (p) {
-      html += '<label style="display:flex;align-items:center;gap:9px;padding:9px 11px;border-bottom:1px solid #26282C;cursor:pointer;font-size:12.5px;color:#fff">'
-        + '<input type="checkbox" class="asm-share-chk" value="' + p.id + '" style="width:16px;height:16px;accent-color:#ECB22E">'
-        + '<span>' + escapeHtml(p.name || 'Untitled') + (p.clientName ? ' <span style="color:#7A7D82">· ' + escapeHtml(p.clientName) + '</span>' : '') + '</span></label>';
-    });
-    html += '</div>';
-    html += '<div id="asm-share-status" style="font-size:12px;margin:12px 0 0;min-height:16px"></div>';
-    html += '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">';
-    html += '<button class="asm-btn asm-btn-ghost" id="asm-share-cancel">Cancel</button>';
-    html += '<button class="asm-btn asm-btn-primary" id="asm-share-send">Share</button>';
-    html += '</div></div>';
-    modal.innerHTML = html;
-    modal.addEventListener('click', function (e) { if (e.target === modal) modal.remove(); });
-    document.body.appendChild(modal);
-
-    document.getElementById('asm-share-cancel').onclick = function () { modal.remove(); };
-    document.getElementById('asm-share-send').onclick = function () { doShare(modal); };
+  // Share lives in asm-share.js.
+  function openShare() {
+    if (!window.ASMShare) { showToast('Share module not loaded', 'error'); return; }
+    ASMShare.init({ apiBase: apiBase, getToken: getAuthToken, showToast: showToast, escapeHtml: escapeHtml });
+    ASMShare.open();
   }
 
-  async function doShare(modal) {
-    const email = (document.getElementById('asm-share-email').value || '').trim();
-    const ids = Array.prototype.map.call(document.querySelectorAll('.asm-share-chk:checked'), function (c) { return c.value; });
-    const st = document.getElementById('asm-share-status');
-    if (!email) { st.textContent = 'Enter a recipient email'; st.style.color = '#E01E5A'; return; }
-    if (!ids.length) { st.textContent = 'Select at least one project'; st.style.color = '#E01E5A'; return; }
-    st.textContent = 'Sharing…'; st.style.color = '#7A7D82';
-    const token = getAuthToken();
-    try {
-      const res = await fetch(apiBase() + '/asm/share', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-        body: JSON.stringify({ recipientEmail: email, projectIds: ids })
-      });
-      const data = await res.json();
-      if (!res.ok || !data.success) { st.textContent = data.error || 'Share failed'; st.style.color = '#E01E5A'; return; }
-      st.textContent = '✓ ' + (data.message || 'Shared'); st.style.color = '#2EB67D';
-      setTimeout(function () { modal.remove(); }, 1200);
-    } catch (e) { st.textContent = e.message; st.style.color = '#E01E5A'; }
-  }
-
-  async function saveProject() {
-    if (readyItems.length === 0 && sbsItems.length === 0) { showToast('Nothing to save', 'error'); return; }
-    const token = getAuthToken();
-    if (!token) { showToast('Please login first', 'error'); return; }
-    showSaveModal();
-    return;
-    if (currentProjectId) {
-      // Update existing — no modal needed
-      try {
-        const res = await fetch(apiBase() + '/asm/projects/save', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-          body: JSON.stringify({ projectId: currentProjectId, name: currentProjectName, readyItems })
-        });
-        const data = await res.json();
-        if (data.success) showToast('Updated: ' + currentProjectName, 'success');
-        else showToast(data.error || 'Save failed', 'error');
-      } catch (err) { showToast('Save failed', 'error'); }
-    } else {
-      // New project — show save modal
-      showSaveModal();
-    }
-  }
-
-  function showSaveModal() {
-    let modal = document.getElementById('asm-save-modal');
-    if (modal) modal.remove();
-    modal = document.createElement('div');
-    modal.id = 'asm-save-modal';
-    modal.style.cssText = 'position:fixed;inset:0;z-index:10002;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center';
-
-    const box = document.createElement('div');
-    box.style.cssText = 'background:#1A1D21;border:1px solid #3A3D42;border-radius:12px;width:420px;overflow:hidden';
-
-    const hdr = document.createElement('div');
-    hdr.style.cssText = 'padding:16px 20px;background:#222529;border-bottom:1px solid #3A3D42';
-    hdr.innerHTML = '<h3 style="margin:0;color:#ECB22E;font-size:16px">Save ASM Project</h3>';
-    box.appendChild(hdr);
-
-    const body = document.createElement('div');
-    body.style.cssText = 'padding:20px';
-    const clientOpts = (typeof clients !== 'undefined' && Array.isArray(clients))
-      ? clients.map(c => '<option value="' + (c.name||'').replace(/"/g,'&quot;') + '">' + (c.name||'') + (c.biz?(' · '+c.biz):'') + '</option>').join('')
-      : '';
-    body.innerHTML = '<div style="margin-bottom:14px">' +
-      '<label style="display:block;font-size:12px;color:#ABABAD;margin-bottom:4px">Client Name</label>' +
-      '<select id="asm-save-client-sel" style="width:100%;padding:8px 12px;background:#14161A;border:1px solid #3A3D42;border-radius:6px;color:#fff;font-size:14px;box-sizing:border-box;margin-bottom:6px">' +
-        '<option value="">— Select client —</option>' + clientOpts +
-        '<option value="__new__">＋ Add new client</option>' +
-      '</select>' +
-      '<input id="asm-save-client" type="text" placeholder="e.g. Mr. Sharma" style="display:none;width:100%;padding:8px 12px;background:#14161A;border:1px solid #3A3D42;border-radius:6px;color:#fff;font-size:14px;box-sizing:border-box">' +
-      '</div>' +
-      '<div style="margin-bottom:14px">' +
-      '<label style="display:block;font-size:12px;color:#ABABAD;margin-bottom:4px">ASM Name</label>' +
-      '<input id="asm-save-name" type="text" placeholder="e.g. Master Bedroom Set" style="width:100%;padding:8px 12px;background:#14161A;border:1px solid #3A3D42;border-radius:6px;color:#fff;font-size:14px;box-sizing:border-box">' +
-      '</div>' +
-      '<div style="margin-bottom:14px">' +
-      '<label style="display:block;font-size:12px;color:#ABABAD;margin-bottom:4px">Remarks (optional)</label>' +
-      '<input id="asm-save-remarks" type="text" placeholder="Any notes..." style="width:100%;padding:8px 12px;background:#14161A;border:1px solid #3A3D42;border-radius:6px;color:#fff;font-size:14px;box-sizing:border-box">' +
-      '</div>';
-    box.appendChild(body);
-
-    const foot = document.createElement('div');
-    foot.style.cssText = 'padding:12px 20px;background:#222529;border-top:1px solid #3A3D42;display:flex;justify-content:flex-end;gap:8px';
-    const cancelBtn = document.createElement('button');
-    cancelBtn.className = 'asm-btn asm-btn-ghost';
-    cancelBtn.textContent = 'Cancel';
-    cancelBtn.onclick = function() { modal.remove(); };
-    const saveBtn = document.createElement('button');
-    saveBtn.className = 'asm-btn asm-btn-primary';
-    saveBtn.textContent = 'Save Project';
-    saveBtn.onclick = function() { doSaveProject(); };
-    foot.appendChild(cancelBtn);
-    foot.appendChild(saveBtn);
-    box.appendChild(foot);
-
-    modal.appendChild(box);
-    modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
-    document.body.appendChild(modal);
-
-    const sel = document.getElementById('asm-save-client-sel');
-    const inp = document.getElementById('asm-save-client');
-    sel.onchange = function() {
-      if (sel.value === '__new__') { inp.style.display = 'block'; inp.value = ''; inp.focus(); }
-      else { inp.style.display = 'none'; inp.value = sel.value; }
-    };
-    sel.focus();
-    // Pre-fill when editing an existing project
-    if (currentProjectId) {
-      hdr.querySelector('h3').textContent = 'Edit ASM Project';
-      const nameEl = document.getElementById('asm-save-name');
-      if (nameEl && currentProjectName && currentProjectName !== 'Untitled') nameEl.value = currentProjectName;
-      if (currentClientName) {
-        const match = Array.from(sel.options).some(o => o.value === currentClientName);
-        if (match) { sel.value = currentClientName; }
-        else { sel.value = '__new__'; inp.style.display = 'block'; inp.value = currentClientName; }
+  // Projects live in asm-projects.js: it owns the modals and the HTTP. The
+  // state swap stays here, because loading a project REASSIGNS sbsItems and
+  // readyItems, and only this closure can do that.
+  function projectsCtx() {
+    return {
+      apiBase: apiBase,
+      getToken: getAuthToken,
+      showToast: showToast,
+      hasWork: function () { return readyItems.length > 0 || sbsItems.length > 0; },
+      getReadyItems: function () { return readyItems; },
+      getMeta: function () {
+        return { id: currentProjectId, name: currentProjectName, client: currentClientName };
+      },
+      setMeta: function (m) {
+        currentProjectId = m.id;
+        currentProjectName = m.name || '';
+        currentClientName = m.client || '';
+        syncProjectName();
+        const sb = document.querySelector('.asm-save-btn');
+        if (sb) sb.textContent = currentProjectId ? 'Edit' : 'Save';
+      },
+      applyProject: function (proj) {
+        sbsItems = [];
+        readyItems = proj.readyItems || [];
+        currentProjectId = proj.id;
+        currentProjectName = proj.name;
+        currentClientName = proj.clientName || '';
+        syncProjectName();
+        const sb = document.querySelector('.asm-save-btn');
+        if (sb) sb.textContent = 'Edit';
+        renderSBS();
+        renderReadyItems();
       }
-    }
-  }
-
-  async function doSaveProject() {
-    const sel = document.getElementById('asm-save-client-sel');
-    const inp = document.getElementById('asm-save-client');
-    const clientName = (sel && sel.value === '__new__') ? inp.value.trim() : (sel ? sel.value.trim() : inp.value.trim());
-    if (clientName && typeof clients !== 'undefined' && Array.isArray(clients)
-        && !clients.some(c => (c.name||'').toLowerCase() === clientName.toLowerCase())) {
-      clients.unshift({ id: 'c' + Date.now(), name: clientName, biz: '', phone: '' });
-      if (typeof saveClients === 'function') saveClients();
-    }
-    const name = document.getElementById('asm-save-name').value.trim() || 'Untitled';
-    const remarks = document.getElementById('asm-save-remarks').value.trim();
-    const token = getAuthToken();
-    if (!token) { showToast('Please login first', 'error'); return; }
-
-    try {
-      const res = await fetch(apiBase() + '/asm/projects/save', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-        body: JSON.stringify({ projectId: currentProjectId, name, clientName, remarks, readyItems })
-      });
-      const data = await res.json();
-      if (data.success) {
-        currentProjectId = data.project.id;
-        currentProjectName = name; currentClientName = clientName; syncProjectName();
-        const sb = document.querySelector('.asm-save-btn'); if (sb) sb.textContent = 'Edit';
-        showToast('Saved: ' + name, 'success');
-        const modal = document.getElementById('asm-save-modal');
-        if (modal) modal.remove();
-      } else showToast(data.error || 'Save failed', 'error');
-    } catch (err) { showToast('Save failed', 'error'); }
-  }
-
-  async function showProjects() {
-    const token = getAuthToken();
-    if (!token) { showToast('Please login first', 'error'); return; }
-    try {
-      const res = await fetch(apiBase() + '/asm/projects', { headers: { 'Authorization': 'Bearer ' + token } });
-      const data = await res.json();
-      if (!data.success) { showToast(data.error || 'Failed', 'error'); return; }
-      showProjectsModal(data.projects);
-    } catch (err) { showToast('Error: ' + err.message, 'error'); }
-  }
-
-  function showProjectsModal(projects) {
-    let modal = document.getElementById('asm-projects-modal');
-    if (modal) modal.remove();
-    modal = document.createElement('div');
-    modal.id = 'asm-projects-modal';
-    modal.style.cssText = 'position:fixed;inset:0;z-index:10002;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center';
-    const box = document.createElement('div');
-    box.style.cssText = 'background:#1A1D21;border:1px solid #3A3D42;border-radius:12px;width:480px;max-height:80vh;overflow:hidden;display:flex;flex-direction:column';
-    const hdr = document.createElement('div');
-    hdr.style.cssText = 'padding:16px 20px;background:#222529;border-bottom:1px solid #3A3D42;display:flex;justify-content:space-between;align-items:center';
-    hdr.innerHTML = '<h3 style="margin:0;color:#ECB22E;font-size:16px">My ASM Projects</h3>';
-    const xBtn = document.createElement('button');
-    xBtn.style.cssText = 'background:none;border:none;color:#7A7D82;font-size:20px;cursor:pointer';
-    xBtn.textContent = 'X';
-    xBtn.onclick = function() { modal.remove(); };
-    hdr.appendChild(xBtn);
-    box.appendChild(hdr);
-    const searchWrap = document.createElement('div');
-    searchWrap.style.cssText = 'padding:10px 16px;background:#1A1D21;border-bottom:1px solid #2A2D31';
-    searchWrap.innerHTML = '<input id="asm-proj-search" type="text" placeholder="Search projects or clients…" style="width:100%;padding:8px 12px;background:#14161A;border:1px solid #3A3D42;border-radius:6px;color:#fff;font-size:13px;box-sizing:border-box">';
-    box.appendChild(searchWrap);
-    const listDiv = document.createElement('div');
-    listDiv.style.cssText = 'padding:16px;overflow-y:auto;flex:1';
-    const renderList = function(filter) {
-      filter = (filter || '').toLowerCase();
-      listDiv.innerHTML = '';
-      const shown = projects.filter(p =>
-        !filter || (p.name||'').toLowerCase().includes(filter) || (p.clientName||'').toLowerCase().includes(filter));
-      if (shown.length === 0) {
-        listDiv.innerHTML = '<div style="text-align:center;color:#7A7D82;padding:30px">No matching projects</div>';
-        return;
-      }
-      shown.forEach(function(p) {
-        const date = new Date(p.updatedAt).toLocaleDateString();
-        const card = document.createElement('div');
-        card.style.cssText = 'background:#222529;border:1px solid #3A3D42;border-radius:8px;padding:12px;margin:8px 0;cursor:pointer';
-        card.onmouseover = function() { card.style.borderColor = '#ECB22E'; };
-        card.onmouseout = function() { card.style.borderColor = '#3A3D42'; };
-        card.onclick = function() { ASMModule.loadProject(p.id); };
-        let info = '<div style="font-weight:700;color:#fff">' + p.name + '</div>';
-        if (p.clientName) info += '<div style="font-size:11px;color:#ECB22E">' + p.clientName + '</div>';
-        info += '<div style="font-size:11px;color:#7A7D82">' + p.itemCount + ' items | ' + p.totalPanels + ' panels | ' + date + '</div>';
-        const row = document.createElement('div');
-        row.style.cssText = 'display:flex;justify-content:space-between;align-items:center';
-        row.innerHTML = '<div>' + info + '</div>';
-        const del = document.createElement('button');
-        del.style.cssText = 'background:none;border:none;color:#E01E5A;cursor:pointer;font-size:12px;padding:4px 8px';
-        del.textContent = 'DEL';
-        del.onclick = function(e) { e.stopPropagation(); ASMModule.deleteProject(p.id); };
-        row.appendChild(del);
-        card.appendChild(row);
-        listDiv.appendChild(card);
-      });
     };
-    if (projects.length === 0) {
-      listDiv.innerHTML = '<div style="text-align:center;color:#7A7D82;padding:30px">No saved projects yet</div>';
-    } else {
-      renderList('');
-    }
-    box.appendChild(listDiv);
-    modal.appendChild(box);
-    modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
-    document.body.appendChild(modal);
-    const si = document.getElementById('asm-proj-search');
-    if (si) si.oninput = function() { renderList(si.value); };
   }
 
-
-  async function loadProject(projectId) {
-    const token = getAuthToken();
-    if (!token) return;
-    try {
-      const res = await fetch(apiBase() + '/asm/projects/' + projectId, { headers: { 'Authorization': 'Bearer ' + token } });
-      const data = await res.json();
-      if (!data.success) { showToast(data.error || 'Load failed', 'error'); return; }
-      sbsItems = [];
-      readyItems = data.project.readyItems || [];
-      currentProjectId = data.project.id;
-      currentProjectName = data.project.name; currentClientName = data.project.clientName || ''; syncProjectName();
-      { const sb = document.querySelector('.asm-save-btn'); if (sb) sb.textContent = 'Edit'; }
-      renderSBS();
-      renderReadyItems();
-      const m = document.getElementById('asm-projects-modal');
-      if (m) m.remove();
-      showToast('Loaded: ' + data.project.name, 'success');
-    } catch (err) { showToast('Load error', 'error'); }
+  // Re-init on every call so the module always sees the current closure.
+  function useProjects() {
+    if (!window.ASMProjects) { showToast('Projects module not loaded', 'error'); return false; }
+    ASMProjects.init(projectsCtx());
+    return true;
   }
-
-  async function deleteProject(projectId) {
-    if (!confirm('Delete this project?')) return;
-    const token = getAuthToken();
-    if (!token) return;
-    try {
-      const res = await fetch(apiBase() + '/asm/projects/' + projectId, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token } });
-      const data = await res.json();
-      if (data.success) {
-        if (currentProjectId === projectId) { currentProjectId = null; currentProjectName = ''; syncProjectName(); }
-        showToast('Deleted', 'success');
-        showProjects();
-      } else showToast(data.error || 'Failed', 'error');
-    } catch (err) { showToast('Error', 'error'); }
-  }
+  function saveProject()        { if (useProjects()) ASMProjects.save(); }
+  function showProjects()       { if (useProjects()) ASMProjects.list(); }
+  function loadProject(id)      { if (useProjects()) ASMProjects.load(id); }
+  function deleteProject(id)    { if (useProjects()) ASMProjects.remove(id); }
+  function duplicateProject(id) { if (useProjects()) ASMProjects.duplicate(id); }
 
   // ========================================================================
+  // PDF EXPORT (delegated to asm-pdf-export.js / window.ASMPdf)  // ========================================================================
   // PDF EXPORT (delegated to asm-pdf-export.js / window.ASMPdf)
   // ========================================================================
 
@@ -2346,369 +2089,31 @@ const ASMModule = (() => {
     renderCatalogue();
   }
 
-  let _asmCoupon = '';
-  function resetPlanPrices(box) {
-    box.querySelectorAll('.asm-plan-price').forEach(function(el){
-      el.innerHTML = '₹' + Number(el.getAttribute('data-base')).toLocaleString();
-    });
-  }
-
-  async function showPricing() {
-    const token = getAuthToken();
-    if (!token) { showToast('Please login first', 'error'); return; }
-    _asmCoupon = '';
-
-    let plans = [];
-    let keyId = '';
-    try {
-      const res = await fetch(apiBase() + '/asm/payments/plans');
-      const data = await res.json();
-      if (data.success) { plans = data.plans; keyId = data.keyId; }
-    } catch (e) {
-      showToast('Could not load pricing', 'error');
-      return;
-    }
-
-    let modal = document.getElementById('asm-pricing-modal');
-    if (modal) modal.remove();
-    modal = document.createElement('div');
-    modal.id = 'asm-pricing-modal';
-    modal.style.cssText = 'position:fixed;inset:0;z-index:10003;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center';
-
-    const box = document.createElement('div');
-    box.style.cssText = 'background:#1A1D21;border:1px solid #3A3D42;border-radius:16px;width:580px;overflow:hidden';
-
-    // Header
-    const hdr = document.createElement('div');
-    hdr.style.cssText = 'padding:24px 28px 16px;text-align:center';
-    hdr.innerHTML = '<h2 style="margin:0 0 6px;color:#ECB22E;font-size:20px">Upgrade to ASM Pro</h2><p style="margin:0;color:#7A7D82;font-size:12px">Unlock all furniture items, unlimited projects, PDF export</p>';
-    box.appendChild(hdr);
-
-    // Plans
-    const grid = document.createElement('div');
-    grid.style.cssText = 'display:flex;gap:12px;padding:0 28px 24px;justify-content:center';
-
-    plans.forEach(function(p) {
-      const isPopular = p.months === 12;
-      const perMonth = Math.round(p.price / p.months);
-      const card = document.createElement('div');
-      card.style.cssText = 'flex:1;background:#222529;border:2px solid ' + (isPopular ? '#ECB22E' : '#3A3D42') + ';border-radius:12px;padding:20px 16px;text-align:center;cursor:pointer;transition:all .2s;position:relative';
-      card.onmouseover = function() { card.style.borderColor = '#ECB22E'; card.style.transform = 'translateY(-2px)'; };
-      card.onmouseout = function() { card.style.borderColor = isPopular ? '#ECB22E' : '#3A3D42'; card.style.transform = ''; };
-
-      let inner = '';
-      if (isPopular) inner += '<div style="position:absolute;top:-10px;left:50%;transform:translateX(-50%);background:#ECB22E;color:#1A1D21;font-size:9px;font-weight:800;padding:2px 10px;border-radius:10px">BEST VALUE</div>';
-      inner += '<div style="font-size:14px;font-weight:800;color:#fff;margin-bottom:4px">' + p.label + '</div>';
-      inner += '<div class="asm-plan-price" data-base="' + p.price + '" style="font-size:28px;font-weight:900;color:#ECB22E;margin:10px 0">₹' + p.price.toLocaleString() + '</div>';
-      inner += '<div style="font-size:11px;color:#7A7D82;margin-bottom:16px">₹' + perMonth.toLocaleString() + '/month</div>';
-      inner += '<button class="asm-btn asm-btn-primary" style="width:100%;padding:10px" onclick="ASMModule.startASMPayment(\'' + p.id + '\')">Choose Plan</button>';
-
-      card.innerHTML = inner;
-      grid.appendChild(card);
-    });
-
-    box.appendChild(grid);
-
-    // Features list
-    const features = document.createElement('div');
-    features.style.cssText = 'padding:0 28px 20px;font-size:11px;color:#7A7D82;text-align:center';
-    features.innerHTML = 'Includes: All 93+ furniture items | Unlimited projects | Save to cloud | PDF export | Export to optimizer | Priority support';
-    // Coupon field
-    const couponWrap = document.createElement('div');
-    couponWrap.style.cssText = 'padding:0 28px 16px';
-    couponWrap.innerHTML =
-      '<div style="display:flex;gap:8px;max-width:340px;margin:0 auto">' +
-        '<input id="asm-coupon-field" type="text" placeholder="Coupon code (optional)" style="flex:1;text-transform:uppercase;background:#222529;border:1px solid #3A3D42;color:#fff;border-radius:6px;padding:9px;font-size:13px">' +
-        '<button id="asm-coupon-apply" class="asm-btn asm-btn-ghost" style="white-space:nowrap">Apply</button>' +
-      '</div>' +
-      '<div id="asm-coupon-msg" style="text-align:center;font-size:12px;margin-top:8px;min-height:15px"></div>';
-    box.appendChild(couponWrap);
-
-    box.appendChild(features);
-
-    // Wire coupon apply — updates each plan card's displayed price
-    const applyBtn = couponWrap.querySelector('#asm-coupon-apply');
-    const field = couponWrap.querySelector('#asm-coupon-field');
-    const msg = couponWrap.querySelector('#asm-coupon-msg');
-    applyBtn.onclick = async function() {
-      const code = (field.value || '').trim().toUpperCase();
-      if (!code) { _asmCoupon = ''; resetPlanPrices(box); msg.textContent = ''; return; }
-      msg.textContent = 'Checking…'; msg.style.color = '#7A7D82';
-      // Validate against the first plan just to check validity; per-plan recompute below.
-      let anyValid = false, lastReason = '';
-      const priceEls = box.querySelectorAll('.asm-plan-price');
-      for (const el of priceEls) {
-        const base = Number(el.getAttribute('data-base'));
-        const planCard = el.closest('div');
-        // find plan id from the card's button
-        const btn = el.parentElement.querySelector('button[onclick*="startASMPayment"]');
-        const pid = btn ? btn.getAttribute('onclick').match(/startASMPayment\('([^']+)'\)/)[1] : null;
-        try {
-          const r = await fetch(apiBase() + '/asm/payments/validate-coupon', {
-            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-            body: JSON.stringify({ code, planId: pid, email: (CURRENT_USER && CURRENT_USER.email) || '' })
-          });
-          const d = await r.json();
-          if (d.valid) {
-            anyValid = true;
-            el.innerHTML = '<span style="text-decoration:line-through;color:#7A7D82;font-size:18px">₹' + base.toLocaleString() + '</span> ₹' + Math.round(d.finalPrice).toLocaleString();
-          } else {
-            lastReason = d.reason || 'Invalid coupon';
-            el.innerHTML = '₹' + base.toLocaleString();
-          }
-        } catch (e) { lastReason = e.message; }
-      }
-      if (anyValid) { _asmCoupon = code; msg.textContent = '✓ Coupon applied'; msg.style.color = '#2EB67D'; }
-      else { _asmCoupon = ''; msg.textContent = lastReason || 'Invalid coupon'; msg.style.color = '#E01E5A'; }
+  // Pricing, coupons and Razorpay live in asm-pricing.js. checkASMPlan()
+  // stays here: the plan it resolves drives the catalogue lock icons.
+  function pricingCtx() {
+    return {
+      apiBase: apiBase,
+      getToken: getAuthToken,
+      showToast: showToast,
+      onActivated: function () { asmPlan = 'pro'; checkASMPlan(); }
     };
-
-    // Close
-    const closeDiv = document.createElement('div');
-    closeDiv.style.cssText = 'padding:12px 28px;background:#222529;border-top:1px solid #3A3D42;text-align:center';
-    const closeBtn = document.createElement('button');
-    closeBtn.className = 'asm-btn asm-btn-ghost';
-    closeBtn.textContent = 'Maybe Later';
-    closeBtn.onclick = function() { modal.remove(); };
-    closeDiv.appendChild(closeBtn);
-    box.appendChild(closeDiv);
-
-    modal.appendChild(box);
-    modal.addEventListener('click', function(e) { if (e.target === modal) modal.remove(); });
-    document.body.appendChild(modal);
   }
-
-  // Coupon prompt — returns code string (applied), '' (skipped), or false (cancelled).
-  function promptCoupon(planId, email, token) {
-    return new Promise(function(resolve) {
-      let modal = document.getElementById('asm-coupon-modal');
-      if (modal) modal.remove();
-      modal = document.createElement('div');
-      modal.id = 'asm-coupon-modal';
-      modal.style.cssText = 'position:fixed;inset:0;z-index:10007;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;padding:16px';
-      modal.innerHTML =
-        '<div style="background:#1A1D21;border:1px solid #3A3D42;border-radius:12px;width:100%;max-width:380px;padding:20px">' +
-          '<h3 style="margin:0 0 4px;color:#ECB22E;font-size:16px">Have a coupon?</h3>' +
-          '<p style="margin:0 0 14px;color:#9A9DA2;font-size:12px">Enter a code, or skip to pay full price.</p>' +
-          '<div style="display:flex;gap:8px">' +
-            '<input id="asm-coupon-input" type="text" placeholder="COUPON CODE" style="flex:1;text-transform:uppercase;background:#222529;border:1px solid #3A3D42;color:#fff;border-radius:6px;padding:9px;font-size:13px">' +
-            '<button id="asm-coupon-apply" class="asm-btn asm-btn-ghost" style="white-space:nowrap">Apply</button>' +
-          '</div>' +
-          '<div id="asm-coupon-status" style="font-size:12px;margin-top:10px;min-height:16px"></div>' +
-          '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">' +
-            '<button id="asm-coupon-cancel" class="asm-btn asm-btn-ghost">Cancel</button>' +
-            '<button id="asm-coupon-continue" class="asm-btn asm-btn-primary">Continue</button>' +
-          '</div>' +
-        '</div>';
-      document.body.appendChild(modal);
-
-      const input = modal.querySelector('#asm-coupon-input');
-      const status = modal.querySelector('#asm-coupon-status');
-      let validCode = ''; // set once a coupon validates
-
-      function done(val) { modal.remove(); resolve(val); }
-
-      modal.querySelector('#asm-coupon-apply').onclick = async function() {
-        const code = (input.value || '').trim().toUpperCase();
-        if (!code) { status.textContent = 'Enter a code first'; status.style.color = '#E01E5A'; return; }
-        status.textContent = 'Checking…'; status.style.color = '#7A7D82';
-        try {
-          const r = await fetch(apiBase() + '/asm/payments/validate-coupon', {
-            method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-            body: JSON.stringify({ code, planId, email })
-          });
-          const d = await r.json();
-          if (d.valid) {
-            validCode = d.code;
-            status.innerHTML = '✓ Applied: ₹' + d.basePrice.toLocaleString('en-IN') +
-              ' → <b style="color:#2EB67D">₹' + d.finalPrice.toLocaleString('en-IN') + '</b> (save ₹' + d.discount.toLocaleString('en-IN') + ')';
-            status.style.color = '#2EB67D';
-          } else {
-            validCode = '';
-            status.textContent = d.reason || 'Invalid coupon';
-            status.style.color = '#E01E5A';
-          }
-        } catch (e) { status.textContent = e.message; status.style.color = '#E01E5A'; }
-      };
-
-      modal.querySelector('#asm-coupon-continue').onclick = function() {
-        // If they typed a code but didn't Apply, treat it as the code (server re-validates anyway).
-        const typed = (input.value || '').trim().toUpperCase();
-        done(validCode || typed || '');
-      };
-      modal.querySelector('#asm-coupon-cancel').onclick = function() { done(false); };
-      modal.addEventListener('click', function(e) { if (e.target === modal) done(false); });
-      input.focus();
-    });
+  function showPricing() {
+    if (!window.ASMPricing) { showToast('Pricing module not loaded', 'error'); return; }
+    ASMPricing.init(pricingCtx());
+    ASMPricing.show();
   }
-
-  async function startASMPayment(planId) {
-    const token = getAuthToken();
-    if (!token) { showToast('Please login first', 'error'); return; }
-
-    // Get user info
-    let userId = '', email = '';
-    try {
-      if (typeof CURRENT_USER !== 'undefined' && CURRENT_USER) {
-        userId = CURRENT_USER.id;
-        email = CURRENT_USER.email || '';
-      }
-    } catch(e) {}
-
-    if (!userId) {
-      try {
-        if (typeof supa !== 'undefined' && supa) {
-          const { data } = await supa.auth.getUser(token);
-          if (data && data.user) { userId = data.user.id; email = data.user.email || ''; }
-        }
-      } catch(e) {}
-    }
-
-    if (!userId) { showToast('Could not identify user', 'error'); return; }
-
-    const coupon = _asmCoupon || '';
-
-    try {
-      // Create order
-      const res = await fetch(apiBase() + '/asm/payments/create-order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-        body: JSON.stringify({ planId, userId, email, coupon: coupon || '' })
-      });
-      const order = await res.json();
-
-      if (!order.orderId) {
-        showToast(order.error || 'Could not create order', 'error');
-        return;
-      }
-
-      // Close pricing modal
-      const pricingModal = document.getElementById('asm-pricing-modal');
-      if (pricingModal) pricingModal.remove();
-
-      // Open Razorpay checkout
-      const options = {
-        key: order.keyId,
-        amount: order.amount,
-        currency: order.currency,
-        name: 'EasyCutList',
-        description: 'ASM Pro - ' + order.planLabel,
-        order_id: order.orderId,
-        handler: async function(response) {
-          // Verify payment
-          try {
-            const verifyRes = await fetch(apiBase() + '/asm/payments/verify', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature,
-                userId, planId
-              })
-            });
-            const result = await verifyRes.json();
-            if (result.ok) {
-              showToast('ASM Pro activated! Expires: ' + new Date(result.expiresAt).toLocaleDateString(), 'success');
-              asmPlan = 'pro';
-              await checkASMPlan();
-            } else {
-              showToast('Payment verification failed', 'error');
-            }
-          } catch (e) {
-            showToast('Verification error', 'error');
-          }
-        },
-        prefill: { email },
-        theme: { color: '#4A154B' }
-      };
-
-      const rzp = new Razorpay(options);
-      rzp.on('payment.failed', function() {
-        showToast('Payment failed', 'error');
-      });
-      rzp.open();
-
-    } catch (err) {
-      showToast('Payment error: ' + err.message, 'error');
-    }
+  function startASMPayment(planId) {
+    if (!window.ASMPricing) return;
+    ASMPricing.init(pricingCtx());
+    ASMPricing.pay(planId);
   }
 
   // ========================================================================
+  // TOAST NOTIFICATIONS  // ========================================================================
   // TOAST NOTIFICATIONS
   // ========================================================================
-
-  // ── image compression: File -> data URL (JPEG, max 1600px, q0.7) ──
-  function compressImage(file) {
-    return new Promise((resolve, reject) => {
-      if (!/^image\/(jpeg|png)$/.test(file.type)) { reject(new Error('Only JPG/PNG')); return; }
-      const img = new Image();
-      const reader = new FileReader();
-      reader.onload = e => { img.src = e.target.result; };
-      reader.onerror = () => reject(new Error('read failed'));
-      img.onload = () => {
-        const MAX = 1600;
-        let { width: w, height: h } = img;
-        if (w > MAX || h > MAX) { const s = Math.min(MAX / w, MAX / h); w = Math.round(w * s); h = Math.round(h * s); }
-        const c = document.createElement('canvas');
-        c.width = w; c.height = h;
-        c.getContext('2d').drawImage(img, 0, 0, w, h);
-        resolve(c.toDataURL('image/jpeg', 0.7));
-      };
-      img.onerror = () => reject(new Error('bad image'));
-      reader.readAsDataURL(file);
-    });
-  }
-
-  // shared: build an attach control that collects compressed data URLs into `store` array
-  function buildAttachUI(store, previewId) {
-    return '<div style="margin-top:10px">' +
-      '<label style="display:inline-flex;align-items:center;gap:6px;font-size:12px;color:#9A9DA2;cursor:pointer">' +
-        '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"></path></svg>' +
-        'Attach screenshots' +
-        '<input type="file" accept="image/png,image/jpeg" multiple style="display:none" ' +
-          'onchange="ASMModule._onAttach(event,\''+previewId+'\')"></label>' +
-      '<div id="'+previewId+'" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px"></div></div>';
-  }
-
-  // global registry so inline onchange can reach the right store
-  var _attachStores = {};
-  async function _onAttach(ev, previewId) {
-    const files = Array.from(ev.target.files || []);
-    const prev = document.getElementById(previewId);
-    const store = _attachStores[previewId] = _attachStores[previewId] || [];
-    for (const f of files) {
-      if (store.length >= 6) { showToast('Max 6 images', 'error'); break; }
-      try {
-        const durl = await compressImage(f);
-        store.push(durl);
-        const wrap = document.createElement('div');
-        wrap.style.cssText = 'position:relative;width:52px;height:52px';
-        const idx = store.length - 1;
-        wrap.innerHTML = '<img src="'+durl+'" style="width:52px;height:52px;object-fit:cover;border-radius:6px;border:1px solid #3A3D42">' +
-          '<span style="position:absolute;top:-6px;right:-6px;background:#E01E5A;color:#fff;border-radius:50%;width:16px;height:16px;font-size:11px;line-height:16px;text-align:center;cursor:pointer" '+
-          'onclick="ASMModule._rmAttach(\''+previewId+'\','+idx+',this)">×</span>';
-        prev.appendChild(wrap);
-      } catch (e) { showToast(e.message, 'error'); }
-    }
-    ev.target.value = '';
-  }
-  function _rmAttach(previewId, idx, el) {
-    const store = _attachStores[previewId];
-    if (store && store[idx] !== undefined) store[idx] = null; // tombstone (keep indices)
-    if (el && el.parentElement) el.parentElement.remove();
-  }
-  function _collectAttachments(previewId) {
-    return (_attachStores[previewId] || []).filter(Boolean);
-  }
-  function _clearAttachments(previewId) { delete _attachStores[previewId]; }
-
-  // render attachments inside a thread bubble
-  function renderAttachments(atts) {
-    if (!atts || !atts.length) return '';
-    return '<div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px">' +
-      atts.map(u => '<a href="'+u+'" target="_blank" rel="noopener"><img src="'+u+'" style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid #3A3D42"></a>').join('') +
-      '</div>';
-  }
 
   // Unified "Export Files" — collects RIS panels, opens ExportFiles modal
   function exportFilesRIS() {
@@ -2737,144 +2142,25 @@ const ASMModule = (() => {
     });
   }
 
+  // Support UI lives in asm-support.js — it only needs the item name.
   function reportProblem(instanceId) {
     const inst = sbsItems.find(i => i.instanceId === instanceId);
-    const itemName = inst ? (inst.itemName || 'Item') : 'Item';
-    const ov = document.createElement('div');
-    ov.className = 'asm-review-overlay';
-    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:100000';
-    ov.innerHTML =
-      '<div style="background:#1E2124;border:1px solid #3A3D42;border-radius:12px;padding:24px;max-width:480px;width:92%">' +
-        '<div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:4px">Report a problem</div>' +
-        '<div style="font-size:13px;color:#9A9DA2;margin-bottom:14px">Item: <b style="color:#ECB22E">' + itemName.replace(/</g,"&lt;") + '</b></div>' +
-        '<textarea id="rpBody" rows="5" placeholder="Describe the problem…" style="width:100%;box-sizing:border-box;background:#14161A;border:1px solid #3A3D42;color:#fff;border-radius:8px;padding:10px;font-family:inherit;font-size:13px;resize:vertical"></textarea>' +
-        buildAttachUI(null, 'rpAttach') +
-        '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px">' +
-          '<button class="asm-btn asm-btn-ghost" id="rpCancel">Cancel</button>' +
-          '<button class="asm-btn" style="background:#E01E5A;color:#fff" id="rpSend">Send</button>' +
-        '</div>' +
-        '<div id="rpStatus" style="font-size:12px;margin-top:8px"></div>' +
-      '</div>';
-    document.body.appendChild(ov);
-    const close = () => ov.remove();
-    ov.querySelector('#rpCancel').onclick = close;
-    ov.onclick = e => { if (e.target === ov) close(); };
-    ov.querySelector('#rpSend').onclick = async () => {
-      const body = ov.querySelector('#rpBody').value.trim();
-      const st = ov.querySelector('#rpStatus');
-      if (!body) { st.textContent = 'Please type a message.'; st.style.color = '#E01E5A'; return; }
-      st.textContent = 'Sending…'; st.style.color = '#9A9DA2';
-      try {
-        const images = _collectAttachments('rpAttach');
-        if (!body && !images.length) { st.textContent = 'Add a message or image.'; st.style.color = '#E01E5A'; return; }
-        const res = await fetch(apiBase() + '/asm/problem', {
-          method: 'POST',
-          headers: Object.assign({ 'Content-Type': 'application/json' }, authH()),
-          body: JSON.stringify({ itemName: itemName, body: body, images: images })
-        });
-        const d = await res.json();
-        if (d.success) { _clearAttachments('rpAttach'); showToast('Problem reported — we will reply soon', 'success'); close(); }
-        else { st.textContent = d.error || 'Failed to send'; st.style.color = '#E01E5A'; }
-      } catch (e) { st.textContent = e.message; st.style.color = '#E01E5A'; }
-    };
+    if (!window.ASMSupport) { showToast('Support module not loaded', 'error'); return; }
+    ASMSupport.report(inst ? (inst.itemName || 'Item') : 'Item');
   }
 
-  async function refreshMyProblemsBadge() {
-    try {
-      const res = await fetch(apiBase() + '/asm/my-problems', { headers: authH() });
-      const d = await res.json();
-      const probs = d.problems || [];
-      const unread = probs.filter(p => p.unread_user).length;
-      const badge = document.getElementById('asm-msgs-badge');
-      if (badge) {
-        if (unread > 0) { badge.textContent = unread; badge.style.display = 'flex'; }
-        else badge.style.display = 'none';
-      }
-      return probs;
-    } catch (e) { return []; }
+  // Thin delegates. They stay on ASMModule because the public API is part
+  // of the contract with every inline onclick this file generates.
+  function refreshMyProblemsBadge() {
+    return window.ASMSupport ? ASMSupport.refreshBadge() : Promise.resolve([]);
   }
-
-  async function openMyProblems() {
-    const probs = await refreshMyProblemsBadge();
-    const ov = document.createElement('div');
-    ov.className = 'asm-review-overlay';
-    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:100000';
-    const esc = x => String(x==null?'':x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-    const fmt = iso => { if(!iso) return ''; const d=new Date(iso); return isNaN(d)?'':d.toLocaleString('en-GB',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}); };
-
-    function threadHtml(p) {
-      return (p.messages||[]).map(m => {
-        const mine = m.sender === 'user';
-        return '<div style="margin:6px 0;display:flex;' + (mine?'justify-content:flex-end':'') + '">' +
-          '<div style="max-width:80%;background:' + (mine?'#2B5C43':'#26282C') + ';color:#eee;padding:8px 11px;border-radius:9px;font-size:13px">' +
-            '<div style="font-size:10px;color:#9A9DA2;margin-bottom:2px">' + (mine?'You':'Support') + ' · ' + fmt(m.created_at) + '</div>' +
-            (m.body ? esc(m.body) : '') + renderAttachments(m.attachments) + '</div></div>';
-      }).join('');
-    }
-
-    const body = probs.length ? probs.map(p =>
-      '<div style="background:#1A1D21;border:1px solid #2A2D31;border-radius:10px;padding:14px;margin-bottom:12px">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">' +
-          '<div style="font-size:13px;color:#ECB22E;font-weight:700">' + esc(p.item_name || 'Item') + (p.status==='closed'?' <span style="background:#555;color:#fff;font-size:9px;padding:1px 6px;border-radius:8px">CLOSED</span>':'') + '</div>' +
-          '<div style="font-size:11px;color:#9A9DA2">' + fmt(p.created_at) + '</div>' +
-        '</div>' +
-        '<div style="max-height:220px;overflow-y:auto;margin-bottom:8px">' + threadHtml(p) + '</div>' +
-        (p.status==='closed' ? '<div style="font-size:12px;color:#9A9DA2">This thread is closed.</div>' :
-          '<div style="display:flex;gap:6px">' +
-            '<input id="myreply-' + p.id + '" placeholder="Reply…" style="flex:1;background:#111;border:1px solid #3A3D42;color:#fff;border-radius:6px;padding:7px;font-size:13px;font-family:inherit">' +
-            '<button class="asm-btn asm-btn-primary" onclick="ASMModule.replyMyProblem(' + p.id + ')">Send</button>' +
-          '</div>' + buildAttachUI(null, 'myAttach-' + p.id)) +
-        '<div id="myrepstatus-' + p.id + '" style="font-size:11px;margin-top:4px"></div>' +
-      '</div>'
-    ).join('') : '<div style="color:#9A9DA2;font-size:13px;text-align:center;padding:20px">No messages yet. Use "Report Problem" on an item to start.</div>';
-
-    ov.innerHTML =
-      '<div style="background:#1E2124;border:1px solid #3A3D42;border-radius:12px;padding:22px;max-width:560px;width:94%;max-height:82vh;overflow-y:auto">' +
-        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">' +
-          '<div style="font-size:16px;font-weight:700;color:#fff">My Messages</div>' +
-          '<button class="asm-btn asm-btn-ghost" id="myMsgClose">Close</button>' +
-        '</div>' + body +
-      '</div>';
-    document.body.appendChild(ov);
-    ov.querySelector('#myMsgClose').onclick = () => ov.remove();
-    ov.onclick = e => { if (e.target === ov) ov.remove(); };
-    ov._probs = probs;
-    _myProblemsOverlay = ov;
-
-    // mark replies as read (server side) — clears the badge
-    try {
-      for (const p of probs) {
-        if (p.unread_user) {
-          await fetch(apiBase() + '/asm/problem/mark-read', {
-            method: 'POST', headers: Object.assign({ 'Content-Type':'application/json' }, authH()),
-            body: JSON.stringify({ problem_id: p.id })
-          });
-        }
-      }
-      refreshMyProblemsBadge();
-    } catch (e) {}
+  function openMyProblems() {
+    if (window.ASMSupport) ASMSupport.openMessages();
+    else showToast('Support module not loaded', 'error');
   }
-
-  async function replyMyProblem(id) {
-    const inp = document.getElementById('myreply-' + id);
-    const st = document.getElementById('myrepstatus-' + id);
-    const body = (inp.value || '').trim();
-    st.textContent = 'Sending…'; st.style.color = '#9A9DA2';
-    try {
-      const images = _collectAttachments('myAttach-' + id);
-      if (!body && !images.length) { st.textContent = 'Add text or image.'; st.style.color = '#E01E5A'; return; }
-      const res = await fetch(apiBase() + '/asm/problem/reply', {
-        method: 'POST', headers: Object.assign({ 'Content-Type':'application/json' }, authH()),
-        body: JSON.stringify({ problem_id: id, body: body, images: images })
-      });
-      const d = await res.json();
-      if (d.success) {
-        _clearAttachments('myAttach-' + id);
-        if (_myProblemsOverlay) _myProblemsOverlay.remove();
-        openMyProblems();  // reload thread
-      } else { st.textContent = d.error || 'Failed'; st.style.color = '#E01E5A'; }
-    } catch (e) { st.textContent = e.message; st.style.color = '#E01E5A'; }
-  }
+  function replyMyProblem(id) { if (window.ASMSupport) ASMSupport.reply(id); }
+  function _onAttach(ev, previewId) { if (window.ASMSupport) ASMSupport._onAttach(ev, previewId); }
+  function _rmAttach(previewId, idx, el) { if (window.ASMSupport) ASMSupport._rmAttach(previewId, idx, el); }
 
   function showToast(msg, type = 'info') {
     const toast = document.createElement('div');
@@ -2946,103 +2232,20 @@ const ASMModule = (() => {
     if (e.key === 'Escape' && document.getElementById('asm-video-modal')) closeVideo();
   });
 
+  // Import lives in asm-import.js. It parses the file and hands the ready
+  // item back; pushing it onto readyItems stays here.
   function showImportModal() {
-    const old = document.getElementById('asm-import-modal'); if (old) old.remove();
-    const m = document.createElement('div');
-    m.id = 'asm-import-modal';
-    m.style.cssText = 'position:fixed;inset:0;z-index:10005;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center';
-    m.onclick = e => { if (e.target === m) m.remove(); };
-    m.innerHTML = `
-      <div style="background:#1A1D21;border:1px solid #3A3D42;border-radius:12px;width:440px;overflow:hidden">
-        <div style="padding:16px 20px;background:#222529;border-bottom:1px solid #3A3D42;display:flex;justify-content:space-between;align-items:center">
-          <div style="font-size:15px;font-weight:700;color:#fff">Import your own Sizes in RIS</div>
-          <button onclick="document.getElementById('asm-import-modal').remove()" style="background:none;border:none;color:#7A7D82;font-size:20px;cursor:pointer">&#10005;</button>
-        </div>
-        <div style="padding:20px">
-          <div style="font-size:12px;color:#ABABAD;margin-bottom:12px">Columns: Component | W | H | Qty | Material | Remark. Component optional. Item name = file name.</div>
-          <input type="file" id="asm-import-file" accept=".csv,.xlsx,.xls" style="width:100%;padding:10px;background:#222529;border:1px solid #3A3D42;border-radius:6px;color:#fff;font-size:13px;box-sizing:border-box">
-          <div id="asm-import-status" style="margin-top:10px;font-size:12px"></div>
-        </div>
-        <div style="padding:12px 20px;background:#222529;border-top:1px solid #3A3D42;display:flex;justify-content:space-between;align-items:center">
-          <button onclick="ASMModule.downloadSample()" style="background:none;border:none;color:#ECB22E;font-size:12px;cursor:pointer;text-decoration:underline">Download sample file</button>
-          <button onclick="ASMModule.doImport()" style="padding:8px 16px;background:#ECB22E;border:none;border-radius:6px;color:#1A1D21;font-weight:700;font-size:13px;cursor:pointer">Import</button>
-        </div>
-      </div>`;
-    document.body.appendChild(m);
-  }
-
-  function downloadSample() {
-    const csv = 'Component,W,H,Qty,Material,Remark\nTOP,600,400,1,MDF,-\nSIDE,400,720,2,PLY,edge band\n';
-    const blob = new Blob([csv], { type: 'text/csv' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob); a.download = 'asm-sample.csv'; a.click();
-  }
-
-  function _loadXLSX() {
-    return new Promise((res, rej) => {
-      if (window.XLSX) return res();
-      const s = document.createElement('script');
-      s.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js';
-      s.onload = res; s.onerror = rej; document.head.appendChild(s);
+    if (!window.ASMImport) { showToast('Import module not loaded', 'error'); return; }
+    ASMImport.open({
+      catalogueKey: currentCatalogue,
+      showToast: showToast,
+      onImport: function (item) { readyItems.push(item); renderReadyItems(); }
     });
   }
+  function downloadSample() { if (window.ASMImport) ASMImport.downloadSample(); }
+  function doImport()       { if (window.ASMImport) ASMImport.run(); }
 
-  function _rowsToItem(rows, name) {
-    let hdr = -1;
-    for (let i = 0; i < rows.length; i++) {
-      const r = (rows[i] || []).map(c => String(c || '').toLowerCase());
-      if (r.some(c => c === 'w') && r.some(c => c === 'h')) { hdr = i; break; }
-    }
-    if (hdr < 0) throw new Error('No header row (need W and H columns)');
-    const cols = rows[hdr].map(c => String(c || '').toLowerCase().trim());
-    const ci = n => cols.indexOf(n);
-    const iw = ci('w'), ih = ci('h'), iq = ci('qty'), ic = ci('component'),
-          im = ci('material'), ir = ci('remark');
-    const outputs = [];
-    for (let i = hdr + 1; i < rows.length; i++) {
-      const r = rows[i]; if (!r || r.every(c => c === '' || c == null)) continue;
-      const w = parseFloat(r[iw]), h = parseFloat(r[ih]);
-      if (isNaN(w) || isNaN(h)) continue;
-      outputs.push({
-        component: (ic >= 0 ? r[ic] : '') || 'PART',
-        w, h, qty: iq >= 0 ? (parseInt(r[iq]) || 1) : 1,
-        material: im >= 0 ? (r[im] || '') : '',
-        remark: ir >= 0 ? (r[ir] || '') : ''
-      });
-    }
-    if (!outputs.length) throw new Error('No valid size rows found');
-    return { readyId: 'ready_' + Date.now(), itemId: 'imported', itemName: name,
-             catalogueKey: currentCatalogue, imported: true, inputs: {}, outputs };
-  }
-
-  async function doImport() {
-    const inp = document.getElementById('asm-import-file');
-    const status = document.getElementById('asm-import-status');
-    const f = inp.files[0];
-    if (!f) { status.innerHTML = '<span style="color:#E01E5A">Choose a file</span>'; return; }
-    const name = f.name.replace(/\.(csv|xlsx|xls)$/i, '');
-    try {
-      let rows;
-      if (/\.csv$/i.test(f.name)) {
-        const text = await f.text();
-        rows = text.split(/\r?\n/).map(l => l.split(','));
-      } else {
-        await _loadXLSX();
-        const buf = await f.arrayBuffer();
-        const wb = XLSX.read(buf, { type: 'array' });
-        rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1 });
-      }
-      const item = _rowsToItem(rows, name);
-      readyItems.push(item);
-      renderReadyItems();
-      document.getElementById('asm-import-modal').remove();
-      showToast(`Imported "${name}" (${item.outputs.length} parts)`, 'success');
-    } catch (e) {
-      status.innerHTML = '<span style="color:#E01E5A">' + e.message + '</span>';
-    }
-  }
-
-  // ── Public API ──
+  // ── Public API ──  // ── Public API ──
   function newProject() {
     const hasWork = (sbsItems && sbsItems.length) || (readyItems && readyItems.length);
     if (hasWork && !confirm('Start a new project? Unsaved items will be cleared.')) return;
@@ -3117,16 +2320,17 @@ const ASMModule = (() => {
     init, openASM, closeASM, makeQuotation, newProject, toggleDrawer, closeDrawers,
     showImportModal, downloadSample, doImport, toggleCS, toggleRIS, stepInput, restoreOutputRows,
     filterCatalogue, addToSBS, removeFromSBS,
+    undoDeleteRow, getInstance, applyInputs,
     updateInput, setRoomName, editOutput, deleteOutputRow, saveToReady, reviewCheck, setRisSort, asmLogin, asmLogout,
     reopenReady, removeReady, duplicateReady, clearReady, exportReady, exportToPDF, _runExport, sbsFont, setUnit, switchCatalogue, showCategoryGallery, exitGallery, addManualRow, addManualRowsPrompt, deleteManualRow, editManualRow, addSBSRows, adjustEBand, reportProblem, exportFilesRIS, openMyProblems, replyMyProblem, _onAttach, _rmAttach,
-    saveProject, showProjects, loadProject, deleteProject,
+    saveProject, showProjects, loadProject, deleteProject, duplicateProject,
     showPricing, startASMPayment,
     setDimOrder, toggleDimOrder,
     toggleItemSwitch, switchSBSItem,
     toggleNotifications, openShare,
     openImageModal, closeImageModal, modalNav,
     openVideo, closeVideo,
-    show3DView, showImageView
+    show3DView, showImageView, showOutView
   };
 })();
 

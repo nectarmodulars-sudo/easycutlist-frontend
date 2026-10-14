@@ -668,25 +668,47 @@ td .asm-cell-num { font-weight: 600; color: #ECB22E; }
 .asm-sbs-split:not(.on) { display:block; }
 .asm-sbs-split.on {
   display:grid;
-  grid-template-columns: minmax(290px, .8fr) minmax(540px, 1.7fr);
+  grid-template-columns: minmax(300px, .72fr) minmax(560px, 2fr);
   gap:14px; align-items:start; padding:12px 16px;
 }
+/* The INPUT COLUMN scrolls on its own, so the model never leaves the screen.
+   Before this the whole SBS body scrolled: on a mid-sized window the inputs
+   are taller than the viewport, and scrolling to reach "Lower vertical" took
+   the 3D view off the top with it. */
 .asm-sbs-split.on > .asm-sbs-inputs-col {
-  order:1; align-self:stretch; min-width:0;
+  order:1; min-width:0;
+  align-self:start;
+  max-height:calc(100vh - 150px);
+  overflow-y:auto; overscroll-behavior:contain;
+  padding-right:6px;
+}
+.asm-sbs-split.on > .asm-sbs-inputs-col::-webkit-scrollbar { width:9px; }
+.asm-sbs-split.on > .asm-sbs-inputs-col::-webkit-scrollbar-thumb {
+  background:#3A3D42; border-radius:5px;
 }
 .asm-sbs-split.on > .asm-sbs-inputs-col > .asm-input-zone { margin:0 0 10px; }
+/* The column is a flex column, so its zones SHRANK to fit the cap instead of
+   overflowing it — and .asm-input-zone clips, so the bottom rows were simply
+   cut off with no scrollbar to reach them. Flex children keep their own
+   height; the column scrolls. */
+.asm-sbs-split.on > .asm-sbs-inputs-col > * { flex:0 0 auto; }
 .asm-sbs-split.on > .asm-sbs-item-diagram-section {
   order:2; padding:0; border-bottom:none;
   position:sticky; top:8px;          /* model stays put while inputs scroll */
 }
-/* the 4-across input grid does not fit a half-width column */
-.asm-sbs-split.on .asm-sbs-item-inputs { grid-template-columns: repeat(2, minmax(130px,1fr)); }
-.asm-sbs-split.on .asm-input-row label { flex:0 0 78px; }
-.asm-sbs-split.on .asm-input-row input[type=number] { width:68px; }
-.asm-sbs-split.on .asm-input-row select { width:100px; }
+/* The 4-across input grid does not fit a half-width column. Two FIXED columns
+   did not either once the window got smaller: a label like "Ply thickness
+   (lrtb & shelves)" had 130px to live in and wrapped into four lines. Let the
+   grid drop to one column on its own, and let the label take the width it
+   needs instead of a fixed 78. */
+.asm-sbs-split.on .asm-sbs-item-inputs { grid-template-columns: repeat(auto-fit, minmax(168px,1fr)); }
+.asm-sbs-split.on .asm-input-row { gap:8px; }
+.asm-sbs-split.on .asm-input-row label { flex:1 1 auto; min-width:0; }
+.asm-sbs-split.on .asm-input-row input[type=number] { width:64px; flex:0 0 auto; }
+.asm-sbs-split.on .asm-input-row select { width:92px; flex:0 0 auto; }
 @media (max-width:1200px) {
   .asm-sbs-split.on { grid-template-columns:1fr; }
-  .asm-sbs-split.on > .asm-sbs-inputs-col { order:2; }
+  .asm-sbs-split.on > .asm-sbs-inputs-col { order:2; max-height:none; overflow:visible; }
   .asm-sbs-split.on > .asm-sbs-item-diagram-section { order:1; position:static; }
   .asm-sbs-split.on .asm-sbs-item-inputs { grid-template-columns:repeat(4,minmax(150px,1fr)); }
 }
@@ -742,8 +764,17 @@ td .asm-cell-num { font-weight: 600; color: #ECB22E; }
 .asm-view-tab .dot { width:7px; height:7px; border-radius:50%; background:#3A3D42; }
 .asm-view-tab.on .dot { background:#ECB22E; }
 .asm-view-pane { width:100%; }
-/* the 3D canvas needs a real height — it has no intrinsic size */
-.asm3d-mount { height:min(66vh, 720px); min-height:340px; }
-@media (max-width:900px) { .asm3d-mount { height:340px; } }
+/* The output table sits behind its own tab on a 3D item. In the pane it gets
+   its own scroll so a long cut list does not push the tabs off the screen. */
+.asm-out-pane { max-height:min(80vh, 900px); overflow:auto; }
+.asm-out-pane > .asm-out-block > .asm-out-head { margin-top:0; }
+.asm-out-block { min-width:0; }
+
+/* the 3D canvas needs a real height — it has no intrinsic size.
+   The mount now holds the viewer, the figures strip and the toolbar, so it
+   needs more than the viewer alone did. */
+.asm3d-mount { height:min(80vh, 900px); min-height:460px; }
+@media (max-height:800px) { .asm3d-mount { height:min(84vh, 760px); min-height:400px; } }
+@media (max-width:900px)  { .asm3d-mount { height:420px; min-height:380px; } }
 
 `;

@@ -112,33 +112,37 @@ window.ASM3DRoom = (function () {
     scene.add(k1); scene.add(k2); scene.add(k3);
   }
 
-  /* ── the room ─────────────────────────────────────────────────── */
+  /* ── the room ───────────────────────────────────────────────────
+     o.mount is how far the item's underside sits above the floor: 0 for a
+     wardrobe that stands, ~1400 for a kitchen wall cabinet that hangs. The
+     ROOM drops by that amount rather than the item rising, so the model stays
+     at the origin and the camera, dimensions and drag planes are untouched. */
   function build(THREE, group, o) {
     for (var i = group.children.length - 1; i >= 0; i--) {
       var c = group.children[i]; group.remove(c);
       if (c.geometry) c.geometry.dispose();
     }
     if (!o.show) return;
-    var FL = 16000, WH = 3300;
+    var FL = 16000, WH = 3300, M = Number(o.mount) || 0;
     var zWall = -(o.D / 2 + 25), xWall = -(o.W / 2 + 1700);
 
     var floor = new THREE.Mesh(new THREE.PlaneGeometry(FL, FL),
       new THREE.MeshStandardMaterial({ map: woodTex(THREE), roughness: .72, metalness: 0 }));
-    floor.rotation.x = -Math.PI / 2; group.add(floor);
+    floor.rotation.x = -Math.PI / 2; floor.position.y = -M; group.add(floor);
 
     var wm = new THREE.MeshStandardMaterial({ map: wallTex(THREE), roughness: .97, metalness: 0 });
     var wa = new THREE.MeshStandardMaterial({ map: wallTex(THREE), color: o.accent || 0x4E7FA6,
                                               roughness: .97, metalness: 0 });
     var bw = new THREE.Mesh(new THREE.PlaneGeometry(FL, WH), wm);
-    bw.position.set(0, WH / 2, zWall); group.add(bw);
+    bw.position.set(0, WH / 2 - M, zWall); group.add(bw);
     var lw = new THREE.Mesh(new THREE.PlaneGeometry(FL, WH), wa);
-    lw.rotation.y = Math.PI / 2; lw.position.set(xWall, WH / 2, 0); group.add(lw);
+    lw.rotation.y = Math.PI / 2; lw.position.set(xWall, WH / 2 - M, 0); group.add(lw);
 
     var sm = new THREE.MeshStandardMaterial({ color: 0xE4E1D9, roughness: .6 });
     var sb = new THREE.Mesh(new THREE.BoxGeometry(FL, 95, 22), sm);
-    sb.position.set(0, 47, zWall + 11); group.add(sb);
+    sb.position.set(0, 47 - M, zWall + 11); group.add(sb);
     var sl = new THREE.Mesh(new THREE.BoxGeometry(22, 95, FL), sm);
-    sl.position.set(xWall + 11, 47, 0); group.add(sl);
+    sl.position.set(xWall + 11, 47 - M, 0); group.add(sl);
   }
 
   /* ── panel materials ──────────────────────────────────────────── */
