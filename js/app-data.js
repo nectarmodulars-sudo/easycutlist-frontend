@@ -110,7 +110,7 @@ function autoPopulateStock(){
         label: '',
         l: defW,
         w: defH,
-        qty: 100,
+        qty: '',            // blank = unlimited
         material: mat,
         price,
       });
@@ -133,7 +133,7 @@ function renderPanels(){
   </tr>`).join('')}
 
 // ══ STOCK ══
-function addStock(label='',l=1220,w=2440,qty=1,material='Plywood',price=0,grainLocked=false){
+function addStock(label='',l=1220,w=2440,qty='',material='Plywood',price=0,grainLocked=false){
   const def = profile.defaultSheetW ? parseInt(profile.defaultSheetW) : 1220;
   const defH = profile.defaultSheetH ? parseInt(profile.defaultSheetH) : 2440;
   // Auto-fill price from price book if not provided
@@ -142,14 +142,14 @@ function addStock(label='',l=1220,w=2440,qty=1,material='Plywood',price=0,grainL
   renderStock();
 }
 function removeStock(id){stockRows=stockRows.filter(r=>r.id!==id);renderStock()}
-function updateStock(id,f,v){const r=stockRows.find(r=>r.id===id);if(r){if(f==='l'||f==='w')r[f]=d2mm(v);else if(f==='qty'||f==='price')r[f]=+v;else r[f]=v;}}
+function updateStock(id,f,v){const r=stockRows.find(r=>r.id===id);if(r){if(f==='l'||f==='w')r[f]=d2mm(v);else if(f==='qty')r[f]=(v===''?'':+v);else if(f==='price')r[f]=+v;else r[f]=v;}}
 function toggleGrain(id){const r=stockRows.find(r=>r.id===id);if(r){r.grainLocked=!r.grainLocked;renderStock()}}
 function renderStock(){
   document.getElementById('stock-tbody').innerHTML=stockRows.map(r=>`<tr>
     <td><input type="text" value="${esc(r.label)}" oninput="updateStock(${r.id},'label',this.value)"></td>
     <td><input type="number" value="${mm2d(r.l)}" min="1" oninput="updateStock(${r.id},'l',this.value)"></td>
     <td><input type="number" value="${mm2d(r.w)}" min="1" oninput="updateStock(${r.id},'w',this.value)"></td>
-    <td><input type="number" value="${r.qty}" min="1" max="99" oninput="updateStock(${r.id},'qty',this.value)"></td>
+    <td><input type="number" value="${r.qty>0?r.qty:''}" min="1" max="999" placeholder="∞" title="Sheets in stock. Blank = unlimited" oninput="updateStock(${r.id},'qty',this.value)"></td>
     <td>${matSel(r.material,`updateStock(${r.id},'material',this.value)`,'matlist_s'+r.id)}</td>
     <td><input type="number" value="${r.price||0}" min="0" step="50" placeholder="0" oninput="updateStock(${r.id},'price',this.value)" title="Price per sheet"></td>
     <td style="text-align:center"><button class="rot-btn" title="${r.grainLocked?'Grain locked — click to allow rotation':'Free rotation — click to lock grain'}" style="color:${r.grainLocked?'#ff8ab0':'rgba(255,255,255,.4)'};font-size:13px" onclick="toggleGrain(${r.id})">${r.grainLocked?'🔒':'↻'}</button></td>
@@ -249,7 +249,7 @@ function applyCSV(){
       // Stock: W,H,QTY,Material,Label,Price
       if(isHeaderRow(cols))continue;
       const W=parseFloat(cols[0]),H=parseFloat(cols[1]);
-      const qty=Math.max(1,parseInt(cols[2])||1),mat=(cols[3]||'Plywood').trim()||'Plywood';
+      const qty=parseInt(cols[2])>0?parseInt(cols[2]):'',mat=(cols[3]||'Plywood').trim()||'Plywood';
       const lbl=(cols[4]||'').trim(),price=parseFloat(cols[5])||0;
       if(W>0&&H>0){addStock(lbl,d2mm(W),d2mm(H),qty,mat,price);imported++;}else errors++;
       continue;

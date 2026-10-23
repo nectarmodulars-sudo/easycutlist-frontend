@@ -944,13 +944,6 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
     </button>
   </div>
   <div style="display:flex;align-items:center;gap:8px" class="hdr-right">
-    <!-- Units dropdown (shared setting with ASM) -->
-    <span style="display:flex;align-items:center;gap:5px;color:rgba(255,255,255,.65);font-size:11px">units
-      <select id="opt-units-select" onchange="setOptUnit(this.value)" title="Display units — all calculations run in mm" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#fff;border-radius:5px;padding:4px 6px;font-size:11px;cursor:pointer;max-width:150px"></select>
-    </span>
-    <span style="display:flex;align-items:center;gap:5px;color:rgba(255,255,255,.65);font-size:11px">format
-      <button onclick="toggleOptDimOrder()" title="Swap size display: W×H / H×W (display only)" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#ECB22E;border-radius:5px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer"><span id="opt-dimord-val">W×H</span></button>
-    </span>
     <!-- Auth buttons -->
     <button class="hdr-btn" onclick="signInGoogle()" id="hdr-signin-btn">
       <svg width="13" height="13" viewBox="0 0 48 48" style="background:#fff;border-radius:2px;padding:1px">
@@ -1094,6 +1087,17 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
       <div><div class="tl">Match by material</div>
         <div class="ts-sub">Place panels on matching stock only</div></div>
       <label class="toggle"><input type="checkbox" id="mat-toggle" checked><span class="tt"></span></label>
+    </div>
+    <!-- Units + size format (moved from header; shared setting with ASM) -->
+    <div class="toggle-row">
+      <div><div class="tl">Units</div>
+        <div class="ts-sub">Display only — all calculations run in mm</div></div>
+      <select id="opt-units-select" onchange="setOptUnit(this.value)" title="Display units — all calculations run in mm" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#fff;border-radius:5px;padding:5px 6px;font-size:11px;cursor:pointer;max-width:160px"></select>
+    </div>
+    <div class="toggle-row">
+      <div><div class="tl">Size format</div>
+        <div class="ts-sub">Show sizes as W×H or H×W</div></div>
+      <button onclick="toggleOptDimOrder()" title="Swap size display: W×H / H×W (display only)" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#ECB22E;border-radius:5px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer"><span id="opt-dimord-val">W×H</span></button>
     </div>
   </div>
 
@@ -1624,9 +1628,18 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
 <script src="js/asm-3d-core.js"></script>
 <script src="js/rule-engines/manifest.js"></script>
 <script src="js/export-files.js"></script>
+   <script src="js/asm-eband.js"></script>
+   <script src="js/asm-support.js"></script>
+      <script src="js/asm-share.js"></script>
+   <script src="js/asm-import.js"></script>
+   <script src="js/asm-pricing.js"></script>
+   <script src="js/asm-projects.js"></script>
 <script src="js/app-asm.js"></script>
+<script src="js/asm-presets.js"></script>
+<script src="js/asm-bot.js"></script>
 <script src="js/faq.js"></script>
 <script src="js/asm-quotation.js"></script>
+<script src="js/support-contact.js"></script>
 <!-- Pricing / Upgrade Modal -->
 <div class="upgrade-overlay" id="pricing-modal" style="display:none" onclick="if(event.target===this)closePricing()">
   <div class="upgrade-box" style="width:560px;max-width:95vw">

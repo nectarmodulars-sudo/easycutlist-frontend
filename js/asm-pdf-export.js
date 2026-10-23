@@ -58,6 +58,8 @@ window.ASMPdf = (function () {
           </div>
           ${row('eo-outer','Print Outer Details','Input values grid atop each item', true, false)}
           ${row('eo-summary','Panel Summary','Components / panels line per item', true, false)}
+          ${row('eo-eband','Deduct Edge Banding','Print the size the panel is CUT at: W less L+R, H less T+B', false, false)}
+          ${row('eo-3d','3D View Picture','The 3D view as you framed it, atop that item', true, false)}
           <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0 4px">
             <div><div style="font-size:13px;color:#E8E8E8">W×H×Qty×Material font (pt)</div>
             <div style="font-size:11px;color:#7A7D82">Component table text size</div></div>
@@ -83,6 +85,8 @@ window.ASMPdf = (function () {
       client:  (document.getElementById('eo-client-text')?.value || '').trim(),
       outer:   document.getElementById('eo-outer')?.checked,
       summary: document.getElementById('eo-summary')?.checked,
+      eband:   document.getElementById('eo-eband')?.checked,
+      img3d:   document.getElementById('eo-3d')?.checked,
       font:    parseInt(document.getElementById('eo-font')?.value) || 14,
       biz: gp.biz, logoSrc: gp.logo, phoneNum: gp.phone
     };
@@ -108,6 +112,18 @@ window.ASMPdf = (function () {
         .it-title-row td { background: #333; color: #fff; padding: 6px 10px; font-size: 13px; font-weight: bold; }
         /* Input rows (was .item-inputs) */
         .it-input-row td { background: #f5f5f5; padding: 3px 8px; font-size: 9px; color: #555; border: 1px solid #ddd; }
+        /* the 3D picture */
+        /* The picture must be free to move to the next page on its own. Glued
+           to the title row (break-after:avoid) it dragged the title, the input
+           grid and the whole table with it, which is what left the first page
+           empty but for the header. */
+        .it-img-row { break-before: auto; }
+        .it-img-row td { border: 1px solid #ddd; padding: 6px; text-align: center; background: #fff; }
+        .it-3d { max-width: 100%; max-height: 58mm; object-fit: contain; }
+        /* a size that has had its edge band taken off */
+        .num-eb { color: #0a7; font-weight: 700; }
+        .eb-tag { display: inline-block; border: 1px solid #0a7; color: #0a7; border-radius: 3px;
+                  padding: 0 3px; font-size: 8px; font-weight: 700; margin-left: 3px; }
         .it-input-pad { background: #f5f5f5 !important; border: 1px solid #ddd; }
         /* Column-header row */
         .it-colhead th { background: #eee; padding: 4px 6px; text-align: left; font-size: ${fs}px; border: 1px solid #ccc; font-weight: 700; }
@@ -180,6 +196,13 @@ window.ASMPdf = (function () {
       });
       inputTable += '</tr></table>';
 
+      /* Does this item actually carry any edge band? The option alone is not
+         enough: an item nobody has set bands on would otherwise be stamped
+         "sizes after edge band deduction" while every size printed is the
+         entered one — the worst kind of wrong label on a shop drawing. */
+      const ebAny = !!opt.eband && it.outputs.some(o => o.band &&
+        ((+o.band.l || 0) + (+o.band.r || 0) + (+o.band.t || 0) + (+o.band.b || 0)) > 0);
+
       const roomPrefix = it.roomName ? (String(it.roomName).trim() + ' — ') : '';
       const _uAbbr = { generic:'', mm:' (mm)', cm:' (cm)', m:' (m)', in:' (in)', in_frac:' (in)', ft_in:' (ft-in)', ft_in_frac:' (ft-in)' }[UNITS.get()] || '';
 
@@ -189,7 +212,8 @@ window.ASMPdf = (function () {
       html += '<table class="item-table"><tbody>';
 
       // Title row (full width, spans all 8 columns)
-      html += '<tr class="it-title-row"><td colspan="8">' + (idx + 1) + '. ' + roomPrefix + it.itemName + '  |  ' + dims + '  |  Qty: ' + (inp.qty || inp.Qty || 1) + '</td></tr>';
+      html += '<tr class="it-title-row"><td colspan="8">' + (idx + 1) + '. ' + roomPrefix + it.itemName + '  |  ' + dims + '  |  Qty: ' + (inp.qty || inp.Qty || 1) +
+              (ebAny ? '  |  SIZES AFTER EDGE BAND DEDUCTION' : '') + '</td></tr>';
 
       // Input rows (each pair label/value; pack 4 pairs per row → 8 cells)
       if (opt.outer && inputRows.length) {
@@ -202,6 +226,14 @@ window.ASMPdf = (function () {
         }
       }
 
+      /* The 3D view the user framed, captured when the item was saved. One
+         row spanning the table so paged.js can break before or after it. */
+      if (opt.img3d && it.snap3d) {
+        html += '<tr class="it-img-row"><td colspan="8">' +
+                '<img class="it-3d" src="' + it.snap3d + '" alt="3D view">' +
+                '</td></tr>';
+      }
+
       // Column header row (does not repeat across pages — acceptable per spec)
       var _wh = _dord() === 'hw'
         ? ('<th>H' + _uAbbr + '</th><th>W' + _uAbbr + '</th>')
@@ -212,6 +244,24 @@ window.ASMPdf = (function () {
         globalSrNo++;
         let color = String(o.color || '-');
         let remark = String(o.remark || '-');
+
+        /* EDGE BAND. The entered size is the FINISHED size; the panel is cut
+           smaller by the band it carries — L+R off the width, T+B off the
+           height — which is the size the saw needs. Printed only when the
+           option is on and that row actually has bands set. */
+        let ow = o.w || 0, oh = o.h || 0, ebTag = '';
+        if (opt.eband && o.band) {
+          const b = o.band;
+          const lr = (+b.l || 0) + (+b.r || 0);
+          const tb = (+b.t || 0) + (+b.b || 0);
+          if (lr || tb) {
+            ow = Math.max(1, ow - lr);
+            oh = Math.max(1, oh - tb);
+            ebTag = '<span class="eb-tag">EB ' +
+              ['l','r','t','b'].filter(k => +b[k]).map(k => k.toUpperCase() + (+b[k])).join(' ') +
+              '</span>';
+          }
+        }
         if (color.includes('===') || color.includes('?') || color.includes('||')) color = '-';
         if (remark.includes('===') || remark.includes('?') || remark.includes('||')) remark = '-';
         color = color.replace(/^["']|["']$/g, '');
@@ -220,16 +270,17 @@ window.ASMPdf = (function () {
         html += '<tr>';
         html += '<td>' + globalSrNo + '</td>';
         html += '<td>' + (o.component || '-') + '</td>';
+        const _ebc = ebTag ? ' num-eb' : '';
         if (_dord() === 'hw') {
-          html += '<td class="num">' + UNITS.fromMM(o.h || 0) + '</td>';
-          html += '<td class="num">' + UNITS.fromMM(o.w || 0) + '</td>';
+          html += '<td class="num' + _ebc + '">' + UNITS.fromMM(oh) + '</td>';
+          html += '<td class="num' + _ebc + '">' + UNITS.fromMM(ow) + '</td>';
         } else {
-          html += '<td class="num">' + UNITS.fromMM(o.w || 0) + '</td>';
-          html += '<td class="num">' + UNITS.fromMM(o.h || 0) + '</td>';
+          html += '<td class="num' + _ebc + '">' + UNITS.fromMM(ow) + '</td>';
+          html += '<td class="num' + _ebc + '">' + UNITS.fromMM(oh) + '</td>';
         }
         html += '<td class="num">' + (o.qty || 0) + '</td>';
         html += '<td>' + color + '</td>';
-        html += '<td>' + remark + '</td>';
+        html += '<td>' + remark + (ebTag ? ' ' + ebTag : '') + '</td>';
         html += '<td></td>';
         html += '</tr>';
       });

@@ -22,7 +22,7 @@
 (function () {
   'use strict';
 
-  var VERSION = '1.0.0';
+  var VERSION = '1.1.0';
 
   /* ── shared helpers ──────────────────────────────────────────────── */
 
@@ -36,26 +36,51 @@
     add({ role: 'carcass', w: g.IW, h: t, d: D, x: 0, y: H - t / 2, z: 0, tag: 'TOP' });
   }
 
-  // Evenly spaced, draggable full-width shelves inside one zone.
-  function shelves(add, S, p, list, zoneOf, count) {
+  // Evenly spaced, draggable full-width shelves.
+  //
+  // Each shelf keeps a STABLE id for the life of the item, and S.shQ[id] holds
+  // the zone it currently lives in. That is what lets the hover arrows carry a
+  // shelf from one quarter to another ("more than 2 fixed shelf can appear in
+  // any quarters. Should be moveable in any quarters") without its height
+  // jumping to whatever the next shelf in that zone happened to be using.
+  //   list   — zones the engine would place a new shelf in by default
+  //   all    — every zone a shelf may be MOVED to (defaults to list)
+  //   noL    — true where sideways makes no sense, e.g. a single-column item
+  function shelves(add, S, p, list, zoneOf, count, all, noL) {
     var recs = [], t = p.ply;
-    if (count <= 0 || !list.length) return recs;
-    var per = Math.ceil(count / list.length), done = 0;
-    list.forEach(function (zk) {
-      var z = zoneOf(zk), n = Math.min(per, count - done);
-      if (n <= 0) return;
-      for (var i = 1; i <= n; i++) {
-        var key = 'sh|' + zk + '|' + i;
-        var base = z.y0 + (z.y1 - z.y0) * i / (n + 1);
+    if (count <= 0) return recs;
+    all = (all && all.length) ? all : list;
+    var base = list.length ? list : all;
+    if (!base.length) return recs;
+    S.shQ = S.shQ || {};
+
+    var byZone = {}, i, per = Math.ceil(count / base.length);
+    for (i = 0; i < count; i++) {
+      var want = S.shQ[i];
+      if (all.indexOf(want) < 0) want = base[Math.min(base.length - 1, Math.floor(i / per))];
+      S.shQ[i] = want;                       // remembered, so lateral() can read it
+      (byZone[want] = byZone[want] || []).push(i);
+    }
+
+    Object.keys(byZone).forEach(function (zk) {
+      var z = zoneOf(zk), ids = byZone[zk], n = ids.length;
+      ids.forEach(function (id, k) {
+        var key = 'sh|' + id;
+        var def = z.y0 + (z.y1 - z.y0) * (k + 1) / (n + 1);
         var lo = z.y0 + 40, hi = z.y1 - 40;
-        var yy = Math.max(lo, Math.min(hi, (S.shY[key] != null) ? S.shY[key] : base));
+        var yy = Mathic(lo, hi, S.shY[key], def);
         add({ role: 'shelf', w: z.w, h: t, d: z.SD, x: z.x, y: yy, z: z.zS,
-              tag: 'SHELF · ' + zk.toUpperCase(), move: 'sh', key: key, lo: lo, hi: hi });
+              tag: 'SHELF · ' + zk.toUpperCase(), move: 'sh', key: key,
+              lo: lo, hi: hi, noL: !!noL });
         recs.push({ zone: zk, y: yy, x: z.x, w: z.w });
-        done++;
-      }
+      });
     });
     return recs;
+  }
+  // clamp(stored ?? default) — kept tiny because shelves() reads it per shelf
+  function Mathic(lo, hi, stored, def) {
+    var v = (stored != null) ? stored : def;
+    return Math.min(hi, Math.max(lo, v));
   }
 
   // Index of the sub-cell furthest from the item centre — the default home for a
@@ -134,7 +159,10 @@
     eband:  { from: ['edge_band', 'edgeband', 'edge_banding'], def: 'MATERIAL', type: 'str' }
   };
 
-  function fresh() { return { bdCol: 'R', bdRow: 0, shY: {}, hs: null, hsKey: '' }; }
+  // uvQ / lvQ: which quarter a single (or the extra) vertical sits in. alloc()
+  // has always read these; the hover widget's left/right arrows now set them.
+  function fresh() { return { bdCol: 'R', bdRow: 0, shY: {}, shQ: {}, sdCol: {},
+                              hs: null, hsKey: '', uvQ: 'q1', lvQ: 'q3' }; }
 
   /* ════════════════════════════════════════════════════════════════════
      slwb — two columns: Q1|Q2 · quarter divider · drawer band · Q3|Q4
@@ -176,42 +204,35 @@
       function rowH(r) { return r.type === 'big' ? p.bdh : p.sdh; }
       function total(a) { var v = 0; a.forEach(function (r) { v += rowH(r); }); return v; }
 
-      function canonical() {
-        var L = [], R = [], sm = Math.max(0, p.sdq), turn = 0;
-        while (sm > 0) {                       // DL-1, DL-2 → DR-1, DR-2 → next row
-          var n = Math.min(2, sm); sm -= n;
-          (turn % 2 === 0 ? L : R).push({ type: 'small', n: n }); turn++;
-        }
-        for (var b = 0; b < Math.max(0, p.bdq); b++)
-          (R.length <= L.length ? R : L).push({ type: 'big' });   // fewer rows wins
-        return { L: L, R: R };
+      /* Small drawers come two to a row — one row fills that column's two
+         slots — and a row may be carried between the lower quarters as a PAIR,
+         which is what S.sdCol[id] records. One big drawer is the movable one
+         (S.bdCol / S.bdRow); any others balance. The band is as tall as its
+         taller column, so stacking two rows in one column does make it grow:
+         that is allowed, because refusing the move silently was worse. */
+      S.sdCol = S.sdCol || {};
+      var smalls = [], sm = Math.max(0, p.sdq), sid = 0;
+      while (sm > 0) {
+        var nsd = Math.min(2, sm); sm -= nsd;
+        var dflt = (sid % 2 === 0) ? 'L' : 'R';
+        var useC = (S.sdCol[sid] === 'L' || S.sdCol[sid] === 'R') ? S.sdCol[sid] : dflt;
+        smalls.push({ type: 'small', n: nsd, sid: sid, col: useC });
+        sid++;
       }
-      var can = canonical();
-      var bandH = Math.max(total(can.L), total(can.R));           // FIXED by inputs
-      var cols = { L: can.L.slice(), R: can.R.slice() };
+      var cols = { L: [], R: [] };
+      smalls.forEach(function (r) { cols[r.col].push(r); });
 
-      if (p.bdq > 0) {
-        var from = null, fi = -1, cc = ['R', 'L'];
-        for (var ci0 = 0; ci0 < cc.length && !from; ci0++) {
-          var a0 = cols[cc[ci0]];
-          for (var i0 = 0; i0 < a0.length; i0++)
-            if (a0[i0].type === 'big') { from = cc[ci0]; fi = i0; break; }
-        }
-        if (from) {
-          var to = (S.bdCol === 'L' || S.bdCol === 'R') ? S.bdCol : from;
-          var tri = { L: cols.L.slice(), R: cols.R.slice() };
-          var item = tri[from].splice(fi, 1)[0];
-          tri[to].splice(Math.max(0, Math.min(tri[to].length, S.bdRow)), 0, item);
-          if (Math.max(total(tri.L), total(tri.R)) <= bandH) cols = tri;  // never grow
-        }
-        // exactly one big drawer is draggable, so a move is never ambiguous
-        var tagged = false, order = (S.bdCol === 'L') ? ['L', 'R'] : ['R', 'L'];
-        for (var o = 0; o < order.length && !tagged; o++) {
-          var ar = cols[order[o]];
-          for (var q0 = 0; q0 < ar.length; q0++)
-            if (ar[q0].type === 'big') { ar[q0].drag = true; ar[q0].col = order[o]; tagged = true; break; }
+      var nbig = Math.max(0, p.bdq), bdCol = null;
+      if (nbig > 0) {
+        bdCol = (S.bdCol === 'L' || S.bdCol === 'R') ? S.bdCol : 'R';
+        var at0 = Math.max(0, Math.min(cols[bdCol].length, S.bdRow || 0));
+        cols[bdCol].splice(at0, 0, { type: 'big', drag: true });
+        for (var b0 = 1; b0 < nbig; b0++) {
+          var ck2 = (cols.R.length <= cols.L.length) ? 'R' : 'L';
+          cols[ck2].push({ type: 'big' });
         }
       }
+      var bandH = Math.max(total(cols.L), total(cols.R));
       var dlH = bandH;
 
       /* ── bands ── */
@@ -299,20 +320,30 @@
         add({ role: 'rod', shape: 'cyl-x', w: colW - 40, h: 26, d: 26, x: Q.q2.x, y: upTop - 90, z: zS, tag: 'HANGING ROD' });
 
       // verticals span the full height of their quarter
+      // A vertical can swap quarters only when the count is ODD — with 2 or 4
+      // both quarters already hold the same number and there is nowhere to go.
+      var uvSwap = (p.uv === 1 || p.uv === 3), lvSwap = (p.lv === 1 || p.lv === 3);
       ['q1', 'q2', 'q3', 'q4'].forEach(function (q) {
         var n = vM[q]; if (!n) return;
         var Qd = Q[q], cw = (Qd.w - n * t) / (n + 1), h = Qd.y1 - Qd.y0;
-        for (var i = 1; i <= n; i++)
-          add({ role: 'vertical', w: t, h: h, d: SD, x: Qd.x - Qd.w / 2 + i * (cw + t) - t / 2,
-                y: Qd.y0 + h / 2, z: zS,
-                tag: (Qd.band === 'upper' ? 'UPPER' : 'LOWER') + ' VERTICAL · ' +
-                     q.toUpperCase() + ' (' + Math.round(h) + ')' });
+        var up = (Qd.band === 'upper'), swap = up ? uvSwap : lvSwap;
+        for (var i = 1; i <= n; i++) {
+          var rec = { role: 'vertical', w: t, h: h, d: SD,
+                      x: Qd.x - Qd.w / 2 + i * (cw + t) - t / 2,
+                      y: Qd.y0 + h / 2, z: zS,
+                      tag: (up ? 'UPPER' : 'LOWER') + ' VERTICAL · ' +
+                           q.toUpperCase() + ' (' + Math.round(h) + ')' };
+          // Only the odd one out moves, and only sideways: noV hides the
+          // up/down arrows, which a full-height vertical has no use for.
+          if (swap && i === n) { rec.move = up ? 'uv' : 'lv'; rec.key = q; rec.noV = true; }
+          add(rec);
+        }
       });
 
       /* ── the drawer band, each column independent ── */
       var dz = D / 2 - p.reveal - t / 2;
       var COLI = { L: { cx: Lx, sl: [0, 1] }, R: { cx: Rx, sl: [2, 3] } };
-      var bdRowYs = [], bdCol = null;
+      var bdRowYs = [];
       ['L', 'R'].forEach(function (cK) {
         var ci = COLI[cK], y = dlTop;
         cols[cK].forEach(function (r) {
@@ -324,12 +355,14 @@
                   tag: 'BIG DRAWER · ' + (cK === 'L' ? 'DL-1+DL-2' : 'DR-1+DR-2'),
                   move: r.drag ? 'bd' : null, key: r.drag ? 'bd' : null });
             add({ role: 'knob', shape: 'cyl-z', w: 22, h: 22, d: 14, x: ci.cx, y: cy, z: dz - t });
-            if (r.drag) bdCol = cK;
           } else {
             for (var k = 0; k < r.n; k++) {
               var si = ci.sl[k];
+              // Both drawers of the row share one move key, so selecting either
+              // selects the pair and the menu shifts them together.
               add({ role: 'drawer', w: slotW - 3, h: h - 8, d: t, x: slotX[si], y: cy, z: dz,
-                    tag: 'SMALL DRAWER · ' + SLOT[si] });
+                    tag: 'SMALL DRAWER PAIR · ' + (cK === 'L' ? 'DL' : 'DR'),
+                    move: 'sd', key: 'sd|' + r.sid + '|' + cK, noV: true });
               add({ role: 'knob', shape: 'cyl-z', w: 22, h: 22, d: 14, x: slotX[si], y: cy, z: dz - t });
             }
           }
@@ -348,7 +381,8 @@
       ['q4', 'q3', 'q2', 'q1'].forEach(function (q) { if (vM[q] === 0) plain.push(q); });
       var shelfRecs = shelves(add, S, p, plain, function (q) {
         return { y0: Q[q].y0, y1: Q[q].y1, x: Q[q].x, w: Q[q].w, SD: SD, zS: zS };
-      }, Math.max(0, p.shelf - topShelves));   // 1st and 2nd already used above the band
+      }, Math.max(0, p.shelf - topShelves),    // 1st and 2nd already used above the band
+         ['q1', 'q2', 'q3', 'q4']);            // but movable into any quarter
 
       /* ── half shelves: upper → Q1/Q2, lower → Q3/Q4 ── */
       function bandCells(band) {
@@ -436,9 +470,152 @@
       };
     },
 
+    /* ── right-click menu ──
+       targets() lists where the selected part MAY go; the core only renders it.
+       Every rule about quarters, bays and verticals lives here.
+         fixed shelf  — any quarter that has no vertical in it
+         half shelf   — the bays of its own band; one quarter has a vertical, so
+                        only that quarter's bays; both do, so it may jump
+         big drawer   — either lower quarter, and any row of the band
+         small drawer — the pair moves between the lower quarters
+         vertical     — the other quarter of its band */
+    targets: function (S, u, res) {
+      var out = [];
+      function put(id, label, cur, dis, why) {
+        out.push({ id: id, label: label + (why ? ' — ' + why : ''),
+                   current: !!cur, disabled: !!dis });
+      }
+      var QN = { q1: 'Q1 · upper left', q2: 'Q2 · upper right',
+                 q3: 'Q3 · lower left', q4: 'Q4 · lower right' };
+
+      if (u.move === 'sh' && u.key != null) {
+        var sid = String(u.key).split('|')[1];
+        ['q1', 'q2', 'q3', 'q4'].forEach(function (q) {
+          var blocked = res.vM[q] > 0;
+          put('sh:' + q, QN[q], S.shQ[sid] === q, blocked,
+              blocked ? 'vertical in the way' : '');
+        });
+        return out;
+      }
+
+      if (u.move === 'hs' && u.key != null) {
+        var st = S.hs && S.hs[+u.key]; if (!st) return out;
+        var qs = (st.band === 'upper') ? ['q1', 'q2'] : ['q3', 'q4'], cellsL = [];
+        qs.forEach(function (q) {
+          if (res.vM[q] > 0) res.CM[q].forEach(function (c) { cellsL.push(c); });
+        });
+        cellsL.forEach(function (c, i) {
+          put('hs:' + i, QN[c.q] + ' · bay ' + c.id, st.cell === i);
+        });
+        if (!cellsL.length)
+          out.push({ id: '', label: 'No bays — ' + qs.join('/').toUpperCase() +
+                     ' need a vertical', disabled: true });
+        return out;
+      }
+
+      if (u.move === 'bd') {
+        ['L', 'R'].forEach(function (k) {
+          put('bd:col:' + k, QN[k === 'L' ? 'q3' : 'q4'], (S.bdCol || 'R') === k);
+        });
+        var rows = (u.lineYs || []).length;
+        for (var i = 0; i < rows; i++)
+          put('bd:row:' + i, 'Row ' + (i + 1) + ' of the band', (S.bdRow || 0) === i);
+        return out;
+      }
+
+      if (u.move === 'sd' && u.key != null) {
+        var kp = String(u.key).split('|'), pid = kp[1], at = kp[2];
+        ['L', 'R'].forEach(function (k) {
+          put('sd:' + pid + ':' + k, QN[k === 'L' ? 'q3' : 'q4'], at === k);
+        });
+        return out;
+      }
+
+      if (u.move === 'uv' || u.move === 'lv') {
+        var band = (u.move === 'uv') ? ['q1', 'q2'] : ['q3', 'q4'];
+        var now = (u.move === 'uv') ? (S.uvQ || 'q1') : (S.lvQ || 'q3');
+        band.forEach(function (q) { put(u.move + ':' + q, QN[q], now === q); });
+        return out;
+      }
+      return out;
+    },
+
+    moveTo: function (S, u, id) {
+      var a = String(id || '').split(':');
+      if (a[0] === 'sh') {
+        var sid = String(u.key).split('|')[1];
+        if (S.shQ[sid] === a[1]) return false;
+        S.shQ[sid] = a[1]; delete S.shY['sh|' + sid]; return true;
+      }
+      if (a[0] === 'hs') {
+        var st = S.hs && S.hs[+u.key]; if (!st) return false;
+        var i = +a[1]; if (st.cell === i) return false;
+        st.cell = i; st.y = null; return true;
+      }
+      if (a[0] === 'bd') {
+        if (a[1] === 'col') {
+          if ((S.bdCol || 'R') === a[2]) return false;
+          S.bdCol = a[2]; S.bdRow = 0; S.hs = null; return true;
+        }
+        if (a[1] === 'row') {
+          var r = +a[2]; if ((S.bdRow || 0) === r) return false;
+          S.bdRow = r; return true;
+        }
+        return false;
+      }
+      if (a[0] === 'sd') {
+        S.sdCol = S.sdCol || {};
+        var pid = a[1], want = a[2];
+        if ((S.sdCol[pid] || ((+pid % 2 === 0) ? 'L' : 'R')) === want) return false;
+        S.sdCol[pid] = want; return true;
+      }
+      if (a[0] === 'uv') {
+        if ((S.uvQ || 'q1') === a[1]) return false;
+        S.uvQ = a[1]; S.hs = null; return true;
+      }
+      if (a[0] === 'lv') {
+        if ((S.lvQ || 'q3') === a[1]) return false;
+        S.lvQ = a[1];
+        // A lower vertical and the big drawer cannot share a quarter.
+        var dq = (S.bdCol === 'L') ? 'q3' : 'q4';
+        if (dq === S.lvQ) { S.bdCol = (S.bdCol === 'L') ? 'R' : 'L'; S.bdRow = 0; }
+        S.hs = null; return true;
+      }
+      return false;
+    },
+
     // left / right arrow on the hover widget
     lateral: function (S, dir, u, res) {
       if (u.move === 'bd') { S.bdCol = (S.bdCol === 'R') ? 'L' : 'R'; S.bdRow = 0; return true; }
+      // a pair of small drawers hops to the other lower quarter
+      if (u.move === 'sd' && u.key != null) {
+        var kp = String(u.key).split('|');
+        S.sdCol = S.sdCol || {};
+        S.sdCol[kp[1]] = (kp[2] === 'L') ? 'R' : 'L';
+        return true;
+      }
+      // Verticals hop between the two quarters of their own band. alloc() reads
+      // uvQ / lvQ as the preferred quarter, so flipping it is the whole move.
+      if (u.move === 'uv') { S.uvQ = (S.uvQ === 'q2') ? 'q1' : 'q2'; S.hs = null; return true; }
+      if (u.move === 'lv') {
+        S.lvQ = (S.lvQ === 'q4') ? 'q3' : 'q4';
+        // A lower vertical and the big drawer cannot share a quarter. The user
+        // moved the vertical, so the drawer is the one that gives way —
+        // otherwise solve() shunts the vertical straight back and nothing moves.
+        var dq = (S.bdCol === 'L') ? 'q3' : 'q4';
+        if (dq === S.lvQ) { S.bdCol = (S.bdCol === 'L') ? 'R' : 'L'; S.bdRow = 0; }
+        S.hs = null; return true;
+      }
+      // A fixed shelf moves to the next quarter. Its stored height belongs to
+      // the quarter it is leaving, so it is dropped and the shelf re-centres.
+      if (u.move === 'sh' && u.key != null) {
+        var sid = String(u.key).split('|')[1];
+        var qAll = ['q1', 'q2', 'q3', 'q4'];
+        var at = qAll.indexOf(S.shQ[sid]); if (at < 0) at = 0;
+        S.shQ[sid] = qAll[(at + (dir > 0 ? 1 : qAll.length - 1)) % qAll.length];
+        delete S.shY['sh|' + sid];
+        return true;
+      }
       if (u.move === 'hs' && u.key != null) {
         var st = S.hs && S.hs[+u.key]; if (!st) return false;
         var qs = (st.band === 'upper') ? ['q1', 'q2'] : ['q3', 'q4'], cells = [];
@@ -626,7 +803,7 @@
       ['L', 'U'].forEach(function (z) { if (vN[z] === 0) plain.push(z); });
       var shelfRecs = shelves(add, S, p, plain, function (z) {
         return { y0: Z[z].y0, y1: Z[z].y1, x: 0, w: colW, SD: SD, zS: zS };
-      }, Math.max(0, p.shelf - topShelves));   // the 1st is above the band
+      }, Math.max(0, p.shelf - topShelves), null, true)   // the 1st is above the band
 
       // One combined HALF SHELF input splits evenly, upper first.
       var uhsN = p.uhs, lhsN = p.lhs;
@@ -694,6 +871,46 @@
              '</b> · drawers <b>' + Math.round(stackH) + '</b> · lower <b>' +
              Math.round(lTop - lBot) + '</b>'
       };
+    },
+
+    // One column, so nothing jumps quarters: a half shelf changes bay, a big
+    // drawer changes row, and a full-width shelf has nowhere sideways to go.
+    targets: function (S, u, res) {
+      var out = [];
+      if (u.move === 'hs' && u.key != null) {
+        var st = S.hs && S.hs[+u.key]; if (!st) return out;
+        var list = res.vN[st.zone] > 0 ? res.CM[st.zone] : [];
+        list.forEach(function (c, i) {
+          out.push({ id: 'hs:' + i, current: st.cell === i,
+                     label: (st.zone === 'U' ? 'Upper' : 'Lower') + ' · bay ' + c.id });
+        });
+        if (!list.length)
+          out.push({ id: '', disabled: true,
+                     label: 'No bays — this part needs a vertical' });
+        return out;
+      }
+      if (u.move === 'bd') {
+        var rows = (u.lineYs || []).length;
+        for (var i = 0; i < rows; i++)
+          out.push({ id: 'bd:row:' + i, label: 'Row ' + (i + 1) + ' of the drawer line',
+                     current: (S.bdRow || 0) === i });
+        return out;
+      }
+      return out;
+    },
+
+    moveTo: function (S, u, id) {
+      var a = String(id || '').split(':');
+      if (a[0] === 'hs') {
+        var st = S.hs && S.hs[+u.key]; if (!st) return false;
+        var i = +a[1]; if (st.cell === i) return false;
+        st.cell = i; st.y = null; return true;
+      }
+      if (a[0] === 'bd' && a[1] === 'row') {
+        var r = +a[2]; if ((S.bdRow || 0) === r) return false;
+        S.bdRow = r; return true;
+      }
+      return false;
     },
 
     lateral: function (S, dir, u, res) {

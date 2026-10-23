@@ -81,7 +81,7 @@ async function calculate() {
         label:    s.label || '',
         w:        Math.round(s.l),
         h:        Math.round(s.w),
-        qty:      s.qty,
+        qty:      (+s.qty > 0 ? +s.qty : 0),   // 0 = unlimited
         material: (typeof MatConsolidate !== 'undefined') ? MatConsolidate.mapMaterial(s.material) : s.material,
         grainLocked: s.grainLocked || false,
       })),
@@ -124,7 +124,7 @@ async function calculate() {
     }));
 
     const unfitted = (data.unfitted || []).map(p => ({
-      label: p.label, l: p.w, w: p.h, material: p.material, qty: 1
+      label: p.label, l: p.w, w: p.h, material: p.material, qty: 1, reason: p.reason
     }));
 
     renderResults(sheets, unfitted, scale);
