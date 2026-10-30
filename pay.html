@@ -84,8 +84,8 @@ dd.big{font-size:20px;font-weight:900}
       </dl>
       <div class="note" id="p-note" hidden></div>
       <div class="acct">
-        <small>Plan will be activated on this account</small>
-        <div class="acct-box"><b id="p-email"></b><span class="badge" id="p-badge">Not signed in</span></div>
+        <small>Plan will be activated on the Google account you sign in with</small>
+        <div class="acct-box"><b id="p-email">Not signed in yet</b><span class="badge" id="p-badge">Not signed in</span></div>
       </div>
       <div class="act">
         <div id="a-signin" hidden>
@@ -93,16 +93,13 @@ dd.big{font-size:20px;font-weight:900}
             <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><path fill="#4285F4" d="M22.5 12.3c0-.8-.1-1.5-.2-2.3H12v4.3h5.9a5 5 0 0 1-2.2 3.3v2.7h3.5c2.1-1.9 3.3-4.7 3.3-8z"/><path fill="#34A853" d="M12 23c3 0 5.5-1 7.3-2.7l-3.5-2.7c-1 .7-2.3 1.1-3.8 1.1-2.9 0-5.4-2-6.3-4.6H2.1v2.8A11 11 0 0 0 12 23z"/><path fill="#FBBC05" d="M5.7 14.1a6.6 6.6 0 0 1 0-4.2V7.1H2.1a11 11 0 0 0 0 9.8z"/><path fill="#EA4335" d="M12 5.4c1.6 0 3.1.6 4.2 1.7l3.1-3.1A11 11 0 0 0 2.1 7.1l3.6 2.8C6.6 7.4 9.1 5.4 12 5.4z"/></svg>
             Sign in with Google to continue
           </button>
-          <p class="hint" style="margin:8px 0 0">Use the Google account shown above, so the plan goes to the right login.</p>
+          <p class="hint" style="margin:8px 0 0">Use the Google account you will log in to EasyCutList with.</p>
         </div>
         <div id="a-pay" hidden>
           <button type="button" class="btn btn-pay" id="btn-pay" style="width:100%"></button>
           <p class="hint" style="margin:8px 0 0">UPI, cards, net banking and wallets · payment by Razorpay</p>
         </div>
-        <div id="a-wrong" hidden>
-          <div class="alert" role="alert">You are signed in as <b id="w-cur"></b>. This plan is for <b id="w-exp"></b>. Switch to that Google account, or ask us to change the email on the link.</div>
-          <button type="button" class="btn btn-g" id="btn-switch" style="width:100%;margin-top:10px">Switch Google account</button>
-        </div>
+        <button type="button" class="btn btn-g" id="btn-switch" hidden style="width:100%;height:40px;font-size:13px">Use a different Google account</button>
         <div class="alert" id="a-err" role="alert" hidden></div>
       </div>
     </section>
@@ -155,39 +152,36 @@ dd.big{font-size:20px;font-weight:900}
     else d.setMonth(d.getMonth() + n);
     return d;
   }
-  var same = function (a, b) { return String(a || '').trim().toLowerCase() === String(b || '').trim().toLowerCase(); };
 
   function render() {
     $('p-for').textContent = link.clientName ? 'Prepared for ' + link.clientName : '';
     $('p-dur').textContent = unitWord(link.durationValue, link.durationUnit);
     $('p-amt').textContent = rupees(link.amount);
     $('p-end').textContent = fmtDate(endFromToday());
-    $('p-email').textContent = link.clientEmail;
     $('p-exp').textContent = 'This link expires on ' + fmtDate(link.linkExpiresAt);
     $('btn-pay').textContent = 'Pay ' + rupees(link.amount) + ' securely';
     if (link.note) { $('p-note').textContent = link.note; $('p-note').hidden = false; }
     if (link.gstIncluded) $('p-amt').title = 'Includes GST';
 
     var email = session && session.user && session.user.email;
-    var ok = email && same(email, link.clientEmail);
+    $('p-email').textContent = email || 'Not signed in yet';
     $('a-signin').hidden = !!email;
-    $('a-pay').hidden = !ok;
-    $('a-wrong').hidden = !email || ok;
+    $('a-pay').hidden = !email;
+    $('btn-switch').hidden = !email;
     var b = $('p-badge');
-    b.textContent = !email ? 'Not signed in' : ok ? 'Signed in' : 'Different account';
-    b.className = 'badge' + (!email ? '' : ok ? ' ok' : ' bad');
-    if (email && !ok) { $('w-cur').textContent = email; $('w-exp').textContent = link.clientEmail; }
+    b.textContent = email ? 'Signed in' : 'Not signed in';
+    b.className = 'badge' + (email ? ' ok' : '');
     show('v-plan');
   }
 
   function signIn() {
-    supa.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin + location.pathname + '?id=' + encodeURIComponent(id), queryParams: { prompt: 'select_account', login_hint: link ? link.clientEmail : '' } } });
+    supa.auth.signInWithOAuth({ provider: 'google', options: { redirectTo: location.origin + location.pathname + '?id=' + encodeURIComponent(id), queryParams: { prompt: 'select_account' } } });
   }
   $('btn-signin').onclick = signIn;
   $('btn-switch').onclick = function () { supa.auth.signOut().then(signIn); };
 
   function paid(expiresAt, paymentId) {
-    $('ok-email').textContent = link.clientEmail;
+    $('ok-email').textContent = (session && session.user && session.user.email) || 'your account';
     $('ok-end').textContent = fmtDate(expiresAt);
     $('ok-pid').textContent = paymentId || '—';
     $('ok-amt').textContent = rupees(link.amount);
@@ -210,14 +204,13 @@ dd.big{font-size:20px;font-weight:900}
       var o = await r.json();
       if (!r.ok) {
         reset();
-        if (o.error === 'wrong_account') { session = s; render(); return; }
         if (o.error === 'paid' || o.error === 'expired' || o.error === 'cancelled') { return start(); }
         return err(o.error || 'Could not start the payment. Please try again.');
       }
       var rzp = new Razorpay({
         key: o.keyId, order_id: o.orderId, amount: o.amount, currency: o.currency,
         name: 'EasyCutList', description: 'Cutlist Builder (ASM) Pro — ' + unitWord(link.durationValue, link.durationUnit),
-        prefill: { email: link.clientEmail, name: link.clientName || '' },
+        prefill: { email: (s.user && s.user.email) || '', name: link.clientName || '' },
         theme: { color: '#4A154B' },
         modal: { ondismiss: reset },
         handler: async function (resp) {
@@ -249,7 +242,7 @@ dd.big{font-size:20px;font-weight:900}
       if (r.status === 404) return dead('This payment link is not valid', 'Please check the link, or ask us for a new one.');
       link = await r.json();
     } catch (e) { return dead('Could not load your plan', 'Please check your connection and refresh this page.'); }
-    if (link.status === 'paid') return dead('This plan is already paid', 'It is active on ' + link.clientEmail + (link.planExpiresAt ? ' till ' + fmtDate(link.planExpiresAt) : '') + '. Open EasyCutList and sign in with that account.');
+    if (link.status === 'paid') return dead('This plan is already paid', 'It is active' + (link.planExpiresAt ? ' till ' + fmtDate(link.planExpiresAt) : '') + ' on the Google account that paid. Open EasyCutList and sign in with that account.');
     if (link.status === 'expired') return dead('This payment link has expired', 'Ask us for a new link — it takes a minute.');
     if (link.status === 'cancelled') return dead('This payment link was cancelled', 'Ask us for a new link if you still need this plan.');
     session = (await supa.auth.getSession()).data.session;

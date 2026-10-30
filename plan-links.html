@@ -76,7 +76,6 @@ input:focus,select:focus{outline:2px solid #ECB22E;outline-offset:-1px}
       <h2 id="new-h">New ASM Pro plan link</h2>
       <label>Client name<input id="f-name" autocomplete="off" placeholder="e.g. Shree Ram Kitchens"></label>
       <label>Client WhatsApp number<input id="f-phone" type="tel" inputmode="tel" placeholder="+91 98xxx xxxxx"></label>
-      <label>Client Google email (plan goes to this login)<input id="f-email" type="email" inputmode="email" autocapitalize="off" placeholder="client@gmail.com"></label>
       <div class="lbl">Duration
         <div style="display:flex;gap:8px">
           <input id="f-dur" type="number" inputmode="numeric" min="1" value="30" aria-label="Duration number" style="width:90px;text-align:right">
@@ -170,8 +169,7 @@ input:focus,select:focus{outline:2px solid #ECB22E;outline-offset:-1px}
   $('btn-create').onclick = function () {
     var btn = this; $('f-err').textContent = '';
     var body = {
-      client_name: $('f-name').value, client_phone: $('f-phone').value, client_email: $('f-email').value,
-      duration_value: $('f-dur').value, duration_unit: unit, amount: $('f-amt').value,
+      client_name: $('f-name').value, client_phone: $('f-phone').value, duration_value: $('f-dur').value, duration_unit: unit, amount: $('f-amt').value,
       link_valid_days: $('f-valid').value, gst_included: $('f-gst').checked, note: $('f-note').value
     };
     btn.disabled = true; btn.textContent = 'Creating…';
@@ -184,7 +182,7 @@ input:focus,select:focus{outline:2px solid #ECB22E;outline-offset:-1px}
       $('r-wa').hidden = !String(body.client_phone || '').replace(/[^\d]/g, '');
       $('v-result').hidden = false;
       $('v-result').scrollIntoView({ behavior: 'smooth', block: 'center' });
-      ['f-name', 'f-phone', 'f-email', 'f-amt', 'f-note'].forEach(function (i) { $(i).value = ''; });
+      ['f-name', 'f-phone', 'f-amt', 'f-note'].forEach(function (i) { $(i).value = ''; });
       loadList();
     }).catch(function () { btn.disabled = false; btn.textContent = 'Create payment link'; $('f-err').textContent = 'Network error — try again.'; });
   };
@@ -205,7 +203,7 @@ input:focus,select:focus{outline:2px solid #ECB22E;outline-offset:-1px}
           : l.status === 'pending' ? 'Link valid till ' + fmt(l.link_expires_at) : 'Created ' + fmt(l.created_at);
         var acts = l.status === 'pending'
           ? '<div class="acts"><button class="btn btn-o" data-copy="' + esc(url) + '">Copy link</button><button class="btn btn-o" data-cancel="' + esc(l.id) + '" style="border-color:#E01E5A;color:#FF9BB5">Cancel</button></div>' : '';
-        return '<div class="item"><div class="top"><div><div class="nm">' + esc(l.client_name || '—') + '</div><div class="em">' + esc(l.client_email) + '</div></div>' +
+        return '<div class="item"><div class="top"><div><div class="nm">' + esc(l.client_name || '—') + '</div>' + (l.status === 'paid' && l.client_email ? '<div class="em">Paid by ' + esc(l.client_email) + '</div>' : '') + '</div>' +
           '<span class="badge b-' + esc(l.status) + '">' + esc(String(l.status).toUpperCase()) + '</span></div>' +
           '<div class="meta">' + esc(unitWord(l.duration_value, l.duration_unit)) + ' · ₹' + esc(Number(l.amount).toLocaleString('en-IN')) + '</div>' +
           '<div class="hint">' + esc(info) + '</div>' + acts + '</div>';
