@@ -132,6 +132,12 @@ header{
   border-radius:6px;display:grid;place-items:center;
 }
 .logo span{color:var(--sl-yellow)}
+/* ── Module tabs (Optimizer | Cutlist Builder) ── */
+.logo{align-self:stretch}
+.mod-tabs{display:flex;align-self:flex-end;gap:3px;margin-left:14px}
+.mod-tab{height:34px;padding:0 16px;border:0;border-radius:7px 7px 0 0;background:rgba(255,255,255,.06);color:#D9CDDB;font-family:var(--sans);font-size:12px;font-weight:900;letter-spacing:.5px;cursor:pointer;white-space:nowrap}
+.mod-tab:hover{background:rgba(255,255,255,.12);color:#fff}
+.mod-tab.active{background:var(--sl-sidebar-bg);color:#fff;box-shadow:inset 0 2px 0 var(--sl-yellow);cursor:default}
 .hbadge{
   font-family:var(--mono);font-size:11px;color:rgba(255,255,255,.5);
   background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.15);
@@ -139,7 +145,7 @@ header{
 }
 
 /* ── LAYOUT ── */
-.app{display:grid;grid-template-columns:var(--sidebar-w,280px) 4px 1fr;min-height:calc(100vh - 44px)}
+.app{display:grid;grid-template-columns:var(--sidebar-w,520px) 4px 1fr;min-height:calc(100vh - 44px)}
 
 /* Resize handle */
 .resize-handle{
@@ -203,7 +209,7 @@ header{
 .btn-csv:hover{border-color:var(--sl-yellow);color:var(--sl-yellow)}
 
 /* Sidebar tables */
-.sidebar-table-wrap{padding:0 10px 4px;overflow-x:hidden}
+.sidebar-table-wrap{padding:0 10px 4px;overflow-x:auto}
 .input-table{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:12px;table-layout:fixed}
 .input-table th{
   text-align:left;padding:0 3px 6px 3px;font-size:9px;color:var(--sl-sidebar-icon);
@@ -214,6 +220,21 @@ header{
 .input-table input[type="number"],
 .input-table input[type="text"],
 .input-table select{width:100%!important;min-width:0!important;box-sizing:border-box}
+/* Excel-style grid: cells touch, thin gridlines, inputs fill the cell */
+.input-table.xl{font-size:12px;min-width:470px}
+.input-table.xl th{padding:5px 4px;text-align:center;background:rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.13);color:rgba(255,255,255,.75)}
+.input-table.xl th.l{text-align:left;padding-left:6px}
+.input-table.xl td{padding:0;height:28px;border:1px solid rgba(255,255,255,.13);background:rgba(255,255,255,.035)}
+.input-table.xl td.rn{background:rgba(0,0,0,.28);text-align:center;color:rgba(255,255,255,.45);font-family:var(--mono);font-size:10px;user-select:none}
+.input-table.xl td input{height:27px!important;border:0!important;border-radius:0!important;background:transparent!important;padding:0 6px!important;font-size:12px!important;color:#fff}
+.input-table.xl td input:focus{outline:2px solid var(--sl-yellow);outline-offset:-2px;background:rgba(0,0,0,.3)!important}
+.input-table.xl td input[list]{color:var(--sl-yellow)!important;font-weight:700}
+.input-table.xl td .del-btn,.input-table.xl td .rot-btn{width:100%;height:27px}
+.input-table.xl tr.xl-add td{background:transparent;border-style:dashed}
+.xl-add-btn{width:100%;height:27px;border:0;background:transparent;color:rgba(255,255,255,.5);font-family:var(--sans);font-size:11px;text-align:left;padding:0 8px;cursor:pointer}
+.xl-add-btn:hover{color:var(--sl-yellow)}
+.xl-total{display:flex;flex-wrap:wrap;gap:4px 14px;padding:5px 2px 0;font-size:10.5px;color:rgba(255,255,255,.5)}
+.xl-total b{color:#fff}
 
 input[type="number"],input[type="text"],select{
   background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.2);
@@ -652,6 +673,7 @@ table.cuts-table{width:100%;border-collapse:collapse;font-family:var(--mono);fon
 
   /* Topbar — collapse to logo + hamburger only */
   header { padding: 0 12px; height: 48px; position: fixed; width: 100%; }
+  .mod-tabs { display: none; }
   .hbadge { display: none; }
 
   /* Hide all topbar nav buttons except UPGRADE and sign-in */
@@ -920,6 +942,7 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- Razorpay Checkout -->
 <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script src="js/meta-pixel.js"></script>
 </head>
 <body>
 <header>
@@ -930,27 +953,18 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
       </svg>
     </div>
     <span style="color:#fff">Easy<span style="color:var(--sl-yellow)">CutList</span></span>
-    <span style="color:#fff;font-size:14px;font-weight:900;letter-spacing:.5px;margin-left:6px;padding-left:10px;border-left:1px solid rgba(255,255,255,.2)">OPTIMIZER</span>
+    <nav class="mod-tabs" aria-label="Modules">
+      <button type="button" class="mod-tab active" aria-pressed="true">OPTIMIZER</button>
+      <button type="button" class="mod-tab" id="btn-asm-module" aria-pressed="false" onclick="ASMModule.openASM()">CUTLIST BUILDER</button>
+    </nav>
   </div>
   <div style="display:flex;align-items:center;gap:8px">
     <button class="hdr-btn hdr-btn-new" onclick="newProject()" title="Clear all and start fresh">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg>
       New Project
     </button>
-    <div style="color:rgba(255,255,255,.35);font-size:16px;font-weight:200" class="hdr-tagline-sep">|</div>
-    <button id="btn-asm-module" class="hdr-btn" onclick="ASMModule.openASM()" style="background:rgba(236,178,46,.15);color:var(--sl-yellow);border:1px solid rgba(236,178,46,.3)">
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
-      ASM Module
-    </button>
   </div>
   <div style="display:flex;align-items:center;gap:8px" class="hdr-right">
-    <!-- Units dropdown (shared setting with ASM) -->
-    <span style="display:flex;align-items:center;gap:5px;color:rgba(255,255,255,.65);font-size:11px">units
-      <select id="opt-units-select" onchange="setOptUnit(this.value)" title="Display units — all calculations run in mm" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#fff;border-radius:5px;padding:4px 6px;font-size:11px;cursor:pointer;max-width:150px"></select>
-    </span>
-    <span style="display:flex;align-items:center;gap:5px;color:rgba(255,255,255,.65);font-size:11px">format
-      <button onclick="toggleOptDimOrder()" title="Swap size display: W×H / H×W (display only)" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#ECB22E;border-radius:5px;padding:4px 8px;font-size:11px;font-weight:700;cursor:pointer"><span id="opt-dimord-val">W×H</span></button>
-    </span>
     <!-- Auth buttons -->
     <button class="hdr-btn" onclick="signInGoogle()" id="hdr-signin-btn">
       <svg width="13" height="13" viewBox="0 0 48 48" style="background:#fff;border-radius:2px;padding:1px">
@@ -1026,19 +1040,20 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
 
   <div class="section" style="padding-top:0">
     <div class="sidebar-table-wrap">
-      <table class="input-table">
+      <table class="input-table xl">
         <thead><tr>
-          <th style="width:6%">#</th>
-          <th style="width:15%">Component</th>
-          <th style="width:11%" id="ph-w">W</th>
-          <th style="width:11%" id="ph-h">H</th>
-          <th style="width:8%">Qty</th>
-          <th style="width:24%">Material</th>
-          <th style="width:18%">Remark</th>
-          <th style="width:7%"></th>
+          <th style="width:26px">#</th>
+          <th class="l">Component</th>
+          <th style="width:58px" id="ph-w">W</th>
+          <th style="width:58px" id="ph-h">H</th>
+          <th style="width:38px">Qty</th>
+          <th class="l" style="width:96px">Material</th>
+          <th class="l">Remark</th>
+          <th style="width:24px"><span style="position:absolute;left:-9999px">Delete</span></th>
         </tr></thead>
         <tbody id="panels-tbody"></tbody>
       </table>
+      <div class="xl-total"><span id="panels-total"></span><span>Enter / ↑↓ to move · Ctrl+V pastes rows from Excel</span></div>
     </div>
   </div>
 
@@ -1058,16 +1073,16 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
       </div>
     </div>
     <div class="sidebar-table-wrap">
-      <table class="input-table">
+      <table class="input-table xl">
         <thead><tr>
-          <th style="width:16%">Label</th>
-          <th style="width:12%">W</th>
-          <th style="width:12%">H</th>
-          <th style="width:8%">Qty</th>
-          <th style="width:23%">Material</th>
-          <th style="width:13%" title="Price per sheet">₹/sheet</th>
-          <th style="width:9%;text-align:center" title="Grain direction — lock to prevent rotation">Grain</th>
-          <th style="width:7%"></th>
+          <th class="l">Label</th>
+          <th style="width:58px">W</th>
+          <th style="width:58px">H</th>
+          <th style="width:38px">Qty</th>
+          <th class="l" style="width:96px">Material</th>
+          <th style="width:58px" title="Price per sheet">₹/sheet</th>
+          <th style="width:40px" title="Grain direction — lock to prevent rotation">Grain</th>
+          <th style="width:24px"><span style="position:absolute;left:-9999px">Delete</span></th>
         </tr></thead>
         <tbody id="stock-tbody"></tbody>
       </table>
@@ -1094,6 +1109,17 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
       <div><div class="tl">Match by material</div>
         <div class="ts-sub">Place panels on matching stock only</div></div>
       <label class="toggle"><input type="checkbox" id="mat-toggle" checked><span class="tt"></span></label>
+    </div>
+    <!-- Units + size format (moved from header; shared setting with ASM) -->
+    <div class="toggle-row">
+      <div><div class="tl">Units</div>
+        <div class="ts-sub">Display only — all calculations run in mm</div></div>
+      <select id="opt-units-select" onchange="setOptUnit(this.value)" title="Display units — all calculations run in mm" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#fff;border-radius:5px;padding:5px 6px;font-size:11px;cursor:pointer;max-width:160px"></select>
+    </div>
+    <div class="toggle-row">
+      <div><div class="tl">Size format</div>
+        <div class="ts-sub">Show sizes as W×H or H×W</div></div>
+      <button onclick="toggleOptDimOrder()" title="Swap size display: W×H / H×W (display only)" style="background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:#ECB22E;border-radius:5px;padding:5px 10px;font-size:11px;font-weight:700;cursor:pointer"><span id="opt-dimord-val">W×H</span></button>
     </div>
   </div>
 
@@ -1624,9 +1650,18 @@ table.cut-seq-table{width:100%;border-collapse:collapse;font-family:var(--mono);
 <script src="js/asm-3d-core.js"></script>
 <script src="js/rule-engines/manifest.js"></script>
 <script src="js/export-files.js"></script>
+   <script src="js/asm-eband.js"></script>
+   <script src="js/asm-support.js"></script>
+      <script src="js/asm-share.js"></script>
+   <script src="js/asm-import.js"></script>
+   <script src="js/asm-pricing.js"></script>
+   <script src="js/asm-projects.js"></script>
 <script src="js/app-asm.js"></script>
+<script src="js/asm-presets.js"></script>
+<script src="js/asm-bot.js"></script>
 <script src="js/faq.js"></script>
 <script src="js/asm-quotation.js"></script>
+<script src="js/support-contact.js"></script>
 <!-- Pricing / Upgrade Modal -->
 <div class="upgrade-overlay" id="pricing-modal" style="display:none" onclick="if(event.target===this)closePricing()">
   <div class="upgrade-box" style="width:560px;max-width:95vw">

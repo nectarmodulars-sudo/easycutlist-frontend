@@ -99,6 +99,7 @@ if(supa){
     refreshAuthUI();
     reloadProjects();
     if(event === 'SIGNED_IN' && typeof fetchPlanAndFlags === 'function') fetchPlanAndFlags();
+    if(event === 'SIGNED_IN' && window.ECLPixel) ECLPixel.signedIn(session && session.user);
   });
 }
 

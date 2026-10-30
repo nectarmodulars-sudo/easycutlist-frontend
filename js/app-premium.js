@@ -288,7 +288,7 @@ async function startPayment(){
       prefill:     { email: CURRENT_USER.email || '' },
       theme:       { color: '#3F0E40' },
       handler: async function(response){
-        await verifyPayment(response, order.orderId);
+        await verifyPayment(response, order.orderId, order);
       },
     });
     rzp.open();
@@ -297,7 +297,7 @@ async function startPayment(){
   }
 }
 
-async function verifyPayment(response, orderId){
+async function verifyPayment(response, orderId, order){
   try {
     const res = await fetch(`${API_URL}/payments/verify`, {
       method:'POST',
@@ -315,6 +315,7 @@ async function verifyPayment(response, orderId){
     if(!res.ok) throw new Error(result.error || 'Verification failed');
 
     // Success — update local state
+    if(window.ECLPixel) ECLPixel.track('Purchase', { value: ((order && order.amount) || 0) / 100, currency: (order && order.currency) || 'INR', content_name: 'Optimizer ' + _selectedTier + ' ' + _selectedMonths + 'm' });
     PLAN = 'pro';
     PLAN_EXPIRES_AT = result.expiresAt;
     localStorage.setItem('ecl_plan', 'pro');
