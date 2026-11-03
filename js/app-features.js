@@ -413,7 +413,7 @@ function saveProject(){
       cutlists: [cutlistData],
     };
     projects.unshift(proj);
-    localStorage.setItem(projectsKey(), JSON.stringify(projects));
+    persistProject(proj);
     closeSaveProject();
     alert(`Saved: ${client} → "${cutlistData.name}"`);
   } else {
@@ -427,7 +427,7 @@ function saveProject(){
     const nextNum = proj.cutlists.length + 1;
     cutlistData.name = clNameEntered || `Cut List ${nextNum}`;
     proj.cutlists.push(cutlistData);
-    localStorage.setItem(projectsKey(), JSON.stringify(projects));
+    persistProject(proj);
     closeSaveProject();
     alert(`Saved: ${proj.client||proj.name} → "${cutlistData.name}"`);
   }
@@ -438,6 +438,7 @@ function openProjects(){
   if(s) s.value='';
   renderProjectsList();
   document.getElementById('projects-modal').style.display='flex';
+  if(typeof syncProjectsFromServer==='function') syncProjectsFromServer();
 }
 function closeProjects(){document.getElementById('projects-modal').style.display='none'}
 
@@ -535,7 +536,7 @@ function deleteCutList(projId, clId){
   const cl = proj.cutlists.find(c=>c.id===clId);
   if(!cl||!confirm(`Delete cut list "${cl.name}"?`)) return;
   proj.cutlists = proj.cutlists.filter(c=>c.id!==clId);
-  localStorage.setItem(projectsKey(), JSON.stringify(projects));
+  persistProject(proj);
   renderProjectsList();
 }
 
@@ -561,7 +562,7 @@ function duplicateProject(id){
   const p=projects.find(p=>p.id===id);if(!p)return;
   const copy={...JSON.parse(JSON.stringify(p)),id:Date.now(),name:p.name+' (Copy)',date:new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})};
   projects.unshift(copy);
-  localStorage.setItem(projectsKey(),JSON.stringify(projects));
+  persistProject(copy);
   renderProjectsList();
 }
 
@@ -569,7 +570,7 @@ function deleteProject(id){
   const p=projects.find(p=>p.id===id);if(!p)return;
   if(!confirm(`Delete "${p.name}" and all its cut lists? This cannot be undone.`))return;
   projects=projects.filter(p=>p.id!==id);
-  localStorage.setItem(projectsKey(),JSON.stringify(projects));
+  removeProjectRemote(id);
   renderProjectsList();
 }
 

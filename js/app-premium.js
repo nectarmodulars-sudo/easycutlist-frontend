@@ -6,15 +6,42 @@ let FEATURE_FLAGS = JSON.parse(localStorage.getItem('ecl_flags')||'{}');
 // Empty for free users. Populated from /my-plan.
 let PLAN_FEATURES = JSON.parse(localStorage.getItem('ecl_plan_features')||'{}');
 
+// Fetch /my-plan with retries. Returns server data, or null if every try failed.
+// A signed-in user getting an anonymous answer (token not ready / expired)
+// refreshes the session and retries instead of accepting 'free'.
+let _planReqSeq = 0;
+async function fetchMyPlan(){
+  for(let attempt = 0; attempt < 4; attempt++){
+    try {
+      const res = await fetch(`${API_URL}/my-plan`, { headers: authHeader(), cache: 'no-store' });
+      if(!res.ok) throw new Error('my-plan ' + res.status);
+      const data = await res.json();
+      if(CURRENT_SESSION && data.loggedIn === false){
+        if(supa){
+          const { data: r } = await supa.auth.refreshSession();
+          if(r && r.session){ CURRENT_SESSION = r.session; CURRENT_USER = r.session.user; }
+        }
+        throw new Error('anonymous answer for signed-in user');
+      }
+      return data;
+    } catch(e){
+      console.warn('[plan] attempt', attempt + 1, e.message);
+      if(attempt < 3) await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+    }
+  }
+  return null;
+}
+
 // Fetch plan + flags from server (non-blocking)
 async function fetchPlanAndFlags(){
+  const mySeq = ++_planReqSeq;
   try {
-    const [planRes, flagsRes] = await Promise.all([
-      fetch(`${API_URL}/my-plan`, { headers: authHeader() }),
-      fetch(`${API_URL}/flags`)
+    const [data, flagsRes] = await Promise.all([
+      fetchMyPlan(),
+      fetch(`${API_URL}/flags`).catch(() => null)
     ]);
-    if(planRes.ok){
-      const data = await planRes.json();
+    if(mySeq !== _planReqSeq) return;   // a newer call is in charge; drop this stale answer
+    if(data){
       const {plan, trialExportsUsed, planExpiresAt, trialLimit, features} = data;
       PLAN = plan;
       PLAN_FEATURES = features || {};
@@ -32,7 +59,7 @@ async function fetchPlanAndFlags(){
       if(mobUpgrade) mobUpgrade.style.display = (plan && plan !== 'free') ? 'none' : '';
     }
     updateUpgradeBtn();
-    if(flagsRes.ok){
+    if(flagsRes && flagsRes.ok){
       FEATURE_FLAGS = await flagsRes.json();
       localStorage.setItem('ecl_flags', JSON.stringify(FEATURE_FLAGS));
     }
@@ -288,7 +315,7 @@ async function startPayment(){
       prefill:     { email: CURRENT_USER.email || '' },
       theme:       { color: '#3F0E40' },
       handler: async function(response){
-        await verifyPayment(response, order.orderId);
+        await verifyPayment(response, order.orderId, order);
       },
     });
     rzp.open();
@@ -297,7 +324,7 @@ async function startPayment(){
   }
 }
 
-async function verifyPayment(response, orderId){
+async function verifyPayment(response, orderId, order){
   try {
     const res = await fetch(`${API_URL}/payments/verify`, {
       method:'POST',
@@ -315,6 +342,7 @@ async function verifyPayment(response, orderId){
     if(!res.ok) throw new Error(result.error || 'Verification failed');
 
     // Success — update local state
+    if(window.ECLPixel) ECLPixel.track('Purchase', { value: ((order && order.amount) || 0) / 100, currency: (order && order.currency) || 'INR', content_name: 'Optimizer ' + _selectedTier + ' ' + _selectedMonths + 'm' });
     PLAN = 'pro';
     PLAN_EXPIRES_AT = result.expiresAt;
     localStorage.setItem('ecl_plan', 'pro');

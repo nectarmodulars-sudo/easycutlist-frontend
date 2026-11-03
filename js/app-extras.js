@@ -515,10 +515,10 @@ function doExportOrderExcel(){
   // ── Resizable sidebar ──
   const handle=document.getElementById('resize-handle');
   let dragging=false,startX=0,startW=0;
-  const MIN_W=200,MAX_W=520;
+  const MIN_W=200,MAX_W=760;
   handle.addEventListener('mousedown',e=>{
     dragging=true;startX=e.clientX;
-    startW=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-w')||'280');
+    startW=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-w')||'520');
     handle.classList.add('dragging');
     document.body.style.cursor='col-resize';
     document.body.style.userSelect='none';
@@ -528,14 +528,14 @@ function doExportOrderExcel(){
     if(!dragging)return;
     const newW=Math.min(MAX_W,Math.max(MIN_W,startW+e.clientX-startX));
     document.documentElement.style.setProperty('--sidebar-w',newW+'px');
-    localStorage.setItem('ecl_sidebar_w',newW);
+    localStorage.setItem('ecl_sidebar_w2',newW);
   });
   document.addEventListener('mouseup',()=>{
     if(!dragging)return;
     dragging=false;handle.classList.remove('dragging');
     document.body.style.cursor='';document.body.style.userSelect='';
   });
-  const savedW=localStorage.getItem('ecl_sidebar_w');
+  const savedW=localStorage.getItem('ecl_sidebar_w2');  // new key: old saved widths (≤280) were too narrow for the grid
   if(savedW) document.documentElement.style.setProperty('--sidebar-w',savedW+'px');
 
   // ── Keep API warm + fetch plan/flags ──

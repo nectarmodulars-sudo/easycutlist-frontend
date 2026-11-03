@@ -187,7 +187,7 @@ function renderResults(sheets,unfitted,scale){
     <div class="mat-rows" ${isPro()?'':`style="filter:blur(5px);pointer-events:none;user-select:none"`}>${matRowsHtml}</div>
   </div>
   ${!isPro()?'<div class="no-print" style="text-align:center;margin:-8px 0 12px;font-size:12px">⭐ <a href="#" onclick="showUpgrade(\'Material Summary\');return false" style="color:#ECB22E;text-decoration:none;font-weight:700">Upgrade to Pro</a> to view details</div>':''}`;
-  if(unfitted.length)html+=`<div class="unfitted-box"><div class="unfitted-title">⚠ ${unfitted.length} piece(s) could not be placed</div>${unfitted.map(p=>`<div class="unfitted-item">${esc(p.label)} — ${_dimP(p.l,p.w)} ${_uSuffix()} · ${esc(p.material)}</div>`).join('')}</div>`;
+  if(unfitted.length)html+=`<div class="unfitted-box"><div class="unfitted-title">⚠ ${unfitted.length} piece(s) could not be placed</div>${unfitted.some(p=>p.reason==='stock_short')?`<div class="unfitted-item" style="font-weight:600">Not enough stock sheets — raise Qty in Stock Sheets, or leave it blank for unlimited.</div>`:''}${unfitted.map(p=>`<div class="unfitted-item">${esc(p.label)} — ${_dimP(p.l,p.w)} ${_uSuffix()} · ${esc(p.material)}${p.reason==='stock_short'?' · stock short':''}</div>`).join('')}</div>`;
 
   let si=0;
   for(const s of sheets){

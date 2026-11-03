@@ -63,6 +63,15 @@ if(typeof window!=='undefined'){
 // ══ CLEAR ══
 function clearPanels(){if(panelRows.length&&!confirm('Clear all panels?'))return;panelRows=[];renderPanels()}
 function clearStock(){if(stockRows.length&&!confirm('Clear all stock sheets?'))return;stockRows=[];renderStock()}
+// For ASM "Export to Optimizer → Replace": no confirm (ASM already asked),
+// clears panels and hides the old result so it is not mistaken for the new one.
+// Stock sheets are kept — the user may have set their own sizes/quantities.
+function panelCount(){return panelRows.length}
+function replacePanelsQuiet(){
+  panelRows=[];renderPanels();
+  const r=document.getElementById('results'),e=document.getElementById('empty-state');
+  if(r)r.style.display='none';if(e)e.style.display='flex';
+}
 
 // ══ PANELS ══
 function addPanel(remark='',l=600,w=400,qty=1,material='Plywood',canRotate=true,srNo=null,component='',band=null){
@@ -87,6 +96,7 @@ function updatePanel(id,f,v){
     else if(f==='qty') r[f]=+v;
     else r[f]=v;
   }
+  if(f==='qty') panelTotals();
   if(f==='material') autoPopulateStock();
 }
 
@@ -110,7 +120,7 @@ function autoPopulateStock(){
         label: '',
         l: defW,
         w: defH,
-        qty: 100,
+        qty: '',            // blank = unlimited
         material: mat,
         price,
       });
@@ -121,19 +131,93 @@ function autoPopulateStock(){
 }
 function toggleRot(id){const r=panelRows.find(r=>r.id===id);if(r){r.canRotate=!r.canRotate;renderPanels()}}
 function renderPanels(){
+  bindXlGrid('panels-tbody', addPanel, pastePanels);
   document.getElementById('panels-tbody').innerHTML=panelRows.map((r,i)=>`<tr>
-    <td style="text-align:center;color:rgba(255,255,255,.4);font-family:var(--mono);font-size:10px;user-select:none">${i+1}</td>
+    <td class="rn">${i+1}</td>
     <td><input type="text" value="${esc(r.component||'')}" placeholder="Component" oninput="updatePanel(${r.id},'component',this.value)"></td>
     <td><input type="number" value="${mm2d(optDimOrder()==='hw'?r.w:r.l)}" min="1" oninput="updatePanel(${r.id},'${optDimOrder()==='hw'?'w':'l'}',this.value)"></td>
     <td><input type="number" value="${mm2d(optDimOrder()==='hw'?r.l:r.w)}" min="1" oninput="updatePanel(${r.id},'${optDimOrder()==='hw'?'l':'w'}',this.value)"></td>
     <td><input type="number" value="${r.qty}" min="1" max="999" oninput="updatePanel(${r.id},'qty',this.value)"></td>
     <td>${matSel(r.material,`updatePanel(${r.id},'material',this.value)`,'matlist_p'+r.id)}</td>
-    <td><input type="text" value="${esc(r.remark||'')}" placeholder="Remark" oninput="updatePanel(${r.id},'remark',this.value)" onkeydown="if(event.key==='Enter'){event.preventDefault();addPanel();const rows=document.querySelectorAll('#panels-tbody tr');const lastRow=rows[rows.length-1];if(lastRow)lastRow.querySelectorAll('input[type=number]')[0]?.focus()}"></td>
-    <td><button class="del-btn" onclick="removePanel(${r.id})">&#215;</button></td>
-  </tr>`).join('')}
+    <td><input type="text" value="${esc(r.remark||'')}" placeholder="Remark" oninput="updatePanel(${r.id},'remark',this.value)"></td>
+    <td><button class="del-btn" aria-label="Delete row" onclick="removePanel(${r.id})">&#215;</button></td>
+  </tr>`).join('')+`<tr class="xl-add"><td class="rn">+</td><td colspan="7"><button type="button" class="xl-add-btn" onclick="xlAddRow('panels-tbody',addPanel)">Click to add a row — or paste rows from Excel (Ctrl+V)</button></td></tr>`;
+  panelTotals();
+}
+function panelTotals(){
+  const el=document.getElementById('panels-total'); if(!el) return;
+  const pcs=panelRows.reduce((t,r)=>t+(+r.qty||0),0);
+  el.innerHTML=panelRows.length?`Total: <b>${pcs} pcs</b> in ${panelRows.length} row${panelRows.length>1?'s':''}`:'';
+}
+
+/* ── Excel-style grid behaviour (panels + stock) ──
+   Enter / ↓ moves to the same column in the next row (a new row is added
+   after the last one), ↑ moves up. Pasting several cells copied from Excel
+   adds one row per line. Bound once per tbody, survives re-renders. */
+function xlAddRow(tbodyId, addFn, col){
+  addFn();
+  const rows=document.querySelectorAll('#'+tbodyId+' tr:not(.xl-add)');
+  const last=rows[rows.length-1]; if(!last) return;
+  const cell=last.cells[col==null?1:col]||last.cells[1];
+  const inp=cell&&cell.querySelector('input'); if(inp){inp.focus();inp.select&&inp.select();}
+}
+function bindXlGrid(tbodyId, addFn, pasteFn){
+  const tb=document.getElementById(tbodyId); if(!tb||tb._xl) return; tb._xl=1;
+  tb.addEventListener('keydown',e=>{
+    const inp=e.target; if(inp.tagName!=='INPUT') return;
+    const down=e.key==='Enter'||(e.key==='ArrowDown'&&!inp.list), up=e.key==='ArrowUp'&&!inp.list;
+    if(!down&&!up) return;
+    const td=inp.closest('td'), tr=inp.closest('tr'); if(!td||!tr) return;
+    e.preventDefault();
+    if(inp.list) inp.dispatchEvent(new Event('change'));   // material box saves on change
+    const col=td.cellIndex;
+    let next=up?tr.previousElementSibling:tr.nextElementSibling;
+    if(next&&next.classList.contains('xl-add')) next=null;
+    if(!next){ if(down) xlAddRow(tbodyId,addFn,col); return; }
+    const t=next.cells[col]&&next.cells[col].querySelector('input');
+    if(t){t.focus();t.select&&t.select();}
+  });
+  tb.addEventListener('paste',e=>{
+    const txt=(e.clipboardData||window.clipboardData).getData('text');
+    if(!txt||(txt.indexOf('\t')<0&&txt.trim().indexOf('\n')<0)) return;   // single value: normal paste
+    e.preventDefault();
+    const lines=txt.replace(/\r/g,'').split('\n').filter(l=>l.trim());
+    const n=pasteFn(lines.map(l=>l.split('\t').map(c=>c.trim())));
+    if(typeof showToast==='function') showToast(n+' row'+(n===1?'':'s')+' pasted','success');
+  });
+}
+const _num=v=>{const x=parseFloat(String(v).replace(/,/g,''));return isFinite(x)?x:NaN;};
+// Rows from Excel: Component, W, H, Qty, Material, Remark — or W, H, Qty, Material, Remark
+// when the first cell is a number. A header row (W not a number) is skipped.
+function pastePanels(rows){
+  let n=0; const hw=optDimOrder()==='hw';
+  rows.forEach(c=>{
+    let comp='', i=0;
+    if(isNaN(_num(c[0]))){comp=c[0]||'';i=1;}
+    const a=_num(c[i]), b=_num(c[i+1]); if(isNaN(a)||isNaN(b)) return;
+    const qty=Math.max(1,Math.round(_num(c[i+2]))||1);
+    const l=d2mm(hw?b:a), w=d2mm(hw?a:b);
+    addPanel(c[i+4]||'', l, w, qty, c[i+3]||'Plywood', true, null, comp);
+    n++;
+  });
+  return n;
+}
+// Rows from Excel: Label, W, H, Qty, Material, Price — or W, H, Qty, Material, Price
+function pasteStock(rows){
+  let n=0;
+  rows.forEach(c=>{
+    let label='', i=0;
+    if(isNaN(_num(c[0]))){label=c[0]||'';i=1;}
+    const a=_num(c[i]), b=_num(c[i+1]); if(isNaN(a)||isNaN(b)) return;
+    const q=_num(c[i+2]);
+    addStock(label, d2mm(a), d2mm(b), isNaN(q)||q<=0?'':Math.round(q), c[i+3]||'Plywood', _num(c[i+4])||0);
+    n++;
+  });
+  return n;
+}
 
 // ══ STOCK ══
-function addStock(label='',l=1220,w=2440,qty=1,material='Plywood',price=0,grainLocked=false){
+function addStock(label='',l=1220,w=2440,qty='',material='Plywood',price=0,grainLocked=false){
   const def = profile.defaultSheetW ? parseInt(profile.defaultSheetW) : 1220;
   const defH = profile.defaultSheetH ? parseInt(profile.defaultSheetH) : 2440;
   // Auto-fill price from price book if not provided
@@ -142,19 +226,21 @@ function addStock(label='',l=1220,w=2440,qty=1,material='Plywood',price=0,grainL
   renderStock();
 }
 function removeStock(id){stockRows=stockRows.filter(r=>r.id!==id);renderStock()}
-function updateStock(id,f,v){const r=stockRows.find(r=>r.id===id);if(r){if(f==='l'||f==='w')r[f]=d2mm(v);else if(f==='qty'||f==='price')r[f]=+v;else r[f]=v;}}
+function updateStock(id,f,v){const r=stockRows.find(r=>r.id===id);if(r){if(f==='l'||f==='w')r[f]=d2mm(v);else if(f==='qty')r[f]=(v===''?'':+v);else if(f==='price')r[f]=+v;else r[f]=v;}}
 function toggleGrain(id){const r=stockRows.find(r=>r.id===id);if(r){r.grainLocked=!r.grainLocked;renderStock()}}
 function renderStock(){
+  bindXlGrid('stock-tbody', addStock, pasteStock);
   document.getElementById('stock-tbody').innerHTML=stockRows.map(r=>`<tr>
     <td><input type="text" value="${esc(r.label)}" oninput="updateStock(${r.id},'label',this.value)"></td>
     <td><input type="number" value="${mm2d(r.l)}" min="1" oninput="updateStock(${r.id},'l',this.value)"></td>
     <td><input type="number" value="${mm2d(r.w)}" min="1" oninput="updateStock(${r.id},'w',this.value)"></td>
-    <td><input type="number" value="${r.qty}" min="1" max="99" oninput="updateStock(${r.id},'qty',this.value)"></td>
+    <td><input type="number" value="${r.qty>0?r.qty:''}" min="1" max="999" placeholder="∞" title="Sheets in stock. Blank = unlimited" oninput="updateStock(${r.id},'qty',this.value)"></td>
     <td>${matSel(r.material,`updateStock(${r.id},'material',this.value)`,'matlist_s'+r.id)}</td>
     <td><input type="number" value="${r.price||0}" min="0" step="50" placeholder="0" oninput="updateStock(${r.id},'price',this.value)" title="Price per sheet"></td>
     <td style="text-align:center"><button class="rot-btn" title="${r.grainLocked?'Grain locked — click to allow rotation':'Free rotation — click to lock grain'}" style="color:${r.grainLocked?'#ff8ab0':'rgba(255,255,255,.4)'};font-size:13px" onclick="toggleGrain(${r.id})">${r.grainLocked?'🔒':'↻'}</button></td>
-    <td><button class="del-btn" onclick="removeStock(${r.id})">&#215;</button></td>
-  </tr>`).join('')}
+    <td><button class="del-btn" aria-label="Delete sheet" onclick="removeStock(${r.id})">&#215;</button></td>
+  </tr>`).join('')+`<tr class="xl-add"><td colspan="8"><button type="button" class="xl-add-btn" onclick="xlAddRow('stock-tbody',addStock,0)">Click to add a sheet — or paste rows from Excel (Ctrl+V)</button></td></tr>`;
+}
 
 // ══ CSV — Panels format: Sr.No, Component, W, H, QTY, Material, Remark, L, R, T, B ══
 const CSV_SAMPLES={
@@ -249,7 +335,7 @@ function applyCSV(){
       // Stock: W,H,QTY,Material,Label,Price
       if(isHeaderRow(cols))continue;
       const W=parseFloat(cols[0]),H=parseFloat(cols[1]);
-      const qty=Math.max(1,parseInt(cols[2])||1),mat=(cols[3]||'Plywood').trim()||'Plywood';
+      const qty=parseInt(cols[2])>0?parseInt(cols[2]):'',mat=(cols[3]||'Plywood').trim()||'Plywood';
       const lbl=(cols[4]||'').trim(),price=parseFloat(cols[5])||0;
       if(W>0&&H>0){addStock(lbl,d2mm(W),d2mm(H),qty,mat,price);imported++;}else errors++;
       continue;
