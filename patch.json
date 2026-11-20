@@ -1,0 +1,133 @@
+{
+  "name": "ASM: undo a deleted output row + saved-settings hooks",
+  "files": [
+    {
+      "path": "js/app-asm.js",
+      "edits": [
+        {
+          "label": "outSummary: count the undo stack",
+          "find": [
+            "    const edited = (inst.outputs || []).filter(o => o._edited).length;",
+            "    let s = n + ' components \\u00b7 ' + panels + ' total panels';"
+          ],
+          "replace": [
+            "    const edited = (inst.outputs || []).filter(o => o._edited).length;",
+            "    const undoN = (inst._undo || []).length;",
+            "    let s = n + ' components \\u00b7 ' + panels + ' total panels';"
+          ]
+        },
+        {
+          "label": "outSummary: Undo delete button",
+          "find": [
+            "    if (hidden || edited) {",
+            "      s += '<button class=\"asm-sum-reset\" onclick=\"ASMModule.restoreOutputRows(\\'' +"
+          ],
+          "replace": [
+            "    if (undoN) {",
+            "      s += '<button class=\"asm-sum-reset\" title=\"Bring back the row just deleted\" onclick=\"ASMModule.undoDeleteRow(\\'' +",
+            "           inst.instanceId + '\\')\">\\u21a9 Undo delete</button>';",
+            "    }",
+            "    if (hidden || edited) {",
+            "      s += '<button class=\"asm-sum-reset\" onclick=\"ASMModule.restoreOutputRows(\\'' +"
+          ]
+        },
+        {
+          "label": "deleteOutputRow remembers + undoDeleteRow",
+          "find": [
+            "    const o = inst.outputs[idx];",
+            "    if (!o._manual) {",
+            "      if (!inst.deletedRows) inst.deletedRows = {};",
+            "      inst.deletedRows[outKey(o)] = true;",
+            "    }",
+            "    inst.outputs.splice(idx, 1);",
+            "    updateSBSItemOutputs(inst);",
+            "  }"
+          ],
+          "replace": [
+            "    const o = inst.outputs[idx];",
+            "    const key = o._manual ? null : outKey(o);",
+            "    if (key) {",
+            "      if (!inst.deletedRows) inst.deletedRows = {};",
+            "      inst.deletedRows[key] = true;",
+            "    }",
+            "    inst.outputs.splice(idx, 1);",
+            "    if (!inst._undo) inst._undo = [];",
+            "    inst._undo.push({ row: o, idx: idx, key: key });",
+            "    if (inst._undo.length > 20) inst._undo.shift();",
+            "    updateSBSItemOutputs(inst);",
+            "  }",
+            "",
+            "  // Put back the row deleted most recently. The stack goes 20 deep, so repeated",
+            "  // clicks walk back through the deletions in reverse order. It lives on the",
+            "  // instance in memory — a page reload starts it empty.",
+            "  function undoDeleteRow(instanceId) {",
+            "    const inst = sbsItems.find(i => i.instanceId === instanceId);",
+            "    if (!inst || !inst._undo || !inst._undo.length) return;",
+            "    const last = inst._undo.pop();",
+            "    if (last.key && inst.deletedRows) delete inst.deletedRows[last.key];",
+            "    if (!inst.outputs) inst.outputs = [];",
+            "    const at = Math.min(last.idx, inst.outputs.length);",
+            "    inst.outputs.splice(at, 0, last.row);",
+            "    updateSBSItemOutputs(inst);",
+            "    showToast('Row restored', 'success');",
+            "  }"
+          ]
+        },
+        {
+          "label": "add getInstance + applyInputs",
+          "before": [
+            "  // Bring back every row deleted on this item, and drop the manual overrides",
+            "  // so the next recalc recomputes them from the formulas.",
+            "  function restoreOutputRows(instanceId) {"
+          ],
+          "insert": [
+            "  // Read-only view of one SBS instance, for asm-presets.js. A copy, not the",
+            "  // live object — nothing outside this module mutates inputs directly.",
+            "  function getInstance(instanceId) {",
+            "    const inst = sbsItems.find(i => i.instanceId === instanceId);",
+            "    if (!inst) return null;",
+            "    return {",
+            "      instanceId: inst.instanceId,",
+            "      itemId: inst.itemId,",
+            "      itemName: inst.itemName,",
+            "      inputs: Object.assign({}, inst.inputs)",
+            "    };",
+            "  }",
+            "",
+            "  // Load a saved setting. Stored values are already in mm, the canonical unit",
+            "  // inst.inputs uses, so nothing is converted on the way in.",
+            "  function applyInputs(instanceId, inputs) {",
+            "    const inst = sbsItems.find(i => i.instanceId === instanceId);",
+            "    if (!inst || !inputs || typeof inputs !== 'object') return false;",
+            "    const schema = activeItemSchemas[inst.itemId];",
+            "    const keys = (schema && schema.inputs) ? schema.inputs.map(i => i.key) : Object.keys(inputs);",
+            "    keys.forEach(k => { if (inputs[k] !== undefined) inst.inputs[k] = inputs[k]; });",
+            "    renderSBS();",
+            "    push3D(instanceId);",
+            "    if (schema && schema.manualEntry) refreshManualRows(instanceId);",
+            "    else recalc(instanceId);",
+            "    return true;",
+            "  }",
+            "",
+            ""
+          ]
+        },
+        {
+          "label": "renderSBSItem: preset slot",
+          "find": "          <button class=\"asm-sbs-item-remove\" onclick=\"ASMModule.removeFromSBS('${inst.instanceId}')\" title=\"Remove\">&#10005;</button>",
+          "replace": "          <span class=\"asm-preset-slot\" data-inst=\"${inst.instanceId}\"></span>\n          <button class=\"asm-sbs-item-remove\" onclick=\"ASMModule.removeFromSBS('${inst.instanceId}')\" title=\"Remove\">&#10005;</button>"
+        },
+        {
+          "label": "renderManualItem: preset slot",
+          "find": "          <button class=\"asm-sbs-item-remove\" onclick=\"ASMModule.removeFromSBS('${inst.instanceId}')\">&#10005;</button>",
+          "replace": "          <span class=\"asm-preset-slot\" data-inst=\"${inst.instanceId}\"></span>\n          <button class=\"asm-sbs-item-remove\" onclick=\"ASMModule.removeFromSBS('${inst.instanceId}')\">&#10005;</button>"
+        },
+        {
+          "label": "public API: new names",
+          "find": "    updateInput, setRoomName, editOutput, deleteOutputRow, saveToReady,",
+          "replace": "    undoDeleteRow, getInstance, applyInputs,\n    updateInput, setRoomName, editOutput, deleteOutputRow, saveToReady,"
+        }
+      ]
+    }
+  ]
+}

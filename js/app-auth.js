@@ -86,6 +86,7 @@ function projectsKey(){
 function reloadProjects(){
   if(typeof projects === 'undefined') return;
   projects = JSON.parse(localStorage.getItem(projectsKey()) || '[]');
+  if(typeof syncProjectsFromServer === 'function') syncProjectsFromServer();
   const modal = document.getElementById('projects-modal');
   if(modal && modal.style.display !== 'none' && typeof renderProjectsList === 'function'){
     renderProjectsList();
@@ -99,6 +100,7 @@ if(supa){
     refreshAuthUI();
     reloadProjects();
     if(event === 'SIGNED_IN' && typeof fetchPlanAndFlags === 'function') fetchPlanAndFlags();
+    if(event === 'SIGNED_IN' && window.ECLPixel) ECLPixel.signedIn(session && session.user);
   });
 }
 

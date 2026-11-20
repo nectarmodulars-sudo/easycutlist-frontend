@@ -103,7 +103,20 @@ function openLabelExport(){
     const s=document.getElementById(id), v=document.getElementById(id+'-val');
     if(s&&v){ v.textContent=s.value+'px'; s.oninput=()=>v.textContent=s.value+'px'; }
   });
+  // Auto-fit checkbox (remembered)
+  const af=document.getElementById('lbl-autofit');
+  if(af){ try{ af.checked = localStorage.getItem('ecl_lbl_autofit')==='1'; }catch(e){} _lblAutofitToggle(); }
   document.getElementById('label-modal').style.display='flex';
+}
+// Auto-fit ON → font sliders disabled (text shrinks itself). OFF → sliders active.
+function _lblAutofitToggle(){
+  const on=!!document.getElementById('lbl-autofit')?.checked;
+  try{ localStorage.setItem('ecl_lbl_autofit', on?'1':'0'); }catch(e){}
+  document.querySelectorAll('#label-modal .lbl-font-ctl').forEach(r=>{
+    r.style.opacity = on ? '.45' : '';
+    r.title = on ? 'Turn off Auto-fit to adjust manually' : '';
+    r.querySelectorAll('input').forEach(i=>i.disabled=on);
+  });
 }
 function closeLabelExport(){document.getElementById('label-modal').style.display='none';}
 
@@ -127,6 +140,7 @@ function doExportLabels(){
   const offX     = parseFloat(document.getElementById('lbl-offx')?.value) || 0;
   const offY     = parseFloat(document.getElementById('lbl-offy')?.value) || 0;
   const guides   = document.getElementById('lbl-guides')?.checked;
+  const autofit  = !!document.getElementById('lbl-autofit')?.checked;
   const fs       = +document.getElementById('lbl-fontsize').value;
   // Per-field sizes (fall back to sensible ratios of the base font)
   const gv = (id, def) => { const el = document.getElementById(id); const v = el ? +el.value : NaN; return isNaN(v) ? def : v; };
@@ -242,7 +256,7 @@ function doExportLabels(){
         html+=`</div>`;
       }
 
-      return `<div style="${box}">${html}</div>`;
+      return `<div class="lbl" style="${box}">${html}</div>`;
     }).join('');
 
     pages+=`<div class="sheet" style="position:relative;width:210mm;height:297mm;page-break-after:always;overflow:hidden">${cells}</div>`;
@@ -269,7 +283,30 @@ function doExportLabels(){
     <span style="font-size:11px;color:#c00;font-weight:700">Important: set Margins = None and Scale = 100% (turn OFF "Fit to page"), uncheck Headers &amp; Footers.</span>
     <span style="font-size:11px;color:#666">Tip: print on plain paper first and hold it against a label sheet to check alignment.</span>
   </div>
-  ${pages}</body></html>`);
+  ${pages}${autofit?`
+  <script>
+  (function(){
+    // Auto-fit: shrink every font in a sticker until nothing overflows (min 35% of slider size).
+    function over(b){
+      if(b.scrollHeight>b.clientHeight+1||b.scrollWidth>b.clientWidth+1) return true;
+      var els=b.querySelectorAll('*');
+      for(var i=0;i<els.length;i++){var e=els[i]; if(e.scrollHeight>e.clientHeight+1||e.scrollWidth>e.clientWidth+1) return true;}
+      return false;
+    }
+    function fit(){
+      document.querySelectorAll('.lbl').forEach(function(b){
+        var els=[].slice.call(b.querySelectorAll('[style*="font-size"]'));
+        els.forEach(function(e){ if(!e.dataset.fs) e.dataset.fs=parseFloat(e.style.fontSize); e.style.fontSize=e.dataset.fs+'px'; });
+        for(var k=1; k>=0.35 && over(b); k-=0.05){
+          els.forEach(function(e){ e.style.fontSize=(e.dataset.fs*k).toFixed(2)+'px'; });
+        }
+      });
+    }
+    if(document.fonts&&document.fonts.ready) document.fonts.ready.then(fit); else fit();
+    window.addEventListener('load',fit);
+    window.addEventListener('beforeprint',fit);
+  })();
+  </script>`:''}</body></html>`);
   win.document.close();
 }
 
@@ -295,7 +332,13 @@ function updateInnerLamTotal(){
     total += sheets * sides;
   }
   const el=document.getElementById('il-total-cell');
-  if(el) el.textContent = total > 0 ? total+' sheets' : '—';
+  if(el) el.textContent = total > 0 ? total : '—';
+  // per-material qty + highlight the picked option
+  document.querySelectorAll('.mat-tbl td[data-ilmat]').forEach(td=>{
+    const m=td.getAttribute('data-ilmat'), v=window._innerLam?.[m];
+    const side = v===0||v===2 ? v : 1;
+    td.textContent = (+td.dataset.sheets * side) || '—';
+  });
 }
 
 function closeExportOrder(){
@@ -515,10 +558,10 @@ function doExportOrderExcel(){
   // ── Resizable sidebar ──
   const handle=document.getElementById('resize-handle');
   let dragging=false,startX=0,startW=0;
-  const MIN_W=200,MAX_W=520;
+  const MIN_W=200,MAX_W=760;
   handle.addEventListener('mousedown',e=>{
     dragging=true;startX=e.clientX;
-    startW=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-w')||'280');
+    startW=parseInt(getComputedStyle(document.documentElement).getPropertyValue('--sidebar-w')||'520');
     handle.classList.add('dragging');
     document.body.style.cursor='col-resize';
     document.body.style.userSelect='none';
@@ -528,14 +571,14 @@ function doExportOrderExcel(){
     if(!dragging)return;
     const newW=Math.min(MAX_W,Math.max(MIN_W,startW+e.clientX-startX));
     document.documentElement.style.setProperty('--sidebar-w',newW+'px');
-    localStorage.setItem('ecl_sidebar_w',newW);
+    localStorage.setItem('ecl_sidebar_w2',newW);
   });
   document.addEventListener('mouseup',()=>{
     if(!dragging)return;
     dragging=false;handle.classList.remove('dragging');
     document.body.style.cursor='';document.body.style.userSelect='';
   });
-  const savedW=localStorage.getItem('ecl_sidebar_w');
+  const savedW=localStorage.getItem('ecl_sidebar_w2');  // new key: old saved widths (≤280) were too narrow for the grid
   if(savedW) document.documentElement.style.setProperty('--sidebar-w',savedW+'px');
 
   // ── Keep API warm + fetch plan/flags ──

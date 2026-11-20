@@ -3,6 +3,9 @@
    Deploy on its own whenever only the viewer chrome changes. */
 window.ASM3D_CSS = `
 /* ── viewer shell ─────────────────────────────────────────────── */
+/* The mount holds the 3D view and, under it, the toolbar. */
+.asm3d-root{display:flex; flex-direction:column; width:100%; height:100%; min-height:300px; gap:7px;}
+.asm3d-root > .asm3d-wrap{flex:1 1 auto; min-height:0;}
 .asm3d-wrap{
   position:relative; width:100%; height:100%; min-height:260px;
   background:radial-gradient(120% 120% at 50% 16%,#23262e 0%,#111318 82%);
@@ -30,11 +33,9 @@ window.ASM3D_CSS = `
    rather than relying on translucency. No amber anywhere: idle is white on
    black, active is white on brand purple. */
 .asm3d-bar{
-  position:absolute; left:10px; bottom:10px; z-index:14;
+  position:static; flex:0 0 auto;
   display:flex; gap:5px; flex-wrap:wrap; align-items:center;
-  max-width:calc(100% - 20px);
-  background:#111318; border:1px solid #3A3D42; border-radius:9px;
-  padding:6px; box-shadow:0 4px 18px rgba(0,0,0,.55);
+  background:#111318; border:1px solid #3A3D42; border-radius:9px; padding:6px;
 }
 .asm3d-bar button{
   background:#1E2125; border:1px solid #3A3D42; color:#E8EAF0;
@@ -62,17 +63,36 @@ window.ASM3D_CSS = `
 .asm3d-ctl input[type=range]{ width:86px; accent-color:#7A3C7C; cursor:pointer; margin:0; }
 
 /* ── hud + notes ──────────────────────────────────────────────── */
+/* The figures and the selection sit in a strip under the view. */
+.asm3d-info{
+  display:flex; flex:0 0 auto; gap:7px; align-items:stretch; flex-wrap:wrap;
+}
 .asm3d-hud{
-  position:absolute; left:10px; top:10px; z-index:13; max-width:270px;
-  background:rgba(17,19,26,.86); border:1px solid #3A3D42; border-radius:8px;
+  flex:1 1 240px; min-width:0;
+  background:#111318; border:1px solid #3A3D42; border-radius:8px;
   padding:7px 10px; font-size:10.5px; line-height:1.5; color:#9AA0AB;
-  backdrop-filter:blur(6px); pointer-events:none;
 }
 .asm3d-hud b{color:#E8EAF0;}
-.asm3d-notes{
-  position:absolute; right:10px; top:10px; z-index:13; max-width:290px;
-  display:flex; flex-direction:column; gap:5px;
+/* Notes live behind a button. Printed in full across the top right they
+   covered the model they were describing. */
+.asm3d-notebtn{
+  position:absolute; right:10px; top:10px; z-index:15;
+  background:#111318; border:1px solid #3A3D42; color:#E8EAF0;
+  border-radius:8px; padding:5px 10px; cursor:pointer;
+  font:800 11.5px/1 inherit; letter-spacing:.04em;
+  box-shadow:0 3px 12px rgba(0,0,0,.5);
 }
+.asm3d-notebtn:hover{border-color:#9AA0AB;}
+.asm3d-notebtn.warn{color:#ECB22E; border-color:rgba(236,178,46,.6);}
+.asm3d-notebtn.err {color:#F6889F; border-color:rgba(224,30,90,.65);}
+.asm3d-notebtn.ok  {color:#7fe0b4; border-color:rgba(46,182,125,.5);}
+.asm3d-notebtn.on{background:#1E2125; border-color:#ECB22E;}
+.asm3d-notes{
+  position:absolute; right:10px; top:44px; z-index:14;
+  width:min(320px, calc(100% - 20px)); max-height:calc(100% - 60px); overflow-y:auto;
+  display:none; flex-direction:column; gap:5px;
+}
+.asm3d-notes.open{display:flex;}
 .asm3d-note{
   font-size:11px; line-height:1.45; padding:6px 9px; border-radius:6px;
   border-left:3px solid; backdrop-filter:blur(6px);
@@ -91,34 +111,70 @@ window.ASM3D_CSS = `
   background:rgba(17,19,26,.82); color:#ECB22E; border:1px solid rgba(236,178,46,.45);
   font-family:'Inconsolata',ui-monospace,monospace;
 }
+.asm3d-labels .gap{
+  background:#1F6FD1; color:#fff; border-radius:999px; padding:1px 7px;
+  font-family:'Inconsolata',ui-monospace,monospace; box-shadow:0 1px 3px rgba(0,0,0,.35);
+}
 .asm3d-labels .mat{
   background:rgba(255,255,255,.93); color:#1A1D21; border:1px solid rgba(0,0,0,.25);
   font-size:10.5px;
 }
 
-/* ── hover move widget ────────────────────────────────────────── */
-.asm3d-mover{
-  position:absolute; display:none; z-index:20; transform:translate(-50%,-50%);
-  border:14px solid transparent; background-clip:padding-box;
-  background:rgba(17,19,26,.95); border-radius:9px; padding:5px;
-  box-shadow:0 6px 20px rgba(0,0,0,.6);
+/* ── selection badge ───────────────────────────── */
+/* There is no hover widget. A click selects, and this says what is selected
+   and what can be done with it. */
+.asm3d-sel{
+  display:none; flex:1 1 240px; min-width:0;
+  background:rgba(14,22,34,.94); border:1px solid #4DA3FF; border-radius:8px;
+  padding:6px 10px; pointer-events:none;
 }
-.asm3d-mover .lbl{
-  font-size:9.5px; color:#ECB22E; text-align:center; font-weight:800;
-  letter-spacing:.05em; text-transform:uppercase; margin-bottom:3px; white-space:nowrap;
+.asm3d-sel b{
+  display:block; font-size:11px; font-weight:800; letter-spacing:.04em;
+  text-transform:uppercase; color:#9ED0FF;
 }
-.asm3d-mover .pad{display:flex; gap:4px; justify-content:center;}
-.asm3d-mover .pad + .pad{margin-top:4px;}
-/* The body of the widget must not swallow a press meant for the part beneath
-   it — only the buttons take the pointer. */
-.asm3d-mover{pointer-events:none;}
-.asm3d-mover button{pointer-events:auto;}
-.asm3d-mover button{
-  width:26px; height:24px; background:#2A2D31; border:1px solid #3A3D42; color:#E8EAF0;
-  border-radius:5px; cursor:pointer; font-size:12px; line-height:1; padding:0; font-family:inherit;
+.asm3d-sel span{display:block; font-size:10.5px; color:#7A8795; margin-top:2px;}
+.asm3d-sel em{
+  display:block; font-style:normal; font-size:11px; line-height:1.4; margin-top:5px;
+  padding-top:5px; border-top:1px solid rgba(77,163,255,.35); color:#ECB22E;
 }
-.asm3d-mover button:hover:not(:disabled){background:#ECB22E; color:#1A1D21; border-color:#ECB22E;}
-.asm3d-mover button:disabled{opacity:.22; cursor:default;}
+
+/* ── right-click move menu ─────────────────────── */
+.asm3d-mvbox{position:absolute; display:none; z-index:20; width:228px; background:#1A1D21; border:1px solid #3A3D42;
+  border-radius:8px; padding:8px 10px; color:#E8E8E8; font-size:12px; box-shadow:0 8px 24px rgba(0,0,0,.45);}
+.asm3d-mvbox .hd{display:flex; align-items:center; gap:6px; margin-bottom:6px;}
+.asm3d-mvbox .hd b{color:#ECB22E; font-weight:700; flex:1; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.asm3d-mvbox .hd span{color:#8B8E94; font-size:11px;}
+.asm3d-mvbox .x{background:none; border:none; color:#8B8E94; cursor:pointer; font-size:13px; padding:0 2px;}
+.asm3d-mvbox .rw{display:flex; align-items:center; gap:6px; margin-bottom:5px;}
+.asm3d-mvbox .rw span{width:56px; color:#D1D2D3;}
+.asm3d-mvbox input{width:64px; height:28px; background:#222529; color:#fff; border:1px solid #3A3D42; border-radius:5px;
+  padding:0 6px; font:inherit; font-family:'Inconsolata',ui-monospace,monospace;}
+.asm3d-mvbox input:focus{outline:none; border-color:#4DA3FF;}
+.asm3d-mvbox .rw button{height:28px; padding:0 9px; background:#2A2D31; border:1px solid #3A3D42; border-radius:5px;
+  color:#E8E8E8; cursor:pointer; font:inherit; font-weight:700; white-space:nowrap;}
+.asm3d-mvbox .rw button:hover{background:#4DA3FF; color:#0f1217;}
+.asm3d-mvbox .ms{color:#8B8E94; font-size:11px; margin-top:4px;}
+.asm3d-mvbox .ms.bad{color:#F28B8B;}
+.asm3d-menu{
+  position:absolute; display:none; z-index:26; min-width:184px; max-width:260px;
+  background:#15181d; border:1px solid #3A3D42; border-radius:9px; padding:5px;
+  box-shadow:0 10px 30px rgba(0,0,0,.65);
+}
+.asm3d-menu .hd{
+  font-size:9.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase;
+  color:#4DA3FF; padding:4px 7px 6px; border-bottom:1px solid #2b2e33; margin-bottom:4px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.asm3d-menu button{
+  display:block; width:100%; text-align:left; background:none; border:0;
+  color:#E8EAF0; font:12px/1.3 inherit; padding:7px 9px; border-radius:6px; cursor:pointer;
+}
+.asm3d-menu button:hover:not(:disabled){background:#4DA3FF; color:#0f1217;}
+.asm3d-menu button:disabled{cursor:default;}
+.asm3d-menu button.cur{color:#9AA0AB;}
+.asm3d-menu button:disabled:not(.cur){opacity:.34;}
+.asm3d-menu .tick{font-size:10px; color:#4DA3FF; margin-left:4px;}
+.asm3d-menu .none{padding:7px 9px; font-size:11.5px; color:#7A7D82;}
 
 /* ── states ───────────────────────────────────────────────────── */
 .asm3d-msg{

@@ -37,54 +37,42 @@ function renderResults(sheets,unfitted,scale){
   // Inner laminate state — persisted per material name
   if(!window._innerLam) window._innerLam={};
 
+  // One real table: header and rows share the same columns, so they line up
+  const ilSide = mat => { const v = window._innerLam?.[mat]; return v === 0 || v === 2 ? v : 1; };   // default 1 side
   let matRowsHtml=matEntries.map(([mat,d],i)=>{
     const wp=d.totalArea>0?((d.totalArea-d.usedArea)/d.totalArea*100):0;
     const wc=wp<15?'waste-good':wp<30?'waste-warn':'waste-bad';
     const col=MAT_COLORS[i%MAT_COLORS.length];
     const ebMtr=+(d.ebMm/1000).toFixed(1);
     const ebOrder=+(ebMtr*1.10).toFixed(1);
-    const mid=`il_${i}`;
-    const il1=window._innerLam[mat+'_1']!==false; // 1-side default checked
-    const il2=window._innerLam[mat+'_2']===true;  // 2-side default unchecked
-    return `<div class="mat-row" id="matrow_${i}">
-      <div class="mat-row-color" style="background:${col}"></div>
-      <div class="mat-row-name">${esc(mat)}</div>
-      <div class="mat-row-size">${d.size} mm</div>
-      <div class="mat-row-sheets"><span class="mat-sheets-badge" style="background:${col}18;color:${col};border-color:${col}30">${d.sheets} sheet${d.sheets!==1?'s':''}</span></div>
-      <div class="mat-row-pieces">${d.pieces} pieces</div>
-      <div class="mat-row-eb no-print" title="Edge banding — exact: ${ebMtr} mtr · order +10%: ${ebOrder} mtr">
-        <span style="font-family:var(--mono);font-size:11px;color:var(--sl-green);font-weight:700">${ebOrder} mtr</span>
-        <span style="font-size:9px;color:var(--sl-text3);margin-left:2px">EB</span>
-      </div>
-      <div class="mat-row-waste"><span class="sheet-waste-badge ${wc}">${wp.toFixed(1)}% waste</span></div>
-      <div class="mat-row-il no-print" style="display:flex;gap:6px;align-items:center;margin-left:8px">
-        <label title="1 side inner laminate" style="display:flex;align-items:center;gap:3px;font-size:10px;color:var(--sl-text2);cursor:pointer;white-space:nowrap">
-          <input type="radio" name="il_${i}" value="1" ${(window._innerLam?.[mat]??1)!==2&&(window._innerLam?.[mat])!==0?'checked':''} onchange="setInnerLam('${mat}',1,true)" style="width:auto"> 1
-        </label>
-        <label title="2 sides inner laminate" style="display:flex;align-items:center;gap:3px;font-size:10px;color:var(--sl-text2);cursor:pointer;white-space:nowrap">
-          <input type="radio" name="il_${i}" value="2" ${(window._innerLam?.[mat])===2?'checked':''} onchange="setInnerLam('${mat}',2,true)" style="width:auto"> 2
-        </label>
-        <label title="No inner laminate" style="display:flex;align-items:center;gap:3px;font-size:10px;color:var(--sl-text2);cursor:pointer;white-space:nowrap">
-          <input type="radio" name="il_${i}" value="0" ${(window._innerLam?.[mat])===0?'checked':''} onchange="setInnerLam('${mat}',0,true)" style="width:auto"> 0
-        </label>
-      </div>
-    </div>`;
+    const side=ilSide(mat);
+    const opt=(v,t)=>`<option value="${v}"${side===v?' selected':''}>${t}</option>`;
+    const ilSel=`<select class="mt-il-sel" data-mat="${esc(mat)}" title="Inner laminate: one side, both sides, or none" onchange="setInnerLam(this.dataset.mat,+this.value,true)">${opt(2,'Both side')}${opt(1,'One side')}${opt(0,'Zero')}</select>`;
+    return `<tr id="matrow_${i}">
+      <td class="mt-mat"><span class="mt-dot" style="background:${col}"></span>${esc(mat)}</td>
+      <td class="mt-size">${d.size}</td>
+      <td class="mt-num"><span class="mat-sheets-badge" style="background:${col}18;color:${col};border-color:${col}30">${d.sheets}</span></td>
+      <td class="mt-num">${d.pieces}</td>
+      <td class="mt-num mt-eb" title="Edge banding — exact: ${ebMtr} mtr · order +10%: ${ebOrder} mtr">${ebOrder} <small>mtr</small></td>
+      <td class="mt-num mt-waste"><span class="sheet-waste-badge ${wc}">${wp.toFixed(1)}%</span></td>
+      <td class="mt-il">${ilSel}</td>
+      <td class="mt-num mt-ilq" data-ilmat="${esc(mat)}" data-sheets="${d.sheets}">${d.sheets*side || '—'}</td>
+    </tr>`;
   }).join('');
 
   // Total row
   const totSheets = matEntries.reduce((a,[,d])=>a+d.sheets,0);
   const totPcs    = matEntries.reduce((a,[,d])=>a+d.pieces,0);
   const totEB     = +(matEntries.reduce((a,[,d])=>a+d.ebMm,0)/1000*1.10).toFixed(1);
-  matRowsHtml += `<div class="mat-row" style="background:var(--sl-bg2);border-top:2px solid var(--sl-border2);font-weight:700">
-    <div class="mat-row-color" style="background:transparent"></div>
-    <div class="mat-row-name" style="font-weight:900;color:var(--sl-text)">TOTAL</div>
-    <div class="mat-row-size"></div>
-    <div class="mat-row-sheets"><span class="mat-sheets-badge" style="background:#1D1C1D18;color:var(--sl-text);border-color:#1D1C1D30;font-weight:900">${totSheets} sheets</span></div>
-    <div class="mat-row-pieces" style="font-weight:900;color:var(--sl-text)">${totPcs} pieces</div>
-    <div class="mat-row-eb no-print"><span style="font-family:var(--mono);font-size:11px;color:var(--sl-green);font-weight:900">${totEB} mtr</span><span style="font-size:9px;color:var(--sl-text3);margin-left:2px">EB</span></div>
-    <div class="mat-row-waste"></div>
-    <div class="mat-row-il no-print" id="il-total-cell" style="font-family:var(--mono);font-size:11px;font-weight:900;color:var(--sl-text);margin-left:8px;min-width:60px"></div>
-  </div>`;
+  const totIL     = matEntries.reduce((a,[mat,d])=>a+d.sheets*ilSide(mat),0);
+  matRowsHtml += `<tr class="mt-total">
+    <td class="mt-mat">Total</td><td></td>
+    <td class="mt-num"><span class="mat-sheets-badge" style="background:#1D1C1D12;color:var(--sl-text);border-color:#1D1C1D30">${totSheets}</span></td>
+    <td class="mt-num">${totPcs}</td>
+    <td class="mt-num mt-eb">${totEB} <small>mtr</small></td>
+    <td class="mt-waste"></td><td></td>
+    <td class="mt-num mt-ilq" id="il-total-cell">${totIL || '—'}</td>
+  </tr>`;
 
   // Estimate sheets without optimization (naive: 1 piece per sheet worst case, or area-based)
   const naiveSheets = Math.ceil(totPieces * 0.7); // rough estimate — random placement would need ~40% more
@@ -176,18 +164,21 @@ function renderResults(sheets,unfitted,scale){
     <div class="mat-summary-title">
       <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
       Sheets by Material
-      <span style="margin-left:auto;display:flex;gap:16px;font-size:9px;color:var(--sl-text3);font-weight:600;letter-spacing:.5px;text-transform:uppercase">
-        <span style="min-width:80px;text-align:center">Sheets</span>
-        <span style="min-width:70px">Pieces</span>
-        <span style="min-width:72px">Edge Band</span>
-        <span style="min-width:50px">Waste</span>
-        <span class="no-print" style="min-width:70px;text-align:center">Inner Lam</span>
-      </span>
     </div>
-    <div class="mat-rows" ${isPro()?'':`style="filter:blur(5px);pointer-events:none;user-select:none"`}>${matRowsHtml}</div>
+    <div class="mat-rows" ${isPro()?'':`style="filter:blur(5px);pointer-events:none;user-select:none"`}>
+      <table class="mat-tbl">
+        <thead><tr>
+          <th class="mt-mat">Material</th><th>Sheet size (mm)</th><th class="mt-num">Sheets</th><th class="mt-num">Pieces</th>
+          <th class="mt-num mt-eb" title="Edge band to order, +10%">Edge band</th><th class="mt-num mt-waste">Waste</th>
+          <th class="mt-il" title="Inner laminate on 1 side, 2 sides, or none">Inner lam side</th>
+          <th class="mt-num mt-ilq" title="Sheets × sides">Inner lam qty</th>
+        </tr></thead>
+        <tbody>${matRowsHtml}</tbody>
+      </table>
+    </div>
   </div>
   ${!isPro()?'<div class="no-print" style="text-align:center;margin:-8px 0 12px;font-size:12px">⭐ <a href="#" onclick="showUpgrade(\'Material Summary\');return false" style="color:#ECB22E;text-decoration:none;font-weight:700">Upgrade to Pro</a> to view details</div>':''}`;
-  if(unfitted.length)html+=`<div class="unfitted-box"><div class="unfitted-title">⚠ ${unfitted.length} piece(s) could not be placed</div>${unfitted.map(p=>`<div class="unfitted-item">${esc(p.label)} — ${_dimP(p.l,p.w)} ${_uSuffix()} · ${esc(p.material)}</div>`).join('')}</div>`;
+  if(unfitted.length)html+=`<div class="unfitted-box"><div class="unfitted-title">⚠ ${unfitted.length} piece(s) could not be placed</div>${unfitted.some(p=>p.reason==='stock_short')?`<div class="unfitted-item" style="font-weight:600">Not enough stock sheets — raise Qty in Stock Sheets, or leave it blank for unlimited.</div>`:''}${unfitted.map(p=>`<div class="unfitted-item">${esc(p.label)} — ${_dimP(p.l,p.w)} ${_uSuffix()} · ${esc(p.material)}${p.reason==='stock_short'?' · stock short':''}</div>`).join('')}</div>`;
 
   let si=0;
   for(const s of sheets){

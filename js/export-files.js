@@ -31,6 +31,97 @@ window.ExportFiles = (function () {
     }).join(',')).join('\r\n');
   }
 
+  // ---------- Factory CSV (one row per piece, cut + finish sizes) ----------
+  // Column layout requested by a client's factory software. Finish = the size
+  // entered; Cut = Finish minus the edge band on the two edges across it:
+  //   Cut Length = Length - (Right_H1 + Left_H2)   (our ebR + ebL, across W)
+  //   Cut Width  = Width  - (Bottom_W1 + Top_W2)   (our ebB + ebT, across H)
+  // Columns 13/14 have no header in the client's file; 13 carries the piece ID.
+  const FACTORY_HEAD = ['Order Name','Order Date','POS No.','Description','Panel Barcode','No. of panels',
+    'Article Name','Material','Edge Bottom_W1','Edge Right_H1','Edge Top_W2','Edge Left_H2','','',
+    'Cut Length','Cut Width','Cut Thickness','Finish Length','Finish Width','Finish Thickness','Qty','Grain Flag'];
+
+  function n2(v){ const n = Math.round((Number(v)||0) * 10) / 10; return String(n); }      // 2031.5, 578
+  function eb0(v){ const n = parseFloat(v); return (isNaN(n) || n <= 0) ? '' : n2(n); }
+  function csvCell(c){ const s = String(c==null?'':c); return /[",\r\n]/.test(s) ? '"' + s.replace(/"/g,'""') + '"' : s; }
+
+  function toFactoryCSV(data, o) {
+    o = o || {};
+    const th = o.thickness || {};
+    const rows = [FACTORY_HEAD];
+    let n = Number(o.startNo) || 1001;
+    (data.panels || []).forEach(p => {
+      const L = Number(p.length) || 0, W = Number(p.width) || 0;
+      const e = { b: parseFloat(p.ebB)||0, r: parseFloat(p.ebR)||0, t: parseFloat(p.ebT)||0, l: parseFloat(p.ebL)||0 };
+      const t = th[p.material || 'MATERIAL'] != null ? th[p.material || 'MATERIAL'] : guessThickness(p.material);
+      const q = Math.max(1, Math.round(Number(p.qty) || 1));
+      for (let i = 0; i < q; i++) {
+        rows.push([
+          o.orderName || '', o.orderDate || '', p.pos || '', p.label || '', p.remark || '', '',
+          p.article || '', p.material || '', eb0(p.ebB), eb0(p.ebR), eb0(p.ebT), eb0(p.ebL),
+          (o.prefix ? o.prefix + '_' : '') + (n++), '',
+          n2(L - e.r - e.l), n2(W - e.b - e.t), n2(t),
+          n2(L), n2(W), n2(t), 1, p.grain ? 1 : 0
+        ]);
+      }
+    });
+    return '﻿' + rows.map(r => r.map(csvCell).join(',')).join('\r\n') + '\r\n';
+  }
+
+  function initials(name){
+    const w = String(name||'').toUpperCase().replace(/[^A-Z0-9 ]+/g,' ').trim().split(/\s+/).filter(Boolean);
+    return (w.map(x => x[0]).join('') || 'ECL').slice(0, 6);
+  }
+  function todayDMY(){ const d = new Date(), p = x => String(x).padStart(2,'0'); return p(d.getDate()) + '-' + p(d.getMonth()+1) + '-' + d.getFullYear(); }
+
+  function openFactoryModal(data) {
+    const mats = {};
+    (data.panels || []).forEach(p => { mats[p.material || 'MATERIAL'] = true; });
+    const matList = Object.keys(mats);
+    const order = data.orderName || data.title || '';
+    const inp = 'width:100%;box-sizing:border-box;background:#111;border:1px solid #3A3D42;color:#fff;border-radius:5px;padding:7px';
+    const lbl = 'display:block;font-size:11px;color:#8A8F98;margin-bottom:3px';
+    const ov = document.createElement('div');
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:100002';
+    ov.innerHTML =
+      '<div style="background:#1E2124;border:1px solid #3A3D42;border-radius:12px;padding:22px;max-width:480px;width:92%;max-height:86vh;overflow-y:auto">'+
+        '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">'+
+          '<div style="font-size:16px;font-weight:700;color:#fff">Factory CSV</div>'+
+          '<button id="fc-close" aria-label="Close" style="background:none;border:none;color:#8A8F98;font-size:20px;cursor:pointer">×</button>'+
+        '</div>'+
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">'+
+          '<div style="grid-column:1/3"><label style="'+lbl+'" for="fc-order">Order name</label><input id="fc-order" style="'+inp+'" value="'+esc(order).replace(/"/g,'&quot;')+'"></div>'+
+          '<div><label style="'+lbl+'" for="fc-date">Order date</label><input id="fc-date" style="'+inp+'" value="'+todayDMY()+'"></div>'+
+          '<div><label style="'+lbl+'" for="fc-prefix">Barcode prefix</label><input id="fc-prefix" style="'+inp+'" value="'+initials(order)+'"></div>'+
+          '<div><label style="'+lbl+'" for="fc-start">First barcode no.</label><input id="fc-start" type="number" min="1" style="'+inp+'" value="1001"></div>'+
+        '</div>'+
+        '<div style="font-size:12px;color:#8A8F98;margin-bottom:4px">Board thickness per material</div>'+
+        matList.map((m,i) =>
+          '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid #2A2D31">'+
+            '<span style="color:#fff;font-size:13px">'+String(m).replace(/</g,'&lt;')+'</span>'+
+            '<span style="display:flex;align-items:center;gap:6px"><input type="number" min="1" step="0.1" id="fc-th-'+i+'" value="'+guessThickness(m)+'" aria-label="Thickness of '+String(m).replace(/"/g,'&quot;')+'" style="width:70px;text-align:center;background:#111;border:1px solid #3A3D42;color:#fff;border-radius:5px;padding:6px"><span style="color:#8A8F98;font-size:12px">mm</span></span>'+
+          '</div>').join('')+
+        '<div style="font-size:11px;color:#8A8F98;margin-top:10px">One row per piece. Cut size = finish size minus the edge band on each edge.</div>'+
+        '<button id="fc-gen" style="margin-top:14px;width:100%;padding:10px;background:#ECB22E;color:#2A1500;border:none;border-radius:8px;font-weight:700;cursor:pointer;font-family:inherit">Download CSV</button>'+
+      '</div>';
+    document.body.appendChild(ov);
+    const close = () => ov.remove();
+    ov.querySelector('#fc-close').onclick = close;
+    ov.onclick = e => { if (e.target === ov) close(); };
+    ov.querySelector('#fc-gen').onclick = () => {
+      const thickness = {};
+      matList.forEach((m,i) => { const v = parseFloat(document.getElementById('fc-th-'+i).value); thickness[m] = (isNaN(v) || v <= 0) ? 18 : v; });
+      const orderName = document.getElementById('fc-order').value.trim();
+      const csv = toFactoryCSV(data, {
+        orderName: orderName, orderDate: document.getElementById('fc-date').value.trim(),
+        prefix: document.getElementById('fc-prefix').value.trim(), startNo: document.getElementById('fc-start').value,
+        thickness: thickness
+      });
+      download(csv, filename({ title: orderName || data.title }, 'csv'), 'text/csv;charset=utf-8');
+      close();
+    };
+  }
+
   // ---------- Excel (.xlsx) via SheetJS ----------
   function loadSheetJS() {
     return new Promise((resolve, reject) => {
@@ -207,6 +298,7 @@ window.ExportFiles = (function () {
           opt('csv','CSV','Part list (universal)','#2EB67D')+
           opt('xlsx','Excel','.xlsx spreadsheet','#36C5F0')+
           opt('saw','.saw','Beam saw (experimental)','#ECB22E')+
+          opt('factory','Factory CSV','One row per piece · cut + finish sizes','#B48EF0')+
         '</div>'+
         '<div id="ef-status" style="font-size:12px;color:#8A8F98;margin-top:12px;min-height:16px"></div>'+
       '</div>';
@@ -232,6 +324,9 @@ window.ExportFiles = (function () {
           } else if (fmt === 'saw') {
             close();
             openThicknessModal(data);
+          } else if (fmt === 'factory') {
+            close();
+            openFactoryModal(data);
           }
         } catch (e) {
           status.textContent = e.message || 'Export failed';
@@ -241,5 +336,5 @@ window.ExportFiles = (function () {
     });
   }
 
-  return { open: open, toCSV: toCSV, toSAW: toSAW };
+  return { open: open, toCSV: toCSV, toSAW: toSAW, toFactoryCSV: toFactoryCSV };
 })();

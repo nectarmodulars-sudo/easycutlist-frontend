@@ -27,7 +27,10 @@ window.ASMPdf = (function () {
     showExportOptions();
   }
 
-  function hf(flag){ try { return (typeof hasFeature==='function') ? hasFeature(flag) : (_ctx.asmPlan==='pro'); } catch(e){ return _ctx.asmPlan==='pro'; } }
+  // ASM PRO unlocks the PDF header extras; otherwise fall back to the Optimizer tier flags.
+  function hf(flag){ if (_ctx.asmPlan==='pro') return true; try { return (typeof hasFeature==='function') ? hasFeature(flag) : false; } catch(e){ return false; } }
+
+  function _elevPref(){ try { return localStorage.getItem('asm_pdf_elev') === '1'; } catch(e){ return false; } }
 
   function showExportOptions() {
     const old = document.getElementById('asm-export-modal'); if (old) old.remove();
@@ -37,11 +40,12 @@ window.ASMPdf = (function () {
     overlay.dataset.client = _ctx.currentClientName || '';
     overlay.style.cssText = 'position:fixed;inset:0;z-index:10005;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center';
     overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+    // locked: true = needs PRO, 'profile' = allowed but nothing saved in My Profile yet
     const row = (id, label, sub, checked, locked) =>
       `<label class="asm-eo-row" style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #2A2D31;${locked?'opacity:.45':''}">
-         <div><div style="font-size:13px;color:#E8E8E8">${label}${locked?' <span style="color:#ECB22E;font-size:10px">⭐PRO</span>':''}</div>
-         <div style="font-size:11px;color:#7A7D82">${sub}</div></div>
-         <input type="checkbox" id="${id}" ${checked?'checked':''} ${locked?'disabled':''} style="width:18px;height:18px;accent-color:#2EB67D">
+         <div><div style="font-size:13px;color:#E8E8E8">${label}${locked===true?' <span style="color:#ECB22E;font-size:10px">⭐PRO</span>':''}</div>
+         <div style="font-size:11px;color:#7A7D82">${locked==='profile'?'Not set — add it in My Profile first':sub}</div></div>
+         <input type="checkbox" id="${id}" ${checked&&!locked?'checked':''} ${locked?'disabled':''} style="width:18px;height:18px;accent-color:#2EB67D">
        </label>`;
     overlay.innerHTML = `
       <div style="background:#1A1D21;border:1px solid #3A3D42;border-radius:12px;width:440px;max-height:85vh;overflow:auto">
@@ -50,14 +54,17 @@ window.ASMPdf = (function () {
           <button onclick="document.getElementById('asm-export-modal').remove()" style="background:none;border:none;color:#7A7D82;font-size:20px;cursor:pointer">&#10005;</button>
         </div>
         <div style="padding:16px 20px">
-          ${row('eo-logo','Company Logo','Your logo from My Profile', false, !hf('pdfLogoHeader')||!gp.logo)}
-          ${row('eo-company','Company Name','Business name from My Profile', false, !hf('pdfCompanyName')||!gp.biz)}
+          ${row('eo-logo','Company Logo','Your logo from My Profile', !!gp.logo, !hf('pdfLogoHeader') ? true : (!gp.logo ? 'profile' : false))}
+          ${row('eo-company','Company Name','Business name from My Profile', !!gp.biz, !hf('pdfCompanyName') ? true : (!gp.biz ? 'profile' : false))}
           <div style="padding:12px 0;border-bottom:1px solid #2A2D31">
             <div style="font-size:13px;color:#E8E8E8;margin-bottom:6px">Client Name</div>
             <input type="text" id="eo-client-text" value="${(_ctx.currentClientName||'').replace(/"/g,'&quot;')}" placeholder="Type client name" style="width:100%;padding:8px 10px;background:#222529;border:1px solid #3A3D42;border-radius:6px;color:#fff;font-size:13px;box-sizing:border-box">
           </div>
           ${row('eo-outer','Print Outer Details','Input values grid atop each item', true, false)}
           ${row('eo-summary','Panel Summary','Components / panels line per item', true, false)}
+          ${row('eo-eband','Deduct Edge Banding','Print the size the panel is CUT at: W less L+R, H less T+B', false, false)}
+          ${row('eo-3d','3D View Picture','The 3D view as you framed it, atop that item', true, false)}
+          ${(_ctx.showElev && _ctx.showElev() && window.ASMElev && ASMElev.pdfSvgs) ? row('eo-elev','Print Item Elevation','Front elevation + side section with sizes, below the 3D picture', _elevPref(), false) : ''}
           <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 0 4px">
             <div><div style="font-size:13px;color:#E8E8E8">W×H×Qty×Material font (pt)</div>
             <div style="font-size:11px;color:#7A7D82">Component table text size</div></div>
@@ -83,11 +90,24 @@ window.ASMPdf = (function () {
       client:  (document.getElementById('eo-client-text')?.value || '').trim(),
       outer:   document.getElementById('eo-outer')?.checked,
       summary: document.getElementById('eo-summary')?.checked,
+      eband:   document.getElementById('eo-eband')?.checked,
+      img3d:   document.getElementById('eo-3d')?.checked,
+      elev:    document.getElementById('eo-elev')?.checked,
       font:    parseInt(document.getElementById('eo-font')?.value) || 14,
       biz: gp.biz, logoSrc: gp.logo, phoneNum: gp.phone
     };
     document.getElementById('asm-export-modal')?.remove();
-    doExportPDF(opt);
+    try { localStorage.setItem('asm_pdf_elev', opt.elev ? '1' : '0'); } catch(e){}
+    if (!opt.elev) { doExportPDF(opt); return; }
+    // Draw each item's elevations first (async), then build the PDF.
+    _ctx.showToast && _ctx.showToast('Drawing elevations…', 'info');
+    const jobs = _ctx.readyItems.map(it => {
+      const sc = _ctx.getSchema ? _ctx.getSchema(it.itemId) : null;
+      if (!sc || !sc.ruleCode) return Promise.resolve({});
+      return ASMElev.pdfSvgs({ ruleCode: sc.ruleCode, inputs: it.inputs, item: it.itemName });
+    });
+    Promise.all(jobs).then(list => { opt.elevSvgs = list; doExportPDF(opt); })
+      .catch(() => doExportPDF(opt));
   }
 
   function doExportPDF(opt) {
@@ -108,6 +128,25 @@ window.ASMPdf = (function () {
         .it-title-row td { background: #333; color: #fff; padding: 6px 10px; font-size: 13px; font-weight: bold; }
         /* Input rows (was .item-inputs) */
         .it-input-row td { background: #f5f5f5; padding: 3px 8px; font-size: 9px; color: #555; border: 1px solid #ddd; }
+        /* the 3D picture */
+        /* The picture must be free to move to the next page on its own. Glued
+           to the title row (break-after:avoid) it dragged the title, the input
+           grid and the whole table with it, which is what left the first page
+           empty but for the header. */
+        .it-img-row { break-before: auto; }
+        .it-img-row td { border: 1px solid #ddd; padding: 6px; text-align: center; background: #fff; }
+        .it-3d { max-width: 100%; max-height: 58mm; object-fit: contain; }
+        .it-elev-row td { border: 1px solid #ddd; padding: 6px; background: #fff; }
+        .it-elev { display: flex; gap: 6mm; justify-content: center; align-items: flex-start; }
+        .it-elev figure { margin: 0; text-align: left; }
+        .it-elev figcaption { font-size: 8px; font-weight: 700; color: #333; letter-spacing: .4px; margin-bottom: 2px; }
+        .it-elev svg { display: block; height: 95mm; width: auto; max-width: 100%; }
+        .it-elev .fr svg { max-width: 120mm; }
+        .it-elev .sd svg { max-width: 60mm; }
+        /* a size that has had its edge band taken off */
+        .num-eb { color: #0a7; font-weight: 700; }
+        .eb-tag { display: inline-block; border: 1px solid #0a7; color: #0a7; border-radius: 3px;
+                  padding: 0 3px; font-size: 8px; font-weight: 700; margin-left: 3px; }
         .it-input-pad { background: #f5f5f5 !important; border: 1px solid #ddd; }
         /* Column-header row */
         .it-colhead th { background: #eee; padding: 4px 6px; text-align: left; font-size: ${fs}px; border: 1px solid #ccc; font-weight: 700; }
@@ -180,6 +219,13 @@ window.ASMPdf = (function () {
       });
       inputTable += '</tr></table>';
 
+      /* Does this item actually carry any edge band? The option alone is not
+         enough: an item nobody has set bands on would otherwise be stamped
+         "sizes after edge band deduction" while every size printed is the
+         entered one — the worst kind of wrong label on a shop drawing. */
+      const ebAny = !!opt.eband && it.outputs.some(o => o.band &&
+        ((+o.band.l || 0) + (+o.band.r || 0) + (+o.band.t || 0) + (+o.band.b || 0)) > 0);
+
       const roomPrefix = it.roomName ? (String(it.roomName).trim() + ' — ') : '';
       const _uAbbr = { generic:'', mm:' (mm)', cm:' (cm)', m:' (m)', in:' (in)', in_frac:' (in)', ft_in:' (ft-in)', ft_in_frac:' (ft-in)' }[UNITS.get()] || '';
 
@@ -189,7 +235,8 @@ window.ASMPdf = (function () {
       html += '<table class="item-table"><tbody>';
 
       // Title row (full width, spans all 8 columns)
-      html += '<tr class="it-title-row"><td colspan="8">' + (idx + 1) + '. ' + roomPrefix + it.itemName + '  |  ' + dims + '  |  Qty: ' + (inp.qty || inp.Qty || 1) + '</td></tr>';
+      html += '<tr class="it-title-row"><td colspan="8">' + (idx + 1) + '. ' + roomPrefix + it.itemName + '  |  ' + dims + '  |  Qty: ' + (inp.qty || inp.Qty || 1) +
+              (ebAny ? '  |  SIZES AFTER EDGE BAND DEDUCTION' : '') + '</td></tr>';
 
       // Input rows (each pair label/value; pack 4 pairs per row → 8 cells)
       if (opt.outer && inputRows.length) {
@@ -202,6 +249,23 @@ window.ASMPdf = (function () {
         }
       }
 
+      /* The 3D view the user framed, captured when the item was saved. One
+         row spanning the table so paged.js can break before or after it. */
+      if (opt.img3d && it.snap3d) {
+        html += '<tr class="it-img-row"><td colspan="8">' +
+                '<img class="it-3d" src="' + it.snap3d + '" alt="3D view">' +
+                '</td></tr>';
+      }
+
+      /* Item elevation (front + side section), directly below the 3D picture. */
+      const ev = opt.elev && opt.elevSvgs ? opt.elevSvgs[idx] : null;
+      if (ev && (ev.front || ev.side)) {
+        html += '<tr class="it-elev-row"><td colspan="8"><div class="it-elev">' +
+          (ev.front ? '<figure class="fr"><figcaption>FRONT ELEVATION · doors off · mm</figcaption>' + ev.front + '</figure>' : '') +
+          (ev.side  ? '<figure class="sd"><figcaption>SIDE SECTION · front on the right</figcaption>' + ev.side + '</figure>' : '') +
+          '</div></td></tr>';
+      }
+
       // Column header row (does not repeat across pages — acceptable per spec)
       var _wh = _dord() === 'hw'
         ? ('<th>H' + _uAbbr + '</th><th>W' + _uAbbr + '</th>')
@@ -212,6 +276,24 @@ window.ASMPdf = (function () {
         globalSrNo++;
         let color = String(o.color || '-');
         let remark = String(o.remark || '-');
+
+        /* EDGE BAND. The entered size is the FINISHED size; the panel is cut
+           smaller by the band it carries — L+R off the width, T+B off the
+           height — which is the size the saw needs. Printed only when the
+           option is on and that row actually has bands set. */
+        let ow = o.w || 0, oh = o.h || 0, ebTag = '';
+        if (opt.eband && o.band) {
+          const b = o.band;
+          const lr = (+b.l || 0) + (+b.r || 0);
+          const tb = (+b.t || 0) + (+b.b || 0);
+          if (lr || tb) {
+            ow = Math.max(1, ow - lr);
+            oh = Math.max(1, oh - tb);
+            ebTag = '<span class="eb-tag">EB ' +
+              ['l','r','t','b'].filter(k => +b[k]).map(k => k.toUpperCase() + (+b[k])).join(' ') +
+              '</span>';
+          }
+        }
         if (color.includes('===') || color.includes('?') || color.includes('||')) color = '-';
         if (remark.includes('===') || remark.includes('?') || remark.includes('||')) remark = '-';
         color = color.replace(/^["']|["']$/g, '');
@@ -220,16 +302,17 @@ window.ASMPdf = (function () {
         html += '<tr>';
         html += '<td>' + globalSrNo + '</td>';
         html += '<td>' + (o.component || '-') + '</td>';
+        const _ebc = ebTag ? ' num-eb' : '';
         if (_dord() === 'hw') {
-          html += '<td class="num">' + UNITS.fromMM(o.h || 0) + '</td>';
-          html += '<td class="num">' + UNITS.fromMM(o.w || 0) + '</td>';
+          html += '<td class="num' + _ebc + '">' + UNITS.fromMM(oh) + '</td>';
+          html += '<td class="num' + _ebc + '">' + UNITS.fromMM(ow) + '</td>';
         } else {
-          html += '<td class="num">' + UNITS.fromMM(o.w || 0) + '</td>';
-          html += '<td class="num">' + UNITS.fromMM(o.h || 0) + '</td>';
+          html += '<td class="num' + _ebc + '">' + UNITS.fromMM(ow) + '</td>';
+          html += '<td class="num' + _ebc + '">' + UNITS.fromMM(oh) + '</td>';
         }
         html += '<td class="num">' + (o.qty || 0) + '</td>';
         html += '<td>' + color + '</td>';
-        html += '<td>' + remark + '</td>';
+        html += '<td>' + remark + (ebTag ? ' ' + ebTag : '') + '</td>';
         html += '<td></td>';
         html += '</tr>';
       });

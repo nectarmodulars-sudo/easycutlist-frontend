@@ -6,17 +6,46 @@ let FEATURE_FLAGS = JSON.parse(localStorage.getItem('ecl_flags')||'{}');
 // Empty for free users. Populated from /my-plan.
 let PLAN_FEATURES = JSON.parse(localStorage.getItem('ecl_plan_features')||'{}');
 
+// Fetch /my-plan with retries. Returns server data, or null if every try failed.
+// A signed-in user getting an anonymous answer (token not ready / expired)
+// refreshes the session and retries instead of accepting 'free'.
+let _planReqSeq = 0;
+async function fetchMyPlan(){
+  for(let attempt = 0; attempt < 4; attempt++){
+    try {
+      const res = await fetch(`${API_URL}/my-plan`, { headers: authHeader(), cache: 'no-store' });
+      if(!res.ok) throw new Error('my-plan ' + res.status);
+      const data = await res.json();
+      if(CURRENT_SESSION && data.loggedIn === false){
+        if(supa){
+          const { data: r } = await supa.auth.refreshSession();
+          if(r && r.session){ CURRENT_SESSION = r.session; CURRENT_USER = r.session.user; }
+        }
+        throw new Error('anonymous answer for signed-in user');
+      }
+      return data;
+    } catch(e){
+      console.warn('[plan] attempt', attempt + 1, e.message);
+      if(attempt < 3) await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+    }
+  }
+  return null;
+}
+
 // Fetch plan + flags from server (non-blocking)
 async function fetchPlanAndFlags(){
+  const mySeq = ++_planReqSeq;
   try {
-    const [planRes, flagsRes] = await Promise.all([
-      fetch(`${API_URL}/my-plan`, { headers: authHeader() }),
-      fetch(`${API_URL}/flags`)
+    const [data, flagsRes] = await Promise.all([
+      fetchMyPlan(),
+      fetch(`${API_URL}/flags`).catch(() => null)
     ]);
-    if(planRes.ok){
-      const data = await planRes.json();
+    if(mySeq !== _planReqSeq) return;   // a newer call is in charge; drop this stale answer
+    if(data){
       const {plan, trialExportsUsed, planExpiresAt, trialLimit, features} = data;
       PLAN = plan;
+      PLAN_TIER_ID = data.tierId || null;
+      PLAN_VIA_ASM = !!data.viaAsm;
       PLAN_FEATURES = features || {};
       localStorage.setItem('ecl_plan_features', JSON.stringify(PLAN_FEATURES));
       TRIAL_EXPORTS_USED = trialExportsUsed || 0;
@@ -27,12 +56,14 @@ async function fetchPlanAndFlags(){
       if(planEl) planEl.textContent = (plan||'free').toUpperCase();
       // Show UPGRADE button only for free users who are signed in
       const upgradeBtn = document.getElementById('hdr-upgrade-btn');
-      if(upgradeBtn) upgradeBtn.style.display = (plan && plan !== 'free') ? 'none' : '';
+      // Optimizer-only users still see Upgrade (Cutlist Builder is the next step);
+      // hide it once they have the full software.
+      if(upgradeBtn) upgradeBtn.style.display = hasFullPlan() ? 'none' : '';
       const mobUpgrade = document.getElementById('mob-upgrade-btn');
-      if(mobUpgrade) mobUpgrade.style.display = (plan && plan !== 'free') ? 'none' : '';
+      if(mobUpgrade) mobUpgrade.style.display = hasFullPlan() ? 'none' : '';
     }
     updateUpgradeBtn();
-    if(flagsRes.ok){
+    if(flagsRes && flagsRes.ok){
       FEATURE_FLAGS = await flagsRes.json();
       localStorage.setItem('ecl_flags', JSON.stringify(FEATURE_FLAGS));
     }
@@ -42,7 +73,10 @@ async function fetchPlanAndFlags(){
     if(CURRENT_USER){
       const pend = JSON.parse(localStorage.getItem('ecl_pending_buy')||'null');
       // Only honour a recent intent (10 min) to avoid stale reopens.
-      if(pend && pend.tierId && (Date.now() - (pend.t||0) < 600000)){
+      if(pend && pend.asmPlanId && (Date.now() - (pend.t||0) < 600000)){
+        localStorage.removeItem('ecl_pending_buy');
+        setTimeout(()=>{ buyAsm(pend.asmPlanId); }, 400);
+      } else if(pend && pend.tierId && (Date.now() - (pend.t||0) < 600000)){
         localStorage.removeItem('ecl_pending_buy');
         _selectedTier   = pend.tierId;
         _selectedMonths = pend.months || 6;
@@ -110,8 +144,10 @@ function toggleMobNav(){
 function updateUpgradeBtn(){
   const btn = document.getElementById('hdr-upgrade-btn');
   if(!btn) return;
-  btn.style.display = isPro() ? 'none' : '';
+  btn.style.display = hasFullPlan() ? 'none' : '';
 }
+// Full software = Cutlist Builder (ASM Pro), which brings the Optimizer tier with it
+function hasFullPlan(){ return isPro() && PLAN_VIA_ASM; }
 
 function requirePro(featureKey, cb){
   const flagKey = FLAG_KEY_MAP[featureKey] || featureKey;
@@ -135,6 +171,11 @@ let _selectedTier   = null;   // tier_id
 let _selectedMonths = 6;      // duration toggle
 let _tierData       = null;   // { tiers:[], pricing:[] }
 let TRIAL_EXPORTS_USED = 0;
+let PLAN_TIER_ID = null;      // Optimizer tier the user has (own or via ASM)
+let PLAN_VIA_ASM = false;     // Optimizer tier comes with their Cutlist Builder plan
+let _asmPlans  = [];          // [{id, months, price (₹), label}] from /asm/payments/plans
+let _asmStatus = null;        // { active, expiresAt } for the signed-in user
+let _asmCoupon = null;        // { code, finals: { planId: final ₹ } } after Apply
 let TRIAL_LIMIT = 3;
 let PLAN_EXPIRES_AT = null;
 
@@ -169,13 +210,20 @@ function closePricing(){
 
 async function loadPricing(){
   try {
-    const res = await fetch(`${API_URL}/tiers`);
+    // Optimizer tiers + Cutlist Builder (ASM) plans + the user's ASM status, together
+    const [res, asmRes, stRes] = await Promise.all([
+      fetch(`${API_URL}/tiers`),
+      fetch(`${API_URL}/asm/payments/plans`).catch(() => null),
+      CURRENT_USER ? fetch(`${API_URL}/asm/payments/status`, { headers: authHeader() }).catch(() => null) : null,
+    ]);
     if(!res.ok) return;
     _tierData = await res.json();
+    try { const a = asmRes && asmRes.ok ? await asmRes.json() : null; _asmPlans = (a && a.plans) || []; } catch(e){ _asmPlans = []; }
+    try { _asmStatus = stRes && stRes.ok ? await stRes.json() : null; } catch(e){ _asmStatus = null; }
     if(!_tierData.tiers || !_tierData.tiers.length) return;
 
-    // Available durations (from pricing rows), ascending
-    const months = [...new Set((_tierData.pricing||[]).map(p => p.months))].sort((a,b)=>a-b);
+    // Available durations (from pricing rows + ASM plans), ascending
+    const months = [...new Set((_tierData.pricing||[]).map(p => p.months).concat(_asmPlans.map(p => p.months)))].sort((a,b)=>a-b);
     if(!months.length) return;
     if(!months.includes(_selectedMonths)) _selectedMonths = months.includes(6) ? 6 : months[0];
 
@@ -195,7 +243,7 @@ function renderDurationToggle(months){
 
 function setDuration(m){
   _selectedMonths = m;
-  const months = [...new Set((_tierData.pricing||[]).map(p => p.months))].sort((a,b)=>a-b);
+  const months = [...new Set((_tierData.pricing||[]).map(p => p.months).concat(_asmPlans.map(p => p.months)))].sort((a,b)=>a-b);
   renderDurationToggle(months);
   renderTierColumns();
 }
@@ -216,7 +264,36 @@ function renderTierColumns(){
     _selectedTier = firstPriced ? firstPriced.tier_id : (tiers[0] && tiers[0].tier_id);
   }
 
-  wrap.innerHTML = tiers.map(t => {
+  const per = _selectedMonths===12 ? 'yr' : _selectedMonths+'mo';
+  const inr = n => '₹' + Number(n).toLocaleString('en-IN');
+  const topTier = tiers[0] || {};
+
+  // ── Cutlist Builder (ASM Pro): the full software, shown first ──
+  const ap = _asmPlans.find(p => Number(p.months) === _selectedMonths);
+  const asmOn = !!(_asmStatus && _asmStatus.active);
+  let asmCard = '';
+  if(_asmPlans.length){
+    const asmFeats = ['90+ ready furniture items','Auto cutlist from sizes','3D view + elevations','Quotation and PDF','Saved settings, projects','Sends cutlist to Optimizer',
+      'Optimizer ' + esc(topTier.name || 'Pro Max') + ' included'];
+    const fin = ap && _asmCoupon && _asmCoupon.finals[ap.id] != null ? _asmCoupon.finals[ap.id] : null;
+    const priceHtml = !ap ? '<span style="font-size:13px;color:var(--sl-text2)">Not available</span>'
+      : fin != null ? `<s>${inr(ap.price)}</s>${inr(Math.round(fin))}<span>/${per}</span>`
+      : `${inr(ap.price)}<span>/${per}</span>`;
+    const perMonth = ap && ap.months ? `<div class="tier-sub">≈ ${inr(Math.round((fin != null ? fin : ap.price) / ap.months))}/month${fin != null ? ' · <b style="color:#2EB67D">' + esc(_asmCoupon.code) + '</b>' : ''}</div>` : '';
+    const btn = asmOn
+      ? `<button class="tier-buy" disabled>✓ Active${_asmStatus.expiresAt ? ' till ' + new Date(_asmStatus.expiresAt).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'2-digit'}) : ''}</button>`
+      : `<button class="tier-buy"${ap ? '' : ' disabled'} onclick="event.stopPropagation();buyAsm('${ap ? esc(ap.id) : ''}')">Buy Cutlist Builder</button>`;
+    asmCard = `<div class="tier-col tier-asm">
+      <div class="tier-badge">Full software</div>
+      <div class="tier-kicker">CUTLIST BUILDER</div>
+      <div class="tier-name">ASM Pro</div>
+      <div class="tier-price">${priceHtml}</div>${perMonth}
+      <div class="tier-feats">${asmFeats.map(f => `<div class="tier-feat on">✓ ${f}</div>`).join('')}</div>
+      ${btn}
+    </div>`;
+  }
+
+  wrap.innerHTML = asmCard + tiers.map(t => {
     const price = priceFor(t.tier_id, _selectedMonths);
     const feats = t.features || {};
     const sel = (t.tier_id === _selectedTier) ? ' selected' : '';
@@ -224,20 +301,31 @@ function renderTierColumns(){
     const priceHtml = price != null
       ? `₹${price.toLocaleString('en-IN')}<span>/${_selectedMonths===12?'yr':_selectedMonths+'mo'}</span>`
       : '<span style="font-size:13px;color:var(--sl-text2)">Not available</span>';
+    const mine = PLAN === 'pro' && PLAN_TIER_ID === t.tier_id;
+    // with Cutlist Builder, lower Optimizer tiers are already covered
+    const myTier = tiers.find(x => x.tier_id === PLAN_TIER_ID);
+    const covered = !mine && PLAN === 'pro' && PLAN_VIA_ASM && myTier && (Number(t.rank)||0) <= (Number(myTier.rank)||0);
     const featRows = TIER_FEATURE_LIST.map(f => {
       const on = feats[f[0]] === true;
       return `<div class="tier-feat ${on?'on':'off'}">${on?'✓':'✗'} ${f[1]}</div>`;
     }).join('');
     const disabled = price == null ? ' disabled' : '';
+    const buyBtn = mine
+      ? `<button class="tier-buy" disabled>${PLAN_VIA_ASM ? '✓ Included with Cutlist Builder' : '✓ Your plan'}</button>`
+      : covered ? `<button class="tier-buy tier-buy-alt" disabled>Covered by your plan</button>`
+      : `<button class="tier-buy tier-buy-alt"${disabled} onclick="event.stopPropagation();selectTier('${t.tier_id}');startPayment()">Buy ${esc(t.name)}</button>`;
     return `<div class="tier-col${sel}" id="tier-${t.tier_id}" onclick="selectTier('${t.tier_id}')">
       ${badge}
+      <div class="tier-kicker">OPTIMIZER ONLY</div>
       <div class="tier-name">${esc(t.name)}</div>
       ${t.subtitle?`<div class="tier-sub">${esc(t.subtitle)}</div>`:''}
       <div class="tier-price">${priceHtml}</div>
       <div class="tier-feats">${featRows}</div>
-      <button class="tier-buy"${disabled} onclick="event.stopPropagation();selectTier('${t.tier_id}');startPayment()">Buy now</button>
+      ${buyBtn}
     </div>`;
   }).join('');
+  const note = document.getElementById('pricing-note');
+  if(note) note.style.display = asmCard ? '' : 'none';
 }
 
 function selectTier(tierId){
@@ -245,6 +333,58 @@ function selectTier(tierId){
   document.querySelectorAll('#pricing-tiers .tier-col').forEach(el => {
     el.classList.toggle('selected', el.id === 'tier-'+tierId);
   });
+}
+
+// Cutlist Builder (ASM Pro) purchase from the shared pricing popup
+function buyAsm(planId){
+  if(!planId) return;
+  if(!CURRENT_USER){
+    try { localStorage.setItem('ecl_pending_buy', JSON.stringify({ asmPlanId: planId, t: Date.now() })); } catch(e){}
+    signInGoogle();
+    return;
+  }
+  closePricing();
+  // a coupon applied in this popup goes with the order (re-checked on the server)
+  if(window.ASMPricing && ASMPricing.setCoupon) ASMPricing.setCoupon(_asmCoupon && _asmCoupon.finals[planId] != null ? _asmCoupon.code : '');
+  if(typeof ASMModule !== 'undefined' && ASMModule.startASMPayment) ASMModule.startASMPayment(planId);
+}
+
+// Coupon box in the Upgrade popup. Coupons are for Cutlist Builder plans:
+// check the code against every ASM plan and re-price the card.
+async function applyPricingCoupon(){
+  const inp = document.getElementById('pricing-coupon-in');
+  const msg = document.getElementById('pricing-coupon-msg');
+  const code = (inp && inp.value || '').trim().toUpperCase();
+  const say = (t, ok) => { if(msg){ msg.textContent = t; msg.style.color = ok === true ? '#2EB67D' : ok === false ? '#E01E5A' : 'var(--sl-text3)'; } };
+  if(!code){ _asmCoupon = null; say(''); renderTierColumns(); return; }
+  if(!_asmPlans.length){ say('Coupons apply to Cutlist Builder plans', false); return; }
+  say('Checking…');
+  const finals = {}; let reason = '';
+  await Promise.all(_asmPlans.map(async p => {
+    try {
+      const r = await fetch(`${API_URL}/asm/payments/validate-coupon`, {
+        method:'POST', headers: Object.assign({'Content-Type':'application/json'}, CURRENT_USER ? authHeader() : {}),
+        body: JSON.stringify({ code, planId: p.id, email: (CURRENT_USER && CURRENT_USER.email) || '' })
+      });
+      const d = await r.json();
+      if(d.valid) finals[p.id] = Number(d.finalPrice);
+      else reason = d.reason || d.error || reason;
+    } catch(e){ reason = reason || 'Could not check the coupon'; }
+  }));
+  if(Object.keys(finals).length){
+    _asmCoupon = { code, finals };
+    const cur = _asmPlans.find(p => Number(p.months) === _selectedMonths);
+    say(cur && finals[cur.id] == null
+      ? '✓ ' + code + ' applied — valid for ' + _asmPlans.filter(p => finals[p.id] != null).map(p => p.label || (p.months + ' months')).join(', ')
+      : '✓ ' + code + ' applied to Cutlist Builder', true);
+  } else { _asmCoupon = null; say(reason || 'Invalid coupon', false); }
+  renderTierColumns();
+}
+// "Have a coupon?" — the ASM checkout popup has the coupon field
+function openAsmCoupon(){
+  if(!CURRENT_USER){ signInGoogle(); return; }
+  closePricing();
+  if(typeof ASMModule !== 'undefined' && ASMModule.showASMCheckout) ASMModule.showASMCheckout();
 }
 
 async function startPayment(){
@@ -288,7 +428,7 @@ async function startPayment(){
       prefill:     { email: CURRENT_USER.email || '' },
       theme:       { color: '#3F0E40' },
       handler: async function(response){
-        await verifyPayment(response, order.orderId);
+        await verifyPayment(response, order.orderId, order);
       },
     });
     rzp.open();
@@ -297,7 +437,7 @@ async function startPayment(){
   }
 }
 
-async function verifyPayment(response, orderId){
+async function verifyPayment(response, orderId, order){
   try {
     const res = await fetch(`${API_URL}/payments/verify`, {
       method:'POST',
@@ -315,6 +455,7 @@ async function verifyPayment(response, orderId){
     if(!res.ok) throw new Error(result.error || 'Verification failed');
 
     // Success — update local state
+    if(window.ECLPixel) ECLPixel.track('Purchase', { value: ((order && order.amount) || 0) / 100, currency: (order && order.currency) || 'INR', content_name: 'Optimizer ' + _selectedTier + ' ' + _selectedMonths + 'm' });
     PLAN = 'pro';
     PLAN_EXPIRES_AT = result.expiresAt;
     localStorage.setItem('ecl_plan', 'pro');

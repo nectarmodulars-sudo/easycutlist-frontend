@@ -45,12 +45,22 @@
       var d = +(inp.depth || inp.d || inp.D || 0);
       var qty = +(inp.qty || 1) || 1;
       var areaMM2 = w * h * qty;
+      // Manual-entry items (e.g. Kitchen shutters) have no outer W×H:
+      // their area is the sum of their panels.
+      var byPanels = !(w > 0 && h > 0);
+      if (byPanels) {
+        areaMM2 = (it.outputs || []).reduce(function (a, o) {
+          return a + (+o.w || 0) * (+o.h || 0) * (+o.qty || 0);
+        }, 0);
+        qty = 1;
+      }
       var area = areaMM2 / areaDivisor();
       var key = it.readyId || ('idx' + i);
       var rate = _itemRates[key] != null ? _itemRates[key] : 0;
       return {
         key: key, name: it.itemName || ('Item ' + (i + 1)), room: it.roomName || '',
-        w: w, h: h, d: d, qty: qty, area: round2(area), rate: rate, amount: round2(area * rate)
+        w: w, h: h, d: d, qty: qty, area: round2(area), rate: rate, amount: round2(area * rate),
+        byPanels: byPanels
       };
     });
   }
@@ -104,7 +114,9 @@
     rows.forEach(function (r) {
       h += '<tr>' +
         '<td>' + esc(r.name) + '</td><td>' + esc(r.room) + '</td>' +
-        '<td>' + dimShow(_dord()==='hw'?r.h:r.w) + '</td><td>' + dimShow(_dord()==='hw'?r.w:r.h) + '</td><td>' + (r.d ? dimShow(r.d) : '—') + '</td>' +
+        (r.byPanels
+          ? '<td colspan="3" style="color:#8B8E94;font-size:12px">sum of panels</td>'
+          : '<td>' + dimShow(_dord()==='hw'?r.h:r.w) + '</td><td>' + dimShow(_dord()==='hw'?r.w:r.h) + '</td><td>' + (r.d ? dimShow(r.d) : '—') + '</td>') +
         '<td>' + r.qty + '</td><td>' + r.area + '</td>' +
         '<td><input type="number" min="0" step="1" value="' + (r.rate || '') + '" data-itemrate="' + esc(r.key) + '" oninput="ASMQuote._setItemRate(this)" style="width:80px"></td>' +
         '<td class="q-amt">' + money(r.amount) + '</td></tr>';
